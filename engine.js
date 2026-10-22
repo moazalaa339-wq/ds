@@ -550,7 +550,8 @@ function ugizmo() {
   if (!o || S.mode !== 'build') { gizmo.visible = false; g.hidden = true; return; }
   const cy = o.base ? o.pos[1] + o.scl[1] / 2 : o.pos[1];
   g.hidden = false; gizmo.visible = true; gizmo.position.set(o.pos[0], cy, o.pos[2]);
-  gizmo.scale.setScalar(cam.position.distanceTo(gizmo.position) * .22); gizmo.updateMatrixWorld(true);
+  const gzMul = (typeof MOB !== 'undefined' && MOB.on) ? .13 : .22;
+  gizmo.scale.setScalar(cam.position.distanceTo(gizmo.position) * gzMul); gizmo.updateMatrixWorld(true);
   const v = new T.Vector3(o.pos[0], cy + Math.max(.6, o.scl[1] / 2) + .5, o.pos[2]).project(cam);
   if (v.z > 1) { g.hidden = true; return; }
   const W = vp.clientWidth, H = vp.clientHeight, hw = g.offsetWidth / 2;
@@ -1610,46 +1611,50 @@ const TouchUI = {
 };
 
 
-function autoText() {
+
+const _autoCtxCache = {};
+async function loadAutoCtx(file) {
+  if (_autoCtxCache[file]) return _autoCtxCache[file];
+  try {
+    const r = await fetch(file, { cache: 'no-store' });
+    if (r && r.ok) {
+      const txt = await r.text();
+      _autoCtxCache[file] = txt || '';
+      return _autoCtxCache[file];
+    }
+  } catch (e) { console.warn('auto ctx', file, e); }
+  _autoCtxCache[file] = '';
+  return '';
+}
+
+function autoText(extraCtx) {
   const sec = S.mode === 'play' ? 'play' : S.section;
-  const names = {play: 'play', prog: 'prog', sobj: 'sobj', objects: 'objects'};
+  const names = { play: 'play', prog: 'prog', sobj: 'sobj', objects: 'objects' };
   const sm = o => `id=${o.id} name=${o.name} type=${o.type} pos=[${o.pos.map(v => +v.toFixed(2))}] rot=[${o.rot.map(v => +v.toFixed(1))}] scl=[${o.scl.map(v => +v.toFixed(2))}] color=${o.color}${o.hidden ? ' hidden' : ''}${o.scripts && o.scripts.length ? ' scripts=' + o.scripts.join(',') : ''}`;
   const mobile = !!(typeof MOB !== 'undefined' && MOB.on);
-  let t = `HAWA_AUTO\nsec=${names[sec] || sec}\nmobile=${mobile ? '1' : '0'}\n${playerNote()}\n`;
+  let t = `HAWA_AUTO\nsec=${names[sec] || sec}\nmobile=${mobile ? '1' : '0'}\ndevice=${mobile ? 'mobile' : 'desktop'}\n${playerNote()}\n`;
   t += API + '\n\n';
 
-  // تلقائي خاص بالموبايل — فقط لقسم البرمجة والكائنات البرمجية وعلى جهاز موبايل
+  // توجيهات الملف المرجعي حسب القسم
+  if (extraCtx) {
+    t += `\n===== CONTEXT_FILE_BEGIN =====\n${extraCtx}\n===== CONTEXT_FILE_END =====\n\n`;
+  }
+
+  // طبقة موبايل إضافية فوق السياق — للبرمجة والكائنات البرمجية فقط
   if (mobile && (sec === 'prog' || sec === 'sobj')) {
-    t += `=== تلقائي موبايل (قسم ${sec === 'sobj' ? 'الكائنات البرمجية' : 'البرمجة'}) ===
-الجهاز: موبايل / لمس. اكتب الكود لهذا الجهاز فقط.
-
-قواعد عامة (إلزامي):
-1) ممنوع الاعتماد على الكيبورد (KeyW/A/S/D/Space/…) كتحكم أساسي أو وحيد.
-2) أي تفاعل يحتاجه اللاعب (ركوب، فتح، التقاط، إطلاق، قائمة…) يظهر كأزرار لمس على الشاشة وقت الحاجة فقط، وتختفي بعد الاستخدام أو عند الابتعاد.
-3) استخدم game.touch:
-   show([{id,label,pos,big,bg}]) · hide() · isDown(id) · wasPressed(id) · isMobile()
-   pos: br|bl|bc|tr|tl|mr|ml
-4) wasPressed للأفعال مرة واحدة (ركوب/نزول/فتح). isDown للاستمرار (بنزين/تصويب/سحب).
-5) dist() أكبر شوية من الديسكتوب (≈2.5–4) عشان اللمس أسهل.
-6) ممنوع hover أو كليك يمين أو اختصارات. كل حاجة بإصبع واحد.
-7) cleanup: game.touch.hide() عند الإيقاف/النزول/حذف الكائن.
-8) الأداء: قلّل إنشاء أجسام كل فريم، استخدم dt، متعلمتش حلقات ثقيلة على الموبايل.
-9) الواجهة: أزرار كبيرة واضحة عربي، متغطيش الجوystick الافتراضي شمال لو ممكن (خلّي أزرار الفعل يمين/وسط).
-10) لو في وضعين (قريب / راكب / داخل قائمة): بدّل مجموعة الأزرار بالكامل بـ show() جديدة، متتراكمش أزرار قديمة.
-
-أمثلة توجيهية (مش قالب ثابت — طبّق حسب طلب المستخدم):
-- عربية/موتوسيكل: قريب → زر «ركوب» · راكب → «بنزين/فرامل/يسار/يمين/نزول» من touch.isDown/wasPressed + seatPlayer/unseatPlayer.
-- باب/صندوق: قريب → «فتح» / «إغلاق».
-- سلاح: «إطلاق» wasPressed أو isDown حسب النوع.
-- متجر: أزرار شراء/إغلاق عند الاقتراب.
-
-شكل الكود: JavaScript نقي فقط مناسب للمحرك (onStart/onUpdate أو شكل Game.onUpdate للكائن البرمجي). ممنوع HTML ملف منفصل. ممنوع شرح بعد الكود.
+    t += `=== طبقة موبايل (فوق السياق — إلزامي على هذا الجهاز) ===
+الجهاز موبايل/لمس. طبّق السياق المرجعي أعلاه + القيود دي:
+1) ممنوع التحكم الأساسي بالكبورد؛ أي تفاعل يظهر كأزرار لمس وقت الحاجة عبر game.touch ثم hide.
+2) game.touch.show/hide/isDown/wasPressed/isMobile — pos: br|bl|bc|tr|tl|mr|ml
+3) مركبة سكربت: customDrive فقط، ممنوع واجهة ركوب المحرك الرخيصة؛ أزرار ركوب/بنزين/فرامل/توجيه/نزول من اللمس.
+4) dist أكبر (2.5–4)، أزرار كبيرة، cleanup يخفي اللمس.
+5) مفيش hover ولا كليك يمين كشرط وحيد للتفاعل.
 
 `;
   } else if (!mobile && (sec === 'prog' || sec === 'sobj')) {
-    t += `=== تلقائي ديسكتوب (قسم ${sec === 'sobj' ? 'الكائنات البرمجية' : 'البرمجة'}) ===
-الجهاز: ديسكتوب. الكيبورد والماوس مسموحين (game.key / كليك).
-لو حابب دعم موبايل لاحقاً يمكن استخدام game.touch اختيارياً بجانب الكيبورد.
+    t += `=== طبقة ديسكتوب ===
+الجهاز ديسكتوب: كيبورد/ماوس مسموحان حسب السياق المرجعي.
+game.touch اختياري لو حابب دعم لمس إضافي.
 
 `;
   }
@@ -1658,10 +1663,10 @@ function autoText() {
   t += `scripts:\n${S.scripts.map(s => `--- ${s.name} enabled=${!!s.enabled}\n${s.code}`).join('\n\n') || '(empty)'}\n\n`;
   t += `sdefs:\n${S.sdefs.map(d => `--- ${d.name} id=${d.id}\n${d.code}`).join('\n\n') || '(empty)'}\n`;
   if (sec === 'play' && RT) {
-    const p = RT.p || {x:0,y:0,z:0};
-    t += `\nplay score=${RT.score} pos=[${[p.x,p.y,p.z].map(v=>(+v).toFixed(2))}] err=${S.err.join(' | ') || 'none'}\n`;
+    const p = RT.p || { x: 0, y: 0, z: 0 };
+    t += `\nplay score=${RT.score} pos=[${[p.x, p.y, p.z].map(v => (+v).toFixed(2))}] err=${S.err.join(' | ') || 'none'}\n`;
   }
-  return {sec, t: t + coordBlock()};
+  return { sec, t: t + coordBlock() };
 }
 
 function coordBlock() {
@@ -1671,18 +1676,53 @@ function coordBlock() {
   const cam = OB && OB.t ? r3([OB.t.x, OB.t.y, OB.t.z]) : '—';
   return `\ncoords player=${pl} cam=${cam} spawns=${sp.join(' | ') || '—'}\n`;
 }
+
 (function bindAuto() {
-  const run = (forceSec) => {
+  const run = async (forceSec) => {
     if (forceSec) S.section = forceSec;
-    const {sec, t} = autoText();
-    dl('hawa-auto-' + sec + '.txt', t);
-    tip('اتحمّل ملف تلقائي: ' + sec);
+    const sec = S.mode === 'play' ? 'play' : S.section;
+    let ctx = '';
+    // برمجة + كائنات برمجية ← ملف السكربتات المرجعي
+    // كائنات عادية ← ملف مستوى/ستوري المرجعي
+    if (sec === 'prog' || sec === 'sobj') ctx = await loadAutoCtx('auto_scripted_object.txt');
+    else if (sec === 'objects') ctx = await loadAutoCtx('auto_story_level.txt');
+    const { sec: s2, t } = autoText(ctx);
+    const tag = (typeof MOB !== 'undefined' && MOB.on) ? 'mobile' : 'desktop';
+    dl('hawa-auto-' + s2 + '-' + tag + '.txt', t);
+    try { tip('✔ تلقائي'); } catch (_) {}
   };
   const bA = $('#bAuto'), pA = $('#pAuto'), sA = $('#sAuto');
-  if (bA) bA.onclick = () => run(null);
-  if (pA) pA.onclick = () => run('prog');
-  if (sA) sA.onclick = () => run('sobj');
+  if (bA) bA.onclick = () => { run(null); };
+  if (pA) pA.onclick = () => { run('prog'); };
+  if (sA) sA.onclick = () => { run('sobj'); };
 })();
+
+function toggleFullscreen() {
+  try {
+    const el = document.documentElement;
+    if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+      const req = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
+      if (req) req.call(el);
+    } else {
+      const ex = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
+      if (ex) ex.call(document);
+    }
+  } catch (e) { console.warn(e); }
+}
+function syncFullscreenBtn() {
+  const b = document.getElementById('bFullscreen');
+  if (!b) return;
+  const on = !!(document.fullscreenElement || document.webkitFullscreenElement);
+  b.classList.toggle('on', on);
+  b.title = on ? 'خروج من ملء الشاشة' : 'ملء الشاشة';
+}
+(function bindFullscreen() {
+  const b = document.getElementById('bFullscreen');
+  if (b) b.onclick = () => toggleFullscreen();
+  document.addEventListener('fullscreenchange', syncFullscreenBtn);
+  document.addEventListener('webkitfullscreenchange', syncFullscreenBtn);
+})();
+
 
 /* =================================================================
    الاختبار — طبقة منفصلة تماماً

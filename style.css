@@ -260,7 +260,7 @@ label.r{color:var(--tx)}
 /* الـ tip فوق المحرر */
 #tip{z-index:60!important}
 
-/* ================= موبايل / شاشات صغيرة ================= */
+/* ================= موبايل / شاشات صغيرة (مضغوط) ================= */
 html,body{-webkit-text-size-adjust:100%;touch-action:manipulation}
 #mBar,#mOverlay,#mTouch,#mBuildHint{display:none}
 body.is-mobile #mBar{display:flex}
@@ -270,110 +270,167 @@ body.is-mobile:not(.play-on) #mBuildHint{display:block}
 @media (max-width:900px),(pointer:coarse){
   :root{--m-safe-b:env(safe-area-inset-bottom,0px);--m-safe-t:env(safe-area-inset-top,0px)}
   body.is-mobile #app{
-    grid-template:calc(48px + var(--m-safe-t)) 1fr 64px / 1fr;
+    grid-template:calc(36px + var(--m-safe-t)) 1fr 48px / 1fr;
     grid-template-areas:"bar" "vp" "rail";
     height:100dvh;height:100vh;
   }
   body.is-mobile #dock,body.is-mobile #side{
-    position:fixed;inset:auto 0 0 0;top:auto;height:min(58dvh,420px);
-    z-index:40;transform:translateY(110%);transition:transform .22s ease;
-    border-radius:16px 16px 0 0;box-shadow:0 -12px 40px rgba(0,0,0,.45);
-    max-width:100%;width:100%;
+    position:fixed;inset:auto 0 0 0;top:auto;height:min(52dvh,360px);
+    z-index:40;transform:translateY(110%);transition:transform .2s ease;
+    border-radius:12px 12px 0 0;box-shadow:0 -8px 28px rgba(0,0,0,.4);
+    max-width:100%;width:100%;font-size:12px;
   }
   body.is-mobile.sheet-dock #dock{transform:translateY(0)}
   body.is-mobile.sheet-side #side{transform:translateY(0);display:block!important}
   body.is-mobile #mOverlay{
-    display:block;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:35;
-    opacity:0;pointer-events:none;transition:opacity .2s;
+    display:block;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:35;
+    opacity:0;pointer-events:none;transition:opacity .15s;
   }
   body.is-mobile.sheet-dock #mOverlay,body.is-mobile.sheet-side #mOverlay{
     opacity:1;pointer-events:auto;
   }
+
+  /* شريط علوي صغير */
   body.is-mobile #bar{
-    padding:var(--m-safe-t) 8px 0 8px;gap:6px;overflow-x:auto;overflow-y:hidden;
-    -webkit-overflow-scrolling:touch;scrollbar-width:none;
+    padding:calc(2px + var(--m-safe-t)) 4px 2px;gap:3px;overflow-x:auto;overflow-y:hidden;
+    -webkit-overflow-scrolling:touch;scrollbar-width:none;min-height:0;
   }
   body.is-mobile #bar::-webkit-scrollbar{display:none}
-  body.is-mobile .brand small,body.is-mobile .brand b{font-size:12px}
-  body.is-mobile .brand .logo{width:28px;height:28px;font-size:14px}
+  body.is-mobile .brand{gap:4px}
+  body.is-mobile .brand small,body.is-mobile .brand b{font-size:10px}
+  body.is-mobile .brand .logo{width:22px;height:22px;font-size:11px;border-radius:6px}
   body.is-mobile #bar button i{display:none}
-  body.is-mobile #bar button{padding:8px 10px;min-height:40px;font-size:12px}
-  body.is-mobile #secs{flex-shrink:0}
-  body.is-mobile #secs button{padding:8px 10px;font-size:12px}
+  body.is-mobile #bar button{
+    padding:4px 6px;min-height:28px;height:28px;font-size:10px;border-radius:7px;gap:3px;
+  }
+  body.is-mobile #bar button svg{width:13px;height:13px}
+  body.is-mobile #secs{flex-shrink:0;gap:2px}
+  body.is-mobile #secs button{padding:4px 6px;font-size:10px;min-height:28px}
+  body.is-mobile #bTest.go{padding:4px 8px;font-size:10px}
+  body.is-mobile #bFullscreen{min-width:28px!important;height:28px!important;font-size:13px;padding:0 6px;margin:0}
+
+  /* شريط أدوات سفلي مضغوط */
   body.is-mobile #rail{
     flex-direction:row;justify-content:space-around;align-items:center;
-    padding:4px 6px calc(4px + var(--m-safe-b));gap:4px;overflow-x:auto;
+    padding:2px 3px calc(2px + var(--m-safe-b));gap:2px;overflow-x:auto;
     border-top:1px solid var(--line);border-inline-end:0;background:#0a1224;
   }
-  body.is-mobile #rail .rail-group{flex-direction:row;gap:4px;flex-wrap:nowrap}
+  body.is-mobile #rail .rail-group{flex-direction:row;gap:2px;flex-wrap:nowrap;margin:0}
   body.is-mobile #rail .rail-group.bottom{margin:0}
   body.is-mobile #rail button{
-    width:46px;height:46px;min-width:46px;border-radius:12px;padding:0;
+    width:34px;height:34px;min-width:34px;border-radius:8px;padding:0;
   }
-  body.is-mobile #rail button svg{width:20px;height:20px}
-  body.is-mobile #rail .snap-l{font-size:9px}
+  body.is-mobile #rail button svg{width:15px;height:15px}
+  body.is-mobile #rail .snap-l{font-size:7px;bottom:1px}
+
   body.is-mobile #vp{min-height:0}
-  body.is-mobile #gz{bottom:72px;left:50%;transform:translateX(-50%);right:auto;max-width:96vw;overflow-x:auto}
-  body.is-mobile #gz button{min-width:52px;min-height:44px;padding:8px 6px}
-  body.is-mobile #coordPanel{top:56px;font-size:12px;max-width:46vw}
-  body.is-mobile #tip{bottom:72px;max-width:92%;font-size:11px;white-space:normal;text-align:center}
-  body.is-mobile #pList,body.is-mobile #sList{grid-template-columns:repeat(3,minmax(0,1fr))}
-  body.is-mobile #grid .g{grid-template-columns:repeat(3,1fr)}
-  body.is-mobile #grid .g button{min-height:64px;padding:10px 4px}
+
+  /* محاور + أزرار الـ 5 (نقل/تدوير/تحجيم…) */
+  body.is-mobile #gz{
+    bottom:54px;left:50%;transform:translateX(-50%);right:auto;
+    max-width:96vw;overflow-x:auto;gap:3px;flex-direction:row;flex-wrap:nowrap;
+    padding:3px 4px;background:rgba(7,12,22,.72);border:1px solid var(--line);
+    border-radius:10px;
+  }
+  body.is-mobile #gz button{
+    min-width:36px;min-height:32px;padding:3px 4px;gap:1px;font-size:9px;border-radius:6px;
+  }
+  body.is-mobile #gz button svg{width:13px;height:13px}
+  body.is-mobile #gz button i{font-size:9px}
+  body.is-mobile #gz .gz-hint{display:none}
+
+  body.is-mobile #coordPanel{top:40px;font-size:10px;max-width:42vw;padding:6px 8px;border-radius:8px}
+  body.is-mobile #coordPanel .cp-row{font-size:10px;line-height:1.45;gap:8px}
+  body.is-mobile #tip{bottom:54px;max-width:90%;font-size:10px;padding:4px 10px;white-space:normal;text-align:center}
+  body.is-mobile #stat{font-size:9px;padding:3px 6px;bottom:52px}
+  body.is-mobile #crosshair{font-size:18px}
+
+  body.is-mobile #pList,body.is-mobile #sList{grid-template-columns:repeat(3,minmax(0,1fr));gap:4px}
+  body.is-mobile .pcard{padding:5px 4px;gap:3px}
+  body.is-mobile .pcard .nm{font-size:9px}
+  body.is-mobile #grid .g{grid-template-columns:repeat(3,1fr);gap:4px}
+  body.is-mobile #grid .g button{min-height:48px;padding:6px 3px;font-size:10px}
+  body.is-mobile #dock .sub,body.is-mobile #side .sub{font-size:10px;padding:4px 8px}
+  body.is-mobile #dock button,body.is-mobile #side button{min-height:28px;padding:4px 7px;font-size:10px}
+  body.is-mobile #hier div{padding:4px 7px;font-size:11px}
+  body.is-mobile #ins{font-size:11px}
   body.is-mobile #ed .box{width:100%;height:100%;max-width:100%;border-radius:0}
-  body.is-mobile #ed textarea{font-size:14px}
-  body.is-mobile #play #pTop{top:calc(8px + var(--m-safe-t));left:8px;right:auto}
-  body.is-mobile #play #pTop button{min-height:44px;padding:10px 14px;font-size:13px}
-  body.is-mobile #pMic{bottom:calc(16px + var(--m-safe-b));transform:scale(.9);transform-origin:bottom right}
+  body.is-mobile #ed textarea{font-size:13px}
+  body.is-mobile #ed .eh{padding:6px;gap:4px}
+  body.is-mobile #ed .eh button{min-height:28px;padding:4px 8px;font-size:11px}
+
+  body.is-mobile #play #pTop{top:calc(4px + var(--m-safe-t));left:6px;right:auto}
+  body.is-mobile #play #pTop button{min-height:30px;padding:5px 9px;font-size:11px;border-radius:8px}
+  body.is-mobile #pMic{bottom:calc(10px + var(--m-safe-b));transform:scale(.75);transform-origin:bottom right}
+  body.is-mobile #pFps{font-size:10px}
 
   #mBar{
-    position:fixed;top:calc(6px + var(--m-safe-t));inset-inline-end:8px;z-index:30;
-    gap:6px;align-items:center;
+    position:fixed;top:calc(4px + var(--m-safe-t));inset-inline-end:4px;z-index:30;
+    gap:3px;align-items:center;
   }
   #mBar button{
-    width:44px;height:44px;border-radius:12px;background:rgba(12,20,36,.88);
-    border:1px solid var(--line2);color:#e2e8f0;font-size:18px;padding:0;
+    width:30px;height:30px;border-radius:8px;background:rgba(12,20,36,.88);
+    border:1px solid var(--line2);color:#e2e8f0;font-size:13px;padding:0;
   }
-  #mBar button.go{background:linear-gradient(180deg,#16a34a,#15803d);border-color:#22c55e;color:#fff}
+  #mBar button.go{background:linear-gradient(180deg,#16a34a,#15803d);border-color:#22c55e;color:#fff;font-size:12px}
   #mBuildHint{
-    position:fixed;bottom:72px;left:50%;transform:translateX(-50%);z-index:12;
-    font-size:11px;color:#cbd5e1;background:rgba(7,12,22,.75);border:1px solid var(--line);
-    padding:6px 12px;border-radius:999px;pointer-events:none;max-width:92%;text-align:center;
+    position:fixed;bottom:52px;left:50%;transform:translateX(-50%);z-index:12;
+    font-size:9px;color:#cbd5e1;background:rgba(7,12,22,.75);border:1px solid var(--line);
+    padding:3px 8px;border-radius:999px;pointer-events:none;max-width:90%;text-align:center;
   }
   #mTouch{position:fixed;inset:0;pointer-events:none;z-index:15}
   #mJoy{
-    pointer-events:auto;position:absolute;left:max(12px,env(safe-area-inset-left));
-    bottom:max(18px,calc(12px + var(--m-safe-b)));
-    width:128px;height:128px;border-radius:50%;
-    background:rgba(15,23,42,.45);border:2px solid rgba(148,163,184,.35);
+    pointer-events:auto;position:absolute;left:max(8px,env(safe-area-inset-left));
+    bottom:max(10px,calc(8px + var(--m-safe-b)));
+    width:96px;height:96px;border-radius:50%;
+    background:rgba(15,23,42,.4);border:1.5px solid rgba(148,163,184,.3);
     touch-action:none;
   }
   #mJoyKnob{
-    position:absolute;left:50%;top:50%;width:54px;height:54px;margin:-27px 0 0 -27px;
-    border-radius:50%;background:rgba(56,217,245,.55);border:2px solid rgba(186,230,253,.8);
-    box-shadow:0 4px 16px rgba(0,0,0,.35);
+    position:absolute;left:50%;top:50%;width:40px;height:40px;margin:-20px 0 0 -20px;
+    border-radius:50%;background:rgba(56,217,245,.5);border:1.5px solid rgba(186,230,253,.75);
+    box-shadow:0 2px 10px rgba(0,0,0,.3);
   }
   #mAct{
-    pointer-events:auto;position:absolute;right:max(12px,env(safe-area-inset-right));
-    bottom:max(18px,calc(12px + var(--m-safe-b)));
-    display:flex;flex-direction:column;gap:10px;align-items:flex-end;
+    pointer-events:auto;position:absolute;right:max(8px,env(safe-area-inset-right));
+    bottom:max(10px,calc(8px + var(--m-safe-b)));
+    display:flex;flex-direction:column;gap:6px;align-items:flex-end;
   }
   #mAct button{
-    width:72px;height:72px;border-radius:50%;font-weight:800;font-size:14px;
-    background:rgba(15,23,42,.55);border:2px solid rgba(148,163,184,.4);color:#f1f5f9;
+    width:52px;height:52px;border-radius:50%;font-weight:800;font-size:11px;
+    background:rgba(15,23,42,.5);border:1.5px solid rgba(148,163,184,.35);color:#f1f5f9;
     touch-action:manipulation;-webkit-user-select:none;user-select:none;
   }
-  #mJump{background:rgba(34,197,94,.35);border-color:rgba(74,222,128,.7)}
-  #mRun{width:60px;height:60px;font-size:12px;background:rgba(245,158,11,.3);border-color:rgba(251,191,36,.65)}
-  #mAct button:active,#mJump.on,#mRun.on{filter:brightness(1.25);transform:scale(.96)}
+  #mJump{background:rgba(34,197,94,.32);border-color:rgba(74,222,128,.65)}
+  #mRun{width:44px;height:44px;font-size:10px;background:rgba(245,158,11,.28);border-color:rgba(251,191,36,.6)}
+  #mAct button:active,#mJump.on,#mRun.on{filter:brightness(1.2);transform:scale(.96)}
+
+  /* أزرار touch من السكربتات أصغر على الموبايل */
+  body.is-mobile #hawaTouchUI button{
+    min-width:56px!important;min-height:56px!important;padding:6px 8px!important;
+    font-size:11px!important;border-radius:12px!important;
+  }
 }
 
 @media (max-width:480px){
   body.is-mobile #bar .seg:nth-of-type(2){display:none}
-  body.is-mobile #mJoy{width:112px;height:112px}
-  body.is-mobile #mAct button{width:64px;height:64px}
+  body.is-mobile #mJoy{width:88px;height:88px}
+  body.is-mobile #mJoyKnob{width:36px;height:36px;margin:-18px 0 0 -18px}
+  body.is-mobile #mAct button{width:48px;height:48px;font-size:10px}
+  body.is-mobile #gz button{min-width:32px;min-height:28px}
 }
 
 /* أزرار لمس السكربتات (مركبات / ركوب) */
 #hawaTouchUI button.on{filter:brightness(1.2);transform:scale(0.96)}
 #hawaTouchUI button:active{filter:brightness(1.25)}
+
+
+/* زر ملء الشاشة — فوق يمين */
+#bFullscreen{
+  margin-inline-start:6px;min-width:42px;height:40px;padding:0 10px;
+  font-size:18px;border:1px solid var(--line2);border-radius:10px;
+  background:rgba(15,23,42,.75);color:#e2e8f0;
+}
+#bFullscreen:hover{border-color:var(--acc);background:rgba(56,217,245,.12)}
+#bFullscreen.on{background:rgba(56,217,245,.22);border-color:var(--acc);color:#c6f6ff}
+body.is-mobile #bFullscreen{min-width:44px;height:44px}
