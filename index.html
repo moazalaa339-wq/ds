@@ -28,7 +28,7 @@
 <!-- ================= طبقة البناء (Build) ================= -->
 <div id="app">
   <header id="bar">
-    <div class="brand"><span class="logo">𓂀</span><div><b>Hawa</b> Engine<small>v2.15 · بناء</small></div></div>
+    <div class="brand"><span class="logo">𓂀</span><div><b>Hawa</b> Engine<small>v2.20 · بناء</small></div></div>
 
     <nav class="tabs" id="secs">
       <button data-sec="objects" class="on"><span>🏛</span>الكائنات</button>
@@ -78,7 +78,12 @@
 
   <!-- لوحة الأقسام اليسرى -->
   <aside id="dock">
-    <div class="dock-head"><span id="dockTitle">الكائنات</span></div>
+    <div class="dock-head"><span id="dockTitle">الكائنات</span><button type="button" class="m-close" data-m-close aria-label="إغلاق">✕</button></div>
+    <div id="mSecs" class="m-secs">
+      <button type="button" data-sec="objects" class="on"><span>🏛</span>الكائنات</button>
+      <button type="button" data-sec="prog"><span>⚙</span>البرمجة</button>
+      <button type="button" data-sec="sobj"><span>🎮</span>برمجية</button>
+    </div>
 
     <div id="catP">
       <div class="search"><span data-ic="search"></span><input id="q" placeholder="ابحث عن كائن"></div>
@@ -153,7 +158,7 @@
 
   <!-- لوحة المشهد والخصائص اليمين -->
   <aside id="side">
-    <div class="sub"><span>المشهد</span><span id="objCount" class="mut">0 كائن</span></div>
+    <div class="sub"><span>المشهد</span><span id="objCount" class="mut">0 كائن</span><button type="button" class="m-close" data-m-close aria-label="إغلاق">✕</button></div>
     <div class="search"><span data-ic="search"></span><input id="hq" placeholder="ابحث في المشهد"></div>
     <div id="hier"></div>
     <div class="sub"><span>الخصائص</span></div>
@@ -210,12 +215,27 @@
 
 <!-- واجهة الموبايل -->
 <div id="mBar" hidden>
-  <button type="button" id="mDockBtn" title="القائمة">☰</button>
-  <button type="button" id="mSideBtn" title="المشهد">📋</button>
-  <button type="button" id="mStorageBtn" title="التخزين">💾</button>
-  <button type="button" id="mTestBtn" class="go" title="اختبر">▶</button>
+  <button type="button" id="mDockBtn" aria-label="قائمة الكائنات والبرمجة"><span>☰</span><i>القائمة</i></button>
+  <button type="button" id="mSideBtn" aria-label="المشهد والخصائص"><span>📋</span><i>المشهد</i></button>
+  <span class="m-grow"></span>
+  <button type="button" id="mMoreBtn" aria-label="المزيد"><span>⋯</span><i>المزيد</i></button>
+  <button type="button" id="mTestBtn" class="go" aria-label="اختبر"><span>▶</span><i>اختبر</i></button>
 </div>
-<div id="mOverlay" hidden></div>
+<div id="mOverlay"></div>
+<div id="mMore">
+  <div class="mm-hd"><b>المزيد</b><button type="button" data-m-close aria-label="إغلاق">✕</button></div>
+  <div class="mm-grid">
+    <button type="button" data-proxy="bSave"><span>💾</span>حفظ</button>
+    <button type="button" data-proxy="bAuto"><span>🤖</span>تلقائي</button>
+    <button type="button" data-proxy="bStorage"><span>🗂</span>عرض التخزين</button>
+    <button type="button" data-proxy="bProjDown"><span>⬇</span>تحميل المشروع</button>
+    <button type="button" data-proxy="bProjUp"><span>⬆</span>رفع المشروع</button>
+    <button type="button" data-proxy="bConvert"><span>📦</span>تحويل للعبة</button>
+    <button type="button" data-proxy="bOpenGame"><span>🎮</span>فتح اللعبة</button>
+    <button type="button" data-proxy="bFullscreen"><span>⛶</span>ملء الشاشة</button>
+    <button type="button" data-proxy="bWipe" class="mm-danger"><span>🗑</span>حذف الكلي</button>
+  </div>
+</div>
 <div id="mTouch" hidden>
   <div id="mJoy"><i id="mJoyKnob"></i></div>
   <div id="mAct">

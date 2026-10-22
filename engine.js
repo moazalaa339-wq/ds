@@ -754,8 +754,15 @@ function ugizmo() {
   if (!o || S.mode !== 'build') { gizmo.visible = false; g.hidden = true; return; }
   const cy = o.base ? o.pos[1] + o.scl[1] / 2 : o.pos[1];
   g.hidden = false; gizmo.visible = true; gizmo.position.set(o.pos[0], cy, o.pos[2]);
+  try { fatHits(!!(typeof MOB !== 'undefined' && MOB.on)); } catch (_) {}
   const gzMul = (typeof MOB !== 'undefined' && MOB.on) ? .32 : .22;
   gizmo.scale.setScalar(cam.position.distanceTo(gizmo.position) * gzMul); gizmo.updateMatrixWorld(true);
+  if (typeof MOB !== 'undefined' && MOB.on) {
+    // موبايل: شريط ثابت مضغوط — مش مربوط بموقع الكائن على الشاشة
+    g.style.left = '';
+    g.style.top = '';
+    return;
+  }
   const v = new T.Vector3(o.pos[0], cy + Math.max(.6, o.scl[1] / 2) + .5, o.pos[2]).project(cam);
   if (v.z > 1) { g.hidden = true; return; }
   const W = vp.clientWidth, H = vp.clientHeight, hw = g.offsetWidth / 2;
@@ -786,7 +793,19 @@ function axT(r, p, a) { const w = new T.Vector3(r.origin.x - p[0], r.origin.y - 
 let drag = null;
 function startDrag(h, e) {
   const o = OBJ.get(S.sel);
-  drag = {o, ax: h.ax, mode: h.mode, t0: axT(ray(e).ray, o.pos, AX[h.ax]), pos: [...o.pos], rot: [...o.rot], scl: [...o.scl], x0: e.clientX, y0: e.clientY};
+  drag = {o, ax: h.ax, mode: h.mode, pid: e.pointerId, t0: axT(ray(e).ray, o.pos, AX[h.ax]), pos: [...o.pos], rot: [...o.rot], scl: [...o.scl], x0: e.clientX, y0: e.clientY};
+}
+/* مناطق لمس الأسهم/الحلقات أكبر على الموبايل (إصبع مش ماوس) */
+let _fatHits = false;
+function fatHits(on) {
+  if (on === _fatHits) return; _fatHits = on;
+  for (const h of HIT) {
+    const old = h.m.geometry;
+    h.m.geometry = h.mode === 'rotate'
+      ? new T.TorusGeometry(1.2, on ? .6 : .28, 8, 48)
+      : new T.CylinderGeometry(on ? .72 : .32, on ? .72 : .32, on ? 2.4 : 1.9, 10);
+    try { old.dispose(); } catch (_) {}
+  }
 }
 function doDrag(e) {
   const {o, ax, mode, pos, rot, scl} = drag, sn = S.snap, q = (v, s) => s ? Math.round(v / s) * s : v;
@@ -961,13 +980,21 @@ cv.addEventListener('pointermove', e => {
   if (!mv && (S.tool === 'place' || S.tool === 'respawn' || S.tool === 'online_spawn')) { S.hr = ray(e).ray.clone(); S.dirty = 1; }
   if (!mv) return;
   const dx = e.clientX - lx, dy = e.clientY - ly; lx = e.clientX; ly = e.clientY; mv.moved += Math.abs(dx) + Math.abs(dy);
-  if (drag) return doDrag(e);
+  if (drag) { if (drag.pid == null || e.pointerId === drag.pid) doDrag(e); return; }
   if (mv.b === 2) { if (e.shiftKey) pan(dx, dy); else { OB.yaw -= dx * .005; OB.pitch = clamp(OB.pitch + dy * .005, -1.5, 1.5); camUpdate(); } }
   else if (mv.b === 1) pan(dx, dy);
 });
 cv.addEventListener('pointerleave', () => { S.hr = null; });
+function _endPointerGesture() {
+  mv = null; rmb = false;
+  if (S.boxdel) { S.boxdel = null; try { _marqueeShow(null); } catch (_) {} }
+  if (drag) { drag = null; try { chg(); } catch (_) {} }
+}
+cv.addEventListener('pointercancel', e => { if (S.mode === 'build') _endPointerGesture(); });
+cv.addEventListener('lostpointercapture', e => { if (S.mode === 'build' && drag && (drag.pid == null || e.pointerId === drag.pid)) _endPointerGesture(); });
 cv.addEventListener('pointerup', e => {
   if (S.mode !== 'build' || !mv) return;
+  if (drag && drag.pid != null && e.pointerId !== drag.pid) return;   // إصبع تاني مش بتاع السحب
   const m = mv; mv = null; rmb = false;
   if (S.boxdel && S.tool === 'boxdel') {
     const n = _marqueeDelete(S.boxdel);
@@ -1048,7 +1075,7 @@ function setTool(t) {
 }
 function setSec(s) {
   S.section = s; $('#catP').hidden = s !== 'objects'; $('#progP').hidden = s !== 'prog'; $('#sobjP').hidden = s !== 'sobj';
-  $$('#secs [data-sec]').forEach(b => b.classList.toggle('on', b.dataset.sec === s));
+  $$('#secs [data-sec],#mSecs [data-sec]').forEach(b => b.classList.toggle('on', b.dataset.sec === s));
   $('#dockTitle').textContent = {objects: 'الكائنات', prog: 'قسم البرمجة', sobj: 'الكائنات البرمجية'}[s];
 }
 function cats() {
@@ -1063,6 +1090,7 @@ $('#grid').onclick = e => { const b = e.target.closest('[data-it]'); if (!b) ret
 $('#q').oninput = cats;
 $('#tools').onclick = e => { const b = e.target.closest('[data-tool]'); if (b) setTool(b.dataset.tool); };
 $('#secs').onclick = e => { const b = e.target.closest('[data-sec]'); if (b) setSec(b.dataset.sec); };
+if ($('#mSecs')) $('#mSecs').onclick = e => { const b = e.target.closest('[data-sec]'); if (b) setSec(b.dataset.sec); };
 $('#bFly').onclick = toggleFly;
 $('#bPar').onclick = () => { document.body.classList.toggle('noside'); $('#bPar').classList.toggle('on', !document.body.classList.contains('noside')); setTimeout(resize, 30); };
 $('#bRs').onclick = () => setTool(S.tool === 'respawn' ? 'select' : 'respawn');
@@ -1968,6 +1996,7 @@ const StoreFS = {
     this.handle = null;
     this.mode = 'none';
     this.label = 'لم يُحدَّد';
+    this.needsGesture = false;
     if (!this.supportsFolder()) {
       this.label = 'المتصفح لا يدعم مجلدات';
       return false;
@@ -1975,16 +2004,34 @@ const StoreFS = {
     try {
       const h = await this._idbGet('dir');
       if (h) {
-        const perm = await h.queryPermission({ mode: 'readwrite' });
-        if (perm === 'granted' || (perm === 'prompt' && (await h.requestPermission({ mode: 'readwrite' })) === 'granted')) {
-          this.handle = h;
-          this.mode = 'folder';
-          this.label = 'مجلد: ' + (h.name || 'جهاز');
-          try { localStorage.setItem('hawa2-store-mode', 'folder'); } catch (_) {}
+        this.handle = h;
+        this.mode = 'folder';
+        this.label = 'مجلد: ' + (h.name || 'جهاز');
+        try { localStorage.setItem('hawa2-store-mode', 'folder'); } catch (_) {}
+        let perm = 'prompt';
+        try { perm = await h.queryPermission({ mode: 'readwrite' }); } catch (_) {}
+        if (perm === 'granted') {
+          this.needsGesture = false;
           return true;
         }
+        // المجلد معروف لكن المتصفح يطلب ضغطة مستخدم بعد التحديث — مش اختيار جديد
+        this.needsGesture = true;
+        return 'pending';
       }
     } catch (e) { console.warn('StoreFS init', e); }
+    return false;
+  },
+  async activatePermission() {
+    if (!this.handle) return false;
+    try {
+      const p = await this.handle.requestPermission({ mode: 'readwrite' });
+      if (p === 'granted') {
+        this.needsGesture = false;
+        this.mode = 'folder';
+        this.label = 'مجلد: ' + (this.handle.name || 'جهاز');
+        return true;
+      }
+    } catch (e) { console.warn('activatePermission', e); }
     return false;
   },
   snapshot() {
@@ -2499,7 +2546,8 @@ function showStorageInfo() {
     <div class="st-row"><span>حالة المجلد</span><b>${hasFolder ? 'متصل' : 'غير محدد'}</b></div>
     <div class="st-row"><span>كائنات / برمجة / برمجي / وسائط</span><b>${objs} / ${scripts} / ${sdefs} / ${mediaN}</b></div>
     <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px">
-      <button type="button" id="stPick" class="go" style="flex:1;min-height:40px">${hasFolder ? 'تغيير مكان التخزين' : 'تحديد مكان التخزين'}</button>
+      ${StoreFS.needsGesture ? '<button type="button" id="stActivate" class="go" style="flex:1;min-height:40px">تفعيل المجلد المحفوظ</button>' : ''}
+      <button type="button" id="stPick" class="go" style="flex:1;min-height:40px">${hasFolder && !StoreFS.needsGesture ? 'تغيير مكان التخزين' : 'تحديد مكان التخزين'}</button>
       <button type="button" id="stReveal" style="flex:1;min-height:40px" ${hasFolder ? '' : 'disabled'}>عرض مجلد التخزين</button>
     </div>
     <div id="stListing" class="mut small" style="margin-top:10px;max-height:180px;overflow:auto;line-height:1.65"></div>
@@ -2509,6 +2557,22 @@ function showStorageInfo() {
       ${folderOk ? '' : '<br><b>ملاحظة:</b> اختيار المجلد يحتاج متصفح يدعم File System Access (Chrome/Edge).'}
     </p>`;
   modal.hidden = false;
+  const act = document.getElementById('stActivate');
+  if (act) act.onclick = async () => {
+    act.disabled = true;
+    const ok = await StoreFS.activatePermission();
+    act.disabled = false;
+    if (ok) {
+      try {
+        const d2 = await StoreFS.loadPreferred();
+        if (d2) loadData(d2, false);
+      } catch (_) {}
+      try { tip('✔ تم تفعيل المجلد'); } catch (_) {}
+      showStorageInfo();
+    } else {
+      await uiAlert('فشل التفعيل. جرّب «تحديد مكان التخزين».');
+    }
+  };
   const pick = document.getElementById('stPick');
   const reveal = document.getElementById('stReveal');
   if (pick) pick.onclick = async () => {
@@ -5474,6 +5538,7 @@ function playStop() {
   for (const o of S.objs) refreshPreview(o);
   grid.visible = true; $('#play').hidden = true; $('#app').hidden = false; attach(vp);
   setTool(S.tool); sel(null); camUpdate(); updModes(); refNames = null; syncMarks();
+  try { drag = null; mv = null; MOB.resetBuildTouch(); MOB.detect(); MOB.syncPads(); setTimeout(() => { try { MOB.detect(); MOB.syncPads(); resize(); } catch (_) {} }, 120); } catch (_) {}
 }
 function togglePlay() { S.mode === 'play' ? playStop() : playStart(); }
 $('#bTest').onclick = togglePlay;
@@ -5634,6 +5699,14 @@ const MOB = {
     document.addEventListener('gesturestart', e => e.preventDefault(), {passive: false});
     const ov = document.getElementById('mOverlay');
     if (ov) ov.onclick = () => this.closeSheets();
+    const mMore = document.getElementById('mMoreBtn');
+    if (mMore) mMore.onclick = () => this.toggleSheet('more');
+    document.querySelectorAll('[data-proxy]').forEach(b => b.onclick = () => {
+      this.closeSheets();
+      const t = document.getElementById(b.dataset.proxy);
+      if (t) setTimeout(() => { try { t.click(); } catch (_) {} }, 80);
+    });
+    document.querySelectorAll('[data-m-close]').forEach(b => b.onclick = () => this.closeSheets());
     const dBtn = document.getElementById('mDockBtn');
     const sBtn = document.getElementById('mSideBtn');
     const tBtn = document.getElementById('mTestBtn');
@@ -5661,22 +5734,24 @@ const MOB = {
     }
   },
   toggleSheet(which) {
-    const dock = which === 'dock';
-    const openDock = dock && !document.body.classList.contains('sheet-dock');
-    const openSide = !dock && !document.body.classList.contains('sheet-side');
-    document.body.classList.remove('sheet-dock', 'sheet-side');
-    if (openDock) document.body.classList.add('sheet-dock');
-    if (openSide) {
-      document.body.classList.remove('noside');
-      document.body.classList.add('sheet-side');
+    const cls = 'sheet-' + which, b = document.body, was = b.classList.contains(cls);
+    b.classList.remove('sheet-dock', 'sheet-side', 'sheet-more');
+    if (!was) {
+      b.classList.add(cls);
+      if (which === 'side') b.classList.remove('noside');
     }
     setTimeout(resize, 40);
   },
   closeSheets() {
-    document.body.classList.remove('sheet-dock', 'sheet-side');
+    document.body.classList.remove('sheet-dock', 'sheet-side', 'sheet-more');
     setTimeout(resize, 40);
   },
+  resetBuildTouch() {
+    this.pinch = null; this.lookTouch = null; this.buildTouch = null; this.gizmoTouch = false;
+    this.look.pid = null;
+  },
   setPlay(on) {
+    this.playOn = !!on;
     document.body.classList.toggle('play-on', !!on);
     if (!on) {
       this.joy.x = this.joy.y = 0; this.joy.active = false;
@@ -5695,7 +5770,7 @@ const MOB = {
       const bh = document.getElementById('mBuildHint'); if (bh) bh.hidden = true;
       return;
     }
-    const play = S.mode === 'play';
+    const play = !!this.playOn;      // مش S.mode — لأن setPlay بيتنادى قبل/بعد تغيير الوضع
     const scriptJoy = document.getElementById('hawa-mobile-joystick');
     const mt = document.getElementById('mTouch');
     // جوystick ثابت في البناء واللعب — يختفي لو سكربت جوystick ظاهر في اللعب
@@ -5704,6 +5779,13 @@ const MOB = {
     if (mb) mb.hidden = !!play;
     const bh = document.getElementById('mBuildHint');
     if (bh) bh.hidden = !!play;
+    // أزرار اليمين: في البناء = طلوع/نزول للكاميرا، في اللعب = قفز/جري
+    const jb = document.getElementById('mJump'), rb = document.getElementById('mRun');
+    if (jb && rb) {
+      jb.innerHTML = play ? 'قفز' : '<b>▲</b><span>طلوع</span>';
+      rb.innerHTML = play ? 'جري' : '<b>▼</b><span>نزول</span>';
+      jb.setAttribute('aria-label', play ? 'قفز' : 'طلوع'); rb.setAttribute('aria-label', play ? 'جري' : 'نزول');
+    }
   },
   _bindJoy() {
     const zone = document.getElementById('mJoy');
@@ -5788,80 +5870,101 @@ const MOB = {
     play.addEventListener('pointercancel', clear);
   },
   _bindBuildGestures() {
-    // بينش زووم + تمييز لمسة قصيرة = كليك
-    let taps = new Map();
+    this.pinch = null;
+    this.buildTouch = null;
+    this.lookTouch = null;
     cv.addEventListener('touchstart', e => {
       if (!this.on || S.mode !== 'build') return;
-      if (e.touches.length === 2) {
+      if (e.touches.length >= 2) {
         const a = e.touches[0], b = e.touches[1];
         const dist = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
-        this.pinch = {dist, d0: OB.dist};
+        this.pinch = { dist, d0: OB.dist };
         this.buildTouch = null;
+        this.lookTouch = null;
         this.gizmoTouch = false;
         e.preventDefault();
-      } else if (e.touches.length === 1) {
-        const t = e.touches[0];
-        // أولوية لمحاور الجizmo
-        this.gizmoTouch = false;
-        if (S.sel != null && gizmo.visible) {
-          try {
-            const list = HIT.filter(h => h.mode === S.gz).map(h => h.m);
-            const hh = ray({clientX: t.clientX, clientY: t.clientY}).intersectObjects(list, false)[0];
-            if (hh) {
-              const rec = HIT.find(h => h.m === hh.object);
-              if (rec) {
-                startDrag(rec, {clientX: t.clientX, clientY: t.clientY, button: 0});
-                this.gizmoTouch = true;
-                this.buildTouch = null;
-                e.preventDefault();
-                return;
-              }
-            }
-          } catch (_) {}
-        }
-        this.buildTouch = {x: t.clientX, y: t.clientY, t: performance.now(), moved: 0, id: t.identifier};
+        return;
       }
-    }, {passive: false});
+      const t = e.changedTouches[0] || e.touches[0];
+      if (!t) return;
+      this.gizmoTouch = false;
+      if (S.sel != null && gizmo.visible) {
+        try {
+          const list = HIT.filter(h => h.mode === S.gz).map(h => h.m);
+          const hh = ray({ clientX: t.clientX, clientY: t.clientY }).intersectObjects(list, false)[0];
+          if (hh) {
+            const rec = HIT.find(h => h.m === hh.object);
+            if (rec) {
+              if (!drag) startDrag(rec, { clientX: t.clientX, clientY: t.clientY, button: 0 });
+              this.gizmoTouch = true;
+              this.buildTouch = null;
+              this.lookTouch = null;
+              e.preventDefault();
+              return;
+            }
+          }
+        } catch (_) {}
+      }
+      // إصبع على المشهد = تدوير كاميرا — يشتغل مع جوystick بإصبع تاني
+      this.lookTouch = { x: t.clientX, y: t.clientY, t: performance.now(), moved: 0, id: t.identifier };
+      this.buildTouch = this.lookTouch;
+    }, { passive: false });
     cv.addEventListener('touchmove', e => {
       if (!this.on || S.mode !== 'build') return;
-      // أثناء سحب محور الجizmo اترك pointer events تشتغل — متدورش الكاميرا
-      if (typeof drag !== 'undefined' && drag) { e.preventDefault(); return; }
+      if (typeof drag !== 'undefined' && drag) {
+        e.preventDefault();
+        if (drag.pid == null && e.touches[0]) { try { doDrag({ clientX: e.touches[0].clientX, clientY: e.touches[0].clientY }); } catch (_) {} }
+        return;
+      }
       if (this.gizmoTouch) { e.preventDefault(); return; }
-      if (e.touches.length === 2 && this.pinch) {
+      if (e.touches.length >= 2 && this.pinch) {
         const a = e.touches[0], b = e.touches[1];
         const dist = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
         const s = this.pinch.dist / Math.max(40, dist);
         OB.dist = clamp(this.pinch.d0 * s, 1.5, 400);
         camUpdate();
         e.preventDefault();
-      } else if (e.touches.length === 1 && this.buildTouch) {
-        const t = e.touches[0];
-        const dx = t.clientX - this.buildTouch.x, dy = t.clientY - this.buildTouch.y;
-        this.buildTouch.moved += Math.abs(dx) + Math.abs(dy);
-        OB.yaw -= dx * 0.005;
-        OB.pitch = clamp(OB.pitch + dy * 0.005, -1.5, 1.5);
-        this.buildTouch.x = t.clientX; this.buildTouch.y = t.clientY;
-        camUpdate();
-        e.preventDefault();
+        return;
       }
-    }, {passive: false});
+      if (this.lookTouch) {
+        let t = null;
+        for (let i = 0; i < e.touches.length; i++) {
+          if (e.touches[i].identifier === this.lookTouch.id) { t = e.touches[i]; break; }
+        }
+        if (t) {
+          const dx = t.clientX - this.lookTouch.x, dy = t.clientY - this.lookTouch.y;
+          this.lookTouch.moved += Math.abs(dx) + Math.abs(dy);
+          OB.yaw -= dx * 0.005;
+          OB.pitch = clamp(OB.pitch + dy * 0.005, -1.5, 1.5);
+          this.lookTouch.x = t.clientX;
+          this.lookTouch.y = t.clientY;
+          camUpdate();
+          e.preventDefault();
+        }
+      }
+    }, { passive: false });
     cv.addEventListener('touchend', e => {
       if (!this.on || S.mode !== 'build') return;
       if (this.pinch && e.touches.length < 2) this.pinch = null;
-      if (this.gizmoTouch) { this.gizmoTouch = false; }
-      if (this.buildTouch && e.changedTouches.length) {
-        const t = e.changedTouches[0];
-        const bt = this.buildTouch;
-        this.buildTouch = null;
-        // لمسة قصيرة بدون حركة ≈ كليك أداة
-        if (bt.moved < 12 && performance.now() - bt.t < 320) {
-          const fake = {clientX: t.clientX, clientY: t.clientY, button: 0};
-          try { click(fake); } catch (_) {}
+      if (this.gizmoTouch) this.gizmoTouch = false;
+      if (this.lookTouch && e.changedTouches.length) {
+        for (let i = 0; i < e.changedTouches.length; i++) {
+          if (e.changedTouches[i].identifier === this.lookTouch.id) {
+            const bt = this.lookTouch;
+            const t = e.changedTouches[i];
+            this.lookTouch = null;
+            this.buildTouch = null;
+            if (bt.moved < 12 && performance.now() - bt.t < 320) {
+              try { click({ clientX: t.clientX, clientY: t.clientY, button: 0 }); } catch (_) {}
+            }
+            break;
+          }
         }
       }
-    }, {passive: false});
+    }, { passive: false });
   }
 };
+
 
 
 /* ================= الانيميشن الافتتاحي السينمائي =================
@@ -5872,7 +5975,7 @@ Object.assign(INTRO, {
   to: null, raf: 0, t0: 0, fov0: 60,
   _key(e) {
     if (!INTRO.active) return;
-    if (e.ctrlKey || e.metaKey || e.altKey || /^F\d+$/.test(e.code)) return;   // اختصارات المتصفح تعدّي
+    if (e.ctrlKey || e.metaKey || e.altKey || /^F\d+$/.test(e.code)) return;
     if (e.code === 'Escape' || e.code === 'Enter' || e.code === 'Space' || e.code === 'NumpadEnter') INTRO.finish(true);
     e.preventDefault(); e.stopImmediatePropagation();
   },
@@ -5892,7 +5995,6 @@ Object.assign(INTRO, {
     const el = document.getElementById('intro');
     if (!el || window.HAWA_PLAY_ONLY || !this.active) { this.active = false; this._cleanup(); return; }
     this.el = el;
-    // الهدف: آخر مكان محفوظ، وإلا مكان المشروع المحمّل
     const g = LAST_CAM || getBuilderCam();
     this.to = {
       tx: +g.tx || 0, ty: Math.max(0, +g.ty || 0), tz: +g.tz || 0,
@@ -5915,7 +6017,7 @@ Object.assign(INTRO, {
       this.raf = requestAnimationFrame(loop);
     };
     this.raf = requestAnimationFrame(loop);
-    this._wd = setTimeout(() => this.finish(true), this.dur + 5000);   // أمان
+    this._wd = setTimeout(() => this.finish(true), this.dur + 5000);
   },
   finish(skipped) {
     if (!this.active) return;
@@ -5929,10 +6031,10 @@ Object.assign(INTRO, {
     }
     const el = this.el, b = document.body;
     if (el) el.classList.add('flash');
-    setTimeout(() => {                     // الوميض يغطّي تبديل الواجهة
+    setTimeout(() => {
       b.classList.remove('intro-on');
       b.classList.add('intro-reveal');
-      try { resize(); camUpdate(); persistCam(true); } catch (_) {}
+      try { resize(); camUpdate(); persistCam(true); MOB.syncPads(); } catch (_) {}
       if (el) el.classList.add('out');
     }, skipped ? 120 : 220);
     setTimeout(() => { b.classList.remove('intro-reveal'); if (el) el.remove(); try { resize(); } catch (_) {} }, skipped ? 1900 : 2300);
@@ -5943,7 +6045,6 @@ Object.assign(INTRO, {
   }
 });
 (function () {
-  // ترتيب ظهور أزرار الشريط العلوي واحد واحد
   try { [...document.querySelectorAll('#bar > *')].forEach((e, i) => e.style.setProperty('--i', i)); } catch (_) {}
   addEventListener('error', () => { if (INTRO.active && !INTRO.started) setTimeout(() => INTRO.finish(true), 1500); });
 })();
@@ -6000,30 +6101,35 @@ function boot() {
   }
 }
 (async function bootAsync() {
-  let ready = false;
-  try { ready = await StoreFS.init(); } catch (e) { console.warn(e); }
-  if (!ready) {
-    try { ready = await StoreFS.ensureFolderOrPrompt(true); } catch (e) { console.warn(e); }
-  }
-  if (!StoreFS.handle) {
-    // منع التشغيل بدون مجلد
-    try {
-      await uiAlert('يجب اختيار مجلد تخزين قبل استخدام المحرك.');
-      await StoreFS.ensureFolderOrPrompt(true);
-    } catch (_) {}
-  }
+  let st = false;
+  try { st = await StoreFS.init(); } catch (e) { console.warn(e); }
   boot();
-  try {
-    if (StoreFS.handle) {
+  if (st === true) {
+    try {
       const d2 = await StoreFS.loadPreferred();
-      if (d2) {
-        try { loadData(d2, false); } catch (e) { console.warn(e); }
+      if (d2) try { loadData(d2, false); } catch (e) { console.warn(e); }
+    } catch (e) { console.warn(e); }
+  } else if (st === 'pending') {
+    // مجلد محفوظ — اطلب ضغطة واحدة لتفعيل الإذن (مش اختيار مجلد من جديد)
+    try {
+      await uiAlert('اضغط «حسنًا» لتفعيل مجلد التخزين المحفوظ بعد تحديث الصفحة.');
+      const ok = await StoreFS.activatePermission();
+      if (ok) {
+        const d2 = await StoreFS.loadPreferred();
+        if (d2) try { loadData(d2, false); } catch (e) { console.warn(e); }
+      } else {
+        await uiAlert('لم يتم تفعيل المجلد. من «عرض التخزين» اضغط تفعيل أو غيّر المجلد.');
+        try { showStorageInfo(); } catch (_) {}
       }
-    }
-  } catch (e) { console.warn(e); }
-  try { INTRO.start(); } catch (e) { console.warn(e); try { INTRO.finish(true); } catch (_) {} }
-  if (!StoreFS.handle) {
-    try { showStorageInfo(); } catch (_) {}
+    } catch (e) { console.warn(e); try { showStorageInfo(); } catch (_) {} }
+  } else {
+    // أول مرة فعلًا
+    try {
+      await uiAlert('أول استخدام: اختر مجلدًا على الجهاز لحفظ المشروع.');
+      const ok = await StoreFS.ensureFolderOrPrompt(true);
+      if (!ok) try { showStorageInfo(); } catch (_) {}
+    } catch (e) { console.warn(e); }
   }
+  try { INTRO.start(); } catch (e) { console.warn(e); try { INTRO.finish(true); } catch (_) {} }
 })();
 })();
