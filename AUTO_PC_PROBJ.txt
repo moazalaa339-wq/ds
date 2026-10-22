@@ -1,0 +1,979 @@
+=== API_TRUTH_V900 (إلزامي — يتفوّق على أي وصف أقدم في هذا الملف) ===
+الدوال الموجودة فعلاً في واجهة Game لكائنات المحرك وملفات البرمجة (وضع اختبار + بناء + أونلاين + أوفلاين):
+- Game.THREE, Game.scene, Game.params, Game.defineParams([...]), Game.onUpdate(function(dt){...})
+- Game.findByName(name) و Game.find(name) → { name, props, mesh, object, position, rotation, scale, hide(), show(), hideBody(), dist() } أو null
+- Game.listAllObjects() → مصفوفة بنفس الشكل
+- Game.key(code), Game.setKey(code,bool), Game.isKeyDown(code), Game.forcePlayerInput(slot, input)
+- Game.getCoords(), Game.getPlayerForward(), Game.getLocalPlayer(), Game.getMyName(), Game.getPlayerId()
+- Game.setPlayerPosition(i,x,y,z,opt), Game.teleportPlayer(i,x,y,z,{yaw}), Game.setPlayerYaw(i,yaw)
+- Game.holdPlayerPosition(i,bool), Game.lockPlayer(i,bool), Game.lockPlayerAnim(), Game.unlockPlayerAnim()
+- Game.setPlayerLimb(i,name,rx,ry,rz,opt), Game.getBone(i,name)
+- Game.setCamera(i,cfg), Game.clearCamera()
+- Game.subtitle(text) — الوقت ثابت — ومفيش Game.say
+- Game.setHud(html), Game.clearHud()
+- Game.registerInteractAction(root, cfg)
+- Game.syncObject(mesh) (أونلاين فقط)
+- Game.getShared(key, default), Game.setShared(key, value) (محلي أوفلاين، وبيتبعت أونلاين)
+- Game.netEvent(toSlot, type, payload), Game.onNetEvent(fn) (أونلاين)
+- Game.getRemotePlayers(), Game.isNetworked() (أونلاين)
+- Game.hitWorld(ox,oy,oz,dx,dy,dz,maxD) → مسافة لأول سطح صلب أو null
+- Game.voice.* (صوت — أونلاين)
+
+أسماء ممنوعة: ما تستخدمش أي دالة مش في القائمة فوق. دول مش موجودين في المحرك: listWorldObjects, linkObject, setObjectVisible, markProgrammed, createBox, attachTo, onTrigger, onClick, findPart, listParts, setPosition, clearScriptUI, setPlayerForm, enterVehicle, makeCatalogCar, raycastCenter, netSend, Game.say.
+الشكل الصحيح لملف البرمجة: (function (Game, root) { "use strict"; ... })(typeof Game !== "undefined" ? Game : null, typeof root !== "undefined" ? root : null);
+ممنوع: var Game = ... داخل الملف.
+=== نهاية API_TRUTH_V900 ===
+
+=== AUTO_PC_PROBJ.txt (ملف تلقائي مخصص — يُحمَّل وحده) ===
+device=PC  section=PROBJ  playNet=offline
+هذا الملف فقط للسياق الحالي. ممنوع الاعتماد على ملفات تلقائي أخرى.
+الجهاز: كومبيوتر (كيبورد/ماوس). ممنوع افتراض لمس/جويستيك كشرط وحيد.
+القسم: كائن برمجي (sobj) — كل البناء تحت root؛ THREE من Game.THREE؛ ممنوع نقل الجذر لـ 0,0,0.
+وضع: أوفلاين — محلي فقط. ممنوع NetMP/getRemotePlayers/مزامنة شبكة/online_spawn.
+
+=== AUTO_FILE_ISOLATION_V800 ===
+لا تقرأ ولا تفترض محتوى ملفات التلقائي الأخرى.
+الملفات المفعّلة حسب السياق فقط (واحد في كل مرة):
+  AUTO_PC_PROG.txt | AUTO_PC_PROBJ.txt | AUTO_PHONE_PROG.txt | AUTO_PHONE_PROBJ.txt
+  AUTO_PC_PROG_SYNC.txt | AUTO_PC_PROBJ_SYNC.txt | AUTO_PHONE_PROG_SYNC.txt | AUTO_PHONE_PROBJ_SYNC.txt
+كومبيوتر → لا هاتف. هاتف → لا كومبيوتر. أوفلاين → لا SYNC. أونلاين → ملف *_SYNC فقط.
+
+=== OFFLINE_LOCAL_ONLY_V801 ===
+1) لاعب محلي واحد فقط.
+2) ممنوع أي كود شبكة/مزامنة لاعبين.
+3) ممنوع online_spawn ومنطق السلوتات.
+
+=== PC_INPUT_V802 ===
+كيبورد/ماوس أساسي. game.key يقرأ الكيبورد الحقيقي.
+
+=== CREATIVE_MESH_POLICY_V1 (أعلى من أي مثال شكل في هذا الملف) ===
+لا تستخدم قوالب شكل ثابتة. كل طلب = تصميم ثلاثي الأبعاد جديد من الصفر.
+لا تعِد استخدام نفس نسب/ألوان/ترتيب الأجزاء لطلبات مختلفة حتى لو النوع متشابه (مركبة، وحش، سفينة).
+استوحِ من الطلب فقط؛ أمثلة التوك توك/العربية/الصناديق هنا للـ API والفيزياء وليست للشكل.
+نوّع الخامات والألوان والارتفاعات والتفاصيل في كل مرة.
+
+SCRIPTED_OBJECT_CONTEXT_V11_LEGENDARY
+=== DIRECTIONS_V468 (موحّد للقسمين) ===
+=== BODY_FLIP_V469 مرونة ساموراي/نينجا ===
+=== FULL_BODY_FREEDOM_V470 تحكم كامل بدون جمود ===
+التحكم في كل مفاصل اللاعب (ذراع/رجل/جذع/راس) من القسمين
+setPlayerBodyTilt+setPlayerBodyRotation للشقلبة الحقيقية (تتكرر كل فريم)
+lockPlayerAnim upperOnly اختياري — افتراضي الرجلين حرة
+أي قفزة/شقلبة/هبوط/دوران مسموح — متفيش قيود على الحركة
+Game.setPlayerBodyTilt(0,true)+setPlayerBodyRotation للشقلبة
+Game.lockPlayerAnim(0,true,{upperOnly:true}) رجلين تمشي
+تحكم كامل مفاصل + شخصيات مرنة من القسمين
+قدام شخصية: Game.getPlayerForward(0) / getPlayerLookDir(0)
+قدام أي مجسم: Game.getObjectForward(mesh) = (-sin(rotY),-cos(rotY))
+أطراف: setPlayerLimb سالب X = قدام | ممنوع قلب sin/cos بعد الدوال دي
+=== FIDELITY_TO_USER_REQUEST ===
+نفّذ طلب المستخدم كما كتبه في الوظيفة والميكانيكس.
+الشكل البصري: إبداعي ومتجدد — ممنوع تكرار قالب ثابت من أمثلة السياق.
+لو حدّد شكلًا بدقة («مكعب أحمر») التزم؛ لو الطلب عام («سفينة / وحش») صمّم شكلًا فريدًا غير منسوخ.
+ممنوع إضافة أنظمة/أزرار لم يطلبها. مسموح إبداع الشكل والتفاصيل البصرية ضمن روح الطلب.
+أمثلة الكود = API فقط وليس شكلًا للنسخ.
+=== SCRIPT_VEHICLE_NO_ENGINE_UI_V740 ===
+مركبة/كائن برمجي: ممنوع root.position.set(0,0,0) أو نقل الجذر لمركز العالم — خليه مكان الوضع في البناء.
+مركبة من التلقائي/كائن برمجي = تحكم سكربت فقط — ممنوع واجهة المحرك الرخيصة (زرين سواقة/ركوب F/G).
+1) root.userData.customDrive = true دائمًا
+2) ممنوع: root.userData.isVehicle = true على مركبة سكربت (ده بيفتح showSeatChoice / F قيادة · G مرافق)
+3) ممنوع استدعاء enterVehicle / tryToggleVehicle / ensureVehicleData
+4) الركوب: registerInteractAction فقط + claimVehicleRide إن وُجد
+5) مسموح vehicleType و colHalfW/colHalfD للتصادم بين المركبات فقط
+
+=== MULTI_VEHICLE_EXCLUSIVE_V720 (مركبات متعددة — فصل مكاني وتحكمي) ===
+المحرك يدعم أكثر من مركبة في نفس اللفل — كل مركبة مستقلة مكانيًا وتحكميًا.
+1) ممنوع لاعب واحد يركب مركبتين في نفس الوقت. claimPlayerRide / ملكية حصرية.
+2) قبل ركوب جديد: انزل من الحالي (exit / release) ثم اركب.
+3) كل مركبة: جذر root منفصل + userData.customDrive=true فقط (ممنوع isVehicle=true للسكربت) — مش نفس الموضع.
+4) عند البناء: باعد بين المراكز ≥ (نصف طول + نصف عرض + 0.5م) لكل مركبتين.
+5) التصادم بين المركبات مفعّل — متخليش موتسيكل يولد جوه عربية.
+6) registerInteractAction للركوب: label فيه «اركب/ركوب»؛ المحرك يمنع الازدواج تلقائي.
+7) setShared لسائق هذه المركبة فقط بمفتاح فريد (مثلاً tuk_driver_<uuid>) — مش مفتاح عالمي واحد لكل المركبات.
+8) الكاميرا/الإدخال أثناء الركوب مربوطين بـ root هذه المركبة فقط.
+
+=== PERF_SCRIPT_SAFE_V730 (منع تهنيج المحرك من السكربتات) ===
+1) ممنوع sc.traverse على scene كامل كل فريم — مرة كل 2–3 ث أو عند الحاجة فقط.
+2) ممنوع Raycaster.intersectObjects على مئات الـ meshes كل فريم — خفّف: كل 3–5 فريمات + قائمة محدودة.
+3) ممنوع forceMeshCollision=true على جذر مركبة كاملة (يضاعف تكلفة التصادم) — استخدم أبعاد colHalfW/colHalfD أو أجزاء قليلة solid.
+4) Game.onUpdate خفيف: حسابات ثقيلة مرة عند الإنشاء؛ LOD للبعيد.
+5) ممنوع أنظمة محطة بنزين/عامل توصيل/اتصال E لتعبئة — المحرك شالها؛ بنزين مالانهاية أو منطق بسيط بدون NPC متحرك.
+6) syncObject بحد أقصى ~15–20Hz مش كل فريم.
+7) لو في قائمة جدران للكاميرا: سقف 40–80 mesh وحدّث القائمة نادرًا.
+
+=== REALISM_LEGENDARY_V710 (قاعدة عامة لأي طلب — مش عربيات بس) ===
+طبق ده على أي شيء يطلبه المستخدم: باب، سلاح، شخصية، غرفة، آلة، لعبة مصغّرة، طقس، مهمة، UI، وحش، أداة…
+الهدف: كود يفكر في كل التفاصيل بطريقة واقعية + تصميم أسطوري فاخر — مش هيكل ناقص ولا مكعب باهت.
+
+### 1) فكّر قبل ما تكتب (تحليل إلزامي في دماغك — مش في الرد)
+  - إيه الوظيفة الأساسية؟ (يفتح، يطلق، يركب، يتحوّل، يتفاعل، يحسب…)
+  - إيه الأجزاء المادية/البصرية اللي المفروض تتواجد في الواقع أو في عالم أسطوري؟
+  - إيه الحالات (states): idle / active / broken / locked / charging / cooldown…
+  - إيه المدخلات؟ (F، ماوس، قرب، زمن، أونلاين، باراميترات المستخدم)
+  - إيه الآثار الجانبية؟ (صوت، ضوء، جزيئات، كاميرا، لاعب، شبكة، تنظيف)
+  - إيه الوحدات؟ متر / ثانية / درجة / نيوتن تقريبي — كل رقم مهم في defineParams بوحدة في الـ label
+
+### 2) كثافة العناصر (كتير جداً — مش الحد الأدنى)
+  ممنوع الاكتفاء بشكل واحد + لون. ابني طبقات:
+  - هيكل أساسي + تفاصيل ثانوية (حواف، مسامير، إطارات، نقوش، ظلال، زخارف)
+  - مواد متعددة: معدن، خشب، قماش، زجاج، مطاط، إيمسيف للضوء — مش Material واحد للكل
+  - ألوان من defineParams type color لما المستخدم هيعدّل؛ وإلا ألوان متناسقة أسطورية
+  - أجزاء متحركة لو المنطق يطلب (باب يفتح، ترس يدور، جناح، مؤشر، عداد)
+  - إضاءة موضعية خفيفة لو العنصر «حي» (PointLight قليلة، emissive على العدسات/الليد)
+  - نصوص/رموز بـ CanvasTexture لو في لوحات أو شاشات أو شعارات
+  - اختياري: جزيئات بسيطة (شرر، دخان، غبار، سحر) بـ pool مش إنشاء كل فريم
+
+### 3) تصميم واقعي + أسطوري (المظهر)
+  - واقعي = نسب صحيحة، وزن بصري، ظل، خشونة/معدنية منطقية، مفيش تقاطع ميشي عبيط
+  - أسطوري = لمسة فخامة: تباين ألوان قوي، حواف واضحة، تفاصيل ذهبية/مضيئة بحساب، حضور قوي في المشهد
+  - مش كرتوني مسطّح ولا مكعبات عشوائية؛ ولا مبالغة بلا معنى تخلي الشكل غير مفهوم
+  - لو الطلب بسيط («مكعب أحمر») التزم حرفياً — الكثافة للطلبات الغنية أو المفتوحة
+  - لو الطلب مفتوح («اعمل باب فخم»، «سيف أسطوري»، «غرفة سحرية») املأ التفاصيل بذوق عالي
+
+### 4) سلوك حي (مش static mesh بس)
+  - انتقالات ناعمة: damp / lerp / smoothstep — ممنوع قفزات مفاجئة للدوران أو الموضع
+  - feedback: صوت خفيف، subtitle قصير، ضوء، اهتزاز كاميرا بسيط عند الأحداث المهمة
+  - حالات واضحة + timers/cooldowns من defineParams
+  - تفاعل: registerInteractAction أو onTrigger أو onClick حسب السياق
+  - لو يؤثر على اللاعب: lock/unlock، teleport، limbs، كاميرا — مع cleanup كامل
+
+### 5) defineParams كعقد مع المستخدم
+  - كل رقم مهم (سرعة، مسافة، مدة، شدة، حجم، FOV، نصف قطر…) له param بوحدة في label
+  - min/max/step منطقية؛ boolean للخيارات؛ color/text/file/audio/image حسب الحاجة
+  - اقرأ بـ PN/PB/PS مع default — متكسرش لو param ناقص
+
+### 6) هندسة الكود
+  - كائن برمجي: كل البناء تحت root؛ THREE = Game.THREE || window.THREE
+  - Game.onUpdate فقط للحلقة؛ dt محدود؛ return false + cleanup لما يتشال الكائن
+  - مواد/هندسات مشتركة؛ typeof قبل أي API؛ try/catch حول النقاط الحساسة
+  - أونلاين: setShared / syncObject عند الحاجة بدون spam كل فريم بلا سبب
+  - بعد الكود: صمت تام — ممنوع جملة نجاح أو شرح
+
+### 7) أمثلة كثافة (للتوجيه — مش قوالب حرفية)
+  - باب: إطار + ضلفة + مقبض + مفصلة + ضوء عتبة + صوت فتح/غلق + حالة قفل + تفاعل F
+  - سلاح: نصل/سبطانة + مقبض + تفاصيل معدن + emissive خفيف + أثر ضرب + صوت + cooldown
+  - غرفة: جدران بمواد مختلفة + إضاءة + ديكور متعدد + تفاعلات صغيرة + جو (ضباب/لون)
+  - آلة: جسم + أزرار/مؤشرات + حركة أجزاء + صوت تشغيل + حالات on/off/error
+  - مركبة: نفس عمق التفاصيل (هيكل/عجلات/فيزياء/ركوب/كاميرا/صوت) — كحالة خاصة من القاعدة العامة
+
+
+=== PERF_QUALITY_V611 (جودة كاملة بدون تهنيج — إلزامي للكائنات البرمجية) ===
+نفّذ الطلب كامل وبجودة عالية — الأداء = تنظيم ذكي مش تقليل الفكرة.
+1) Game.onUpdate فقط — ممنوع requestAnimationFrame يدوي.
+2) مواد + هندسة مشتركة؛ أعد الاستخدام بدل new لكل نسخة.
+3) حشود: LOD (تفصيلي قريب / بسيط بعيد) + تحديث حسب المسافة من اللاعب.
+4) ظلال للقريب فقط؛ forceMeshCollision للجدران/الأرض فقط مش لكل ديكور/NPC.
+5) ابنِ تحت root.add — شكل ظاهر في البناء؛ THREE=Game.THREE||window.THREE.
+6) الحسابات الثقيلة مرة عند الإنشاء؛ onUpdate خفيف.
+=== CHARACTER_BODY_QUALITY_V612 (منع جسم فاضي / تحت الأرض / نفس الشكل) ===
+1) شخصية اللاعب الحية = Game.setPlayerForm — ممنوع Group مكعبات تتبع اللاعب كل فريم.
+2) بطن ظاهر = حجم حقيقي (Sphere/Box سميك) على الصدر محلياً — مش box رفيع ولا y تحت الصفر العالمي.
+3) نور عين/بطن = emissive على الجزء + PointLight child — ممنوع لمبة/createLamp.
+4) scale على جذر الشخصية 1.2–1.6؛ ممنوع scale 2.8+ على overlay يخلي الرجلين تحت الأرض.
+5) id الشكل من الطلب (monster/beast/demon/...) — ممنوع تثبيت ironGolem لكل طلب.
+6) لو الجسم فاضي أو الرجلين تحت الأرض = فشل — صلّح المواضع المحلية تحت المفاصل.
+7) اختبر typeof قبل كل API؛ try/catch حول traverse.
+8) بعد setPlayerForm المفاصل تمشي — متقفلش lockPlayerAnim إلا بطلب.
+=== ERROR_SAFE_V608 (تقليل أخطاء القسمين — إلزامي) ===
+1) كل استدعاء API مش مضمون: if (typeof Game.xxx === "function") Game.xxx(...)
+2) ممنوع ReferenceError: متستدعاش دوال خارج النطاق أو متغيرات قبل التعريف.
+3) onUpdate: لو خلصت الشغل return false؛ لو مستمر خلّي الشرط واضح (done/flag).
+4) try/catch حول أي traverse أو material.clone أو شبكة.
+5) أرقام سحرية ممنوعة للقيم المهمة → Game.defineParams.
+6) مفيش IIFE يغطي الملف كله ويمسح Game — المحرك يمرّر Game.
+7) أونلاين: أي شكل لاعب جذري → Game.setPlayerForm فقط (مش تعديل mesh يدوي من غير API).
+8) بعد setPlayerForm المفاصل تفضل شغالة — متقفلش lockPlayerAnim إلا بطلب.
+9) clearPlayerForm قبل تحويل جديد لو عايز تتأكد من نظافة الدروع.
+10) اختبر typeof THREE قبل new THREE.*
+
+=== HIGH_IMAGINATION_V608 (خيال عالي — متى وكيف) ===
+FIDELITY_FIRST = التزم بمضمون طلب المستخدم. لكن:
+• لو الطلب إبداعي («آيرون جولم»، «تنين»، «عربية فضائية»، «قلعة سحرية») → خيال عالي في التفاصيل البصرية والميكانيكس بما يخدم نفس الفكرة.
+• لو الطلب حرفي ضيق («مكعب أحمر 1×1 عند 0,0,0») → حرفي بدون زخرفة.
+• التحويل الجذري للاعب: استخدم Game.setPlayerForm + دروع/مواد/حجم — المشي والمفاصل تبقى.
+• شخصيات/وحوش: createRiggedCharacter أو setPlayerForm — ممنوع بوكس ثابت يدّعي إنه كائن حي.
+• مركبات: نظام قيادة كامل (F ركوب، WASD، كاميرا، نزول) مش مجسم واقف.
+• مباني: هيكل + باب تفاعلي + إضاءة داخلية حسب الطلب.
+• الجودة: كود نظيف، مزامنة أونلاين، بدون spam توست، بدون أخطاء كونسول.
+
+=== ALL_AUTOS_MUST_MATCH_V780 (قانون إجباري — أعلى أولوية) ===
+أي طلب «عدّل التلقائي» يُطبَّق على الملفات المناسبة للسياق — مع احترام الفصل:
+أوفلاين (بدون SYNC):
+  AUTO_PC_PROG.txt | AUTO_PC_PROBJ.txt | AUTO_PHONE_PROG.txt | AUTO_PHONE_PROBJ.txt
+أونلاين (SYNC+):
+  AUTO_PC_PROG_SYNC.txt | AUTO_PC_PROBJ_SYNC.txt | AUTO_PHONE_PROG_SYNC.txt | AUTO_PHONE_PROBJ_SYNC.txt
++ auto_story_level.txt للكائنات العادية عند الحاجة.
+فصل إلزامي: كومبيوتر لا يمسّ هاتف، هاتف لا يمسّ كومبيوتر، أوفلاين لا يمسّ *_SYNC، أونلاين لا يمسّ ملفات بدون SYNC.
+لو طلب المستخدم «عدّل التلقائي» وهو على PC+أوفلاين+برمجة → عدّل AUTO_PC_PROG فقط (والنسخ المقابلة إن طلب صراحة الكل).
+
+=== FUNNY_IS_EXAMPLE_ONLY_V790 (قانون إجباري — ممنوع النسخ كقالب) ===
+ملف samples/hawa-funny-motion.js (وحركة FUNNY) = مثال تقني فقط لطريقة تحريك المفاصل والشخصية.
+  1) ممنوع نسخه كاملاً أو شبه كامل عند أي طلب مستخدم (حتى لو طلب «حركة فاني» أو «مضحك»).
+  2) ممنوع اعتباره قالباً افتراضياً لأي سكربت تلقائي أو كائن برمجي أو برمجة.
+  3) المسموح فقط: استلهام أسلوب الربط بالمفاصل (discover joints / setPlayerLimb / hooks)
+     وبناء حركة جديدة تناسب طلب المستخدم من الصفر.
+  4) لو المستخدم طلب حركة مخصصة: اكتب كوداً جديداً — لا تلصق محتوى FUNNY.
+  5) أسماء/ثوابت/تعليقات FUNNY (HawaFunny, CFG.talk, LINES, عجلة ناروتو…) ممنوعة في مخرجات التلقائي
+     إلا إذا طلب المستخدم صراحةً «نفس سكربت الفاني الموجود».
+
+=== CUSTOM_PLAYER_ANIM_ONLINE_V781 (قانون إجباري — حركة اللاعب) ===
+أي سكربت يغيّر مفاصل/وضعية اللاعب المحلي (setPlayerLimb / hooks / updateMatrixWorld / anim مخصص):
+  1) لازم يظهر بنفس الشكل عند كل اللاعبين أونلاين — مش محلي فقط.
+  2) الطريقة المعتمدة في المحرك (آلية مزامنة — مش قالب FUNNY):
+     - window.__HawaFunnyNetPack = () => compactPoseOrNull
+     - window.__HawaFunnyNetApply = (remote, pack, dt) => apply on remote.rig
+     - المحرك يبعت الحقل funny داخل state ويطبّقه بدل animRig للبعيدين.
+     (الأسماء التاريخية __HawaFunnyNet* هي قناة المحرك فقط — لا تعني نسخ سكربت الفاني)
+  3) بديل مقبول: Game.setShared('anim_'+slot, pack) + تطبيق على getRemotePlayers() كل فريم.
+  4) ممنوع الاعتماد على عشوائية غير متزامنة (Math.random على كل جهاز) — ابعت الناتج أو seed مشترك.
+  5) RULE: لو اللاعب المحلي شايف الحركة، كل لاعب أونلاين لازم يشوفها.
+
+=== MULTIPLAYER_SYNC_V616 (تلقائي من المحرك) ===
+المحرك يزامن تلقائي (state.autoSyncAll=true):
+  - سكربتات البرمجة العادية تتعيد على كل لاعب بعيد (getLocalPlayer يرجع البعيد أثناء المرآة).
+  - attachPlayerOverlay يتنسخ على الريموت الظاهر عندك.
+  - setPlayerForm / scriptFlags / أسلحة / build_pack كما هي.
+  - ضرر: Game.damagePlayer(target, amount) متزامن.
+يفضّل كمان: Game.getAllPlayers() للبناء الصريح على الكل.
+لإيقاف المزامنة التلقائية: Game.params أو state.autoSyncAll=false (للمطور).
+
+=== UNITS_V613 (وحدة الطول = الباراميتر) ===
+وحدة واحدة في الكود = 1 متر = نفس أرقام defineParams (مسافة 2 = مترين، ارتفاع 1.85 = طول اللاعب).
+أصل شخصية اللاعب (group/mesh) عند القدمين على الأرض — مش عند الوسط.
+ارتفاعات الهيكل الافتراضي: قدم 0 | حوض 0.96 | بطن 1.12 | صدر 1.38 | رأس 1.82 | طول كلي ≈ 1.85
+Game.getPlayerHeight() → 1.85
+bodyScale/scale: 1.0 = الحجم الافتراضي، 1.2 = أكبر 20٪ — مش scale عشوائي يخلي الجسم تحت الأرض.
+
+=== PLAYER_SUIT_ATTACH_V614 (إلزامي — ممنوع جسم تحت جسم زي الصورة: لاعب فوق + بدلة تحت) ===
+الخطأ الشائع: بناء بدلة مركزها عند الوسط + add على mesh بـ position(0,0,0) → البدلة عند القدمين واللاعب الأصلي ظاهر فوقها.
+الصح الحصري:
+  A) ابنِ البدلة بقدمين عند y=0 ورأس عند y≈1.7 (نفس هيكل اللاعب: صدر1.38 حوض0.96 رأس1.82).
+  B) لازم: Game.attachPlayerOverlay(0, suit, { hideBody:true, alignFeet:true });
+     — يضيف على p.group (مش mesh الفرعي) + يخفي كل mesh أصلي + يحاذي القدمين.
+  C) ممنوع lp.mesh.add(suit) لوحده من غير إخفاء كامل + محاذاة.
+  D) ممنوع scene.add / root.add / تتبع position كل فريم.
+  E) ممنوع rig.position.set(0,0,0) على بدلة مركزها الوسط — لازم أقدام عند 0 أو alignFeet.
+مثال attach:
+  var suit = buildSuit(); // أقدام y=0
+  Game.attachPlayerOverlay(0, suit, { hideBody:true, alignFeet:true });
+تحويل ألوان بسيط: Game.setPlayerForm(0,{id:"monster",scale:1.2}) — مش مكعبات منفصلة.
+بدلة كاملة (سبايدر/درع): attachPlayerOverlay فقط.
+
+PLAYER_FORM_API + VARIETY_V612 (إلزامي — ممنوع نفس الشكل كل مرة):
+  حوّل اللاعب بـ setPlayerForm فقط من قسم البرمجة — ممنوع بناء مكعبات وحش منفصلة على root تدّعي إنها اللاعب.
+  اختَر id من الطلب: monster | beast | demon | ogre | troll | mutant | dragonkin | ironGolem
+  مثال وحش: Game.setPlayerForm(0,{id:"monster",metal:"#2d5a1e",dark:"#1a3a0e",glow:"#7cff3a",scale:1.45,hideHair:true})
+  مثال شيطان: Game.setPlayerForm(0,{id:"demon",metal:"#4a1520",dark:"#1a0508",glow:"#ff2200",scale:1.4,hideHair:true})
+  مثال وحشي: Game.setPlayerForm(0,{id:"beast",metal:"#5c4033",dark:"#2a1810",glow:"#ffaa33",scale:1.5,hideHair:true})
+  مثال روبوت: Game.setPlayerForm(0,{id:"ironGolem",metal:"#7a8b9a",dark:"#3d4a55",glow:"#38bdf8",scale:1.25,hideHair:true})
+  Game.clearPlayerForm(0); — رجوع للشكل الأصلي
+  scale المفضل 1.2–1.6 (حد أقصى ~2.0) — أكبر من كده الرجلين تغرز في الأرض.
+  نور عين/بطن: المحرك يضيف emissive+PointLight على الراس والصدر حسب id — ممنوع createLamp أو مكعب لمبة.
+  ممنوع تكرار نفس الألوان/id لو المستخدم طلب شكل مختلف — غيّر metal/dark/glow/id حسب الوصف.
+  الشكل يتزامن أونلاين تلقائي عبر scriptFlags — متخترعش قناة ثانية.
+PLAYER_OVERLAY_FORBIDDEN:
+  ممنوع في كائن برمجي: بناء Group وحش + position = player world pos كل فريم (بطن/رجلين تحت الأرض + شكل ثابت غبي).
+  لو المطلوب «شخصية اللاعب» = setPlayerForm من برمجة اللفل فقط.
+  لو المطلوب وحش NPC مستقل في العالم = ابنِ تحت root، رجلين: أسفل المجسم عند y=0 (مش مركز الجسم عند 0 بعد scale).
+SCRIPTED_OBJECT_FORBIDDEN_V462
+=== محرمات + أسلوب صحيح (V462 SO) ===
+المحرك يشغّل ملفك هكذا: new Function("Game", "use strict;\n" + كودك) ثم يستدعي fn(GameAPI).
+يعني: Game جاهز بالفعل — ممنوع لفّ الكود في IIFE إلا لو ضروري.
+
+--- محرمات (ممنوع) ---
+1) ممنوع: (function(Game){ ... })(typeof Game!=="undefined"?Game:null);  ← المحرك يمرّر Game
+2) ممنوع: استدعاء Game.xxx من غير typeof لو الدالة مش مضمونة
+3) ممنوع: اختراع دوال مش في القائمة (إلا بعد typeof)
+4) ممنوع: أرقام سطر من stack الموقع (main.js:2225) — السطر الصحيح من <anonymous>:N فقط
+5) ممنوع: eval / new Function جوّه السكربت
+6) ممنوع: أقواس أو اقتباس مفتوح؛ راجع التوازن قبل الإرسال
+7) ممنوع: الاعتماد على window.Game وقت البناء — في اللعب/الاختبار فقط
+8) ممنوع: setPlayerPose بمفاتيح غلط — المفاتيح: rightArm,leftArm,rightLeg,leftLeg,rightForearm,...
+9) ممنوع: نسيان Game.defineParams لكل رقم/مدة/سرعة/ملف صوتي
+10) ممنوع: ترك عناصر DOM من غير data-script-ui وتنظيف عند انتهاء onUpdate
+11) ممنوع: Game.THREE من غير فحص: var THREE=Game.THREE; if(!THREE)return;
+12) ممنوع: كود يعتمد على ملفات الموقع الداخلية أو تعديل main.js
+
+--- الأسلوب الصحيح (مثال مختصر) ---
+Game.defineParams([{key:"speed",label:"سرعة",type:"number",value:5,min:1,max:20,step:0.5}]);
+var THREE = Game.THREE;
+if (!THREE || !Game.scene) return;
+var root = new THREE.Group();
+Game.scene.add(root);
+// بناء meshes...
+Game.onUpdate(function(dt){
+  if (!root.parent) return false; // ينهي التحديث وينضّف
+  var sp = (Game.params && Game.params.speed) || 5;
+  // منطق...
+});
+
+--- دوال لاعب آمنة ---
+Game.setPlayerPosition(0,x,y,z); Game.setPlayerYaw(0,yaw);
+PLACE_PLAYER (بدون فراغ هوائي): Game.setPlayerPosition(0,x,y,z,{hold:true}) — يثبت الموضع ضد الجاذبية.
+  Game.placePlayerOn(0, "الحصان 1", {yOffset:0.05, hold:true, faceObject:true}) — يضع اللاعب على سطح المجسم.
+  Game.placePlayerOn(0, mesh, {local:{x:0,y:0.9,z:0.2}, hold:true, sit:true}) — إزاحة محلية على السرج.
+  Game.holdPlayerPosition(0, true) · Game.holdPlayerPosition(0, false) — تثبيت/إلغاء.
+  Game.teleportPlayer(0,x,y,z,{hold:800,yaw:0}) — تيليبورت مع تثبيت مؤقت.
+مهم: لو حطيت اللاعب على حصان/كرسي بـ y يدوي من غير hold، الفيزياء ممكن ترفعه أو تنزّله (فراغ هوائي).
+Game.setPlayerLimb(0,"rightArm", rx,ry,rz, {lock:true});
+Game.setPlayerPose(0,{ rightArm:[-0.5,0.1,0], leftArm:[-0.4,0,0] }); // موجود
+Game.lockPlayer(0,true/false); Game.lockPlayerAnim(0,true); Game.unlockPlayerAnim(0);
+
+--- كاميرا / صوت / جرافيكس ---
+if (typeof Game.setCamera==="function") Game.setCamera(0,{x,y,z,lookX,lookY,lookZ,fov,lerp});
+CAMERA_FP_EYE: منظور أول شخص = عين اللاعب (موضع+اتجاه headPivot) — يتبع رقص/شقلبة/أنيميشن.
+  أقسام البرمجة لها أولوية: Game.setCamera(0,{x,y,z,lookX,lookY,lookZ,lerp,fov}) يلغي FP مؤقتًا.
+  Game.setCamera(0,{ quat:{x,y,z,w} }) أو { rotation:{x,y,z,order:'YXZ'} }) للاتجاه الحر.
+  Game.setCamera(0, null) لإرجاع التحكم الافتراضي (عين/ثالث شخص).
+  Game.setFirstPerson(true/false) · Game.setPlayerCamera(0,{yaw,pitch,firstPerson}).
+if (typeof Game.clearCamera==="function") Game.clearCamera(0);
+if (typeof Game.playSound==="function") Game.playSound(url,{loop:true,volume:0.5});
+أرقام الكاميرا/الهزة/المدة كلها من defineParams — مش ثابتة في الكود.
+
+--- UI في السكربت ---
+العنصر: setAttribute("data-script-ui","1"); الأزرار: data-script-ui-interactive
+عند الانتهاء: احذف الـ DOM + return false من onUpdate
+
+--- كائن مبرمج ---
+المتاح: Game, root, THREE (حسب غلاف الكائن). ابنِ تحت root.
+مثال: var box = new THREE.Mesh(...); root.add(box);
+لو الطلب ناقص تفاصيل هندسية: استخدم أبسط شكل ممكن يحقق المعنى (مش تصميم فني من عندك).
+اكتب كود محترف نظيف — مش سكربتات ضعيفة أو أزرار HTML عشوائية.
+متقلّدش ملفات الموقع الجاهزة؛ ومتعتمدش على لمبات/نار كتالوج إلا لو الطلب صرّح بكده.
+=== إضاءة/توهج — ممنوع التنفيذ الساذج ===
+طلب «جسم منور / توهج / هالة / طاقة / سحر / glow / neon / illuminated»:
+  ممنوع: لمبة ظاهرة فوق الراس أو جنب الجسم أو createBox أصفر باسم لمبة.
+  ممنوع: createLamp / عمود إنارة من الكتالوج / أي مجسم لمبة حول الشخصية.
+  الصحيح:
+    (1) توهج المادة: clone للـ material ثم emissive + emissiveIntensity (+ نبض في onUpdate)
+    (2) PointLight/SpotLight مربوط بالجسم بدون أي Mesh لمبة ظاهر
+    (3) هالة اختيارية: Sphere شفافة emissive خفيفة — مش مكعب أصفر
+  مثال توهج لاعب:
+    var pl=Game.getLocalPlayer(); if(pl&&pl.mesh){ pl.mesh.traverse(function(c){
+      if(!c.isMesh||!c.material)return;
+      var arr=Array.isArray(c.material)?c.material:[c.material];
+      c.material=arr.map(function(m){m=m.clone();m.emissive=new THREE.Color(0x44aaff);m.emissiveIntensity=0.9;return m;});
+    }); var L=new THREE.PointLight(0x66ccff,2.2,12,2); pl.mesh.add(L); L.position.set(0,1.2,0); }
+  مثال غلط: createBox لمبة فوق الراس / createLamp حول الجسم / مكعب أصفر + نور جنبه.
+نفس القاعدة: نار=شعلة THREE+PointLight مش كتالوج؛ سحر=emissive+FX مش لمبة؛ درع=شفاف emissive مش صندوق.
+لو محتاج ضوء/نار/FX عام: THREE فقط (PointLight + شكل إبداعي + onUpdate) مش أنظمة الموقع.
+=== JS SYNTAX (إلزامي — سبب فشل سكربتات القيادة) ===
+ممنوع حذف علامة الضرب *: اكتب دائماً a * b و dt * speed و Math.PI / 180
+غلط: speed+=acceldt | yaw+=steerMath.PI | cos(yaw)2.4
+صح: speed += accel * dt | yaw += steer * Math.PI | Math.cos(yaw) * 2.4
+المفاتيح: Game.isKeyDown("KeyW") / KeyA / KeyS / KeyD / KeyF — مش keys["w"] فقط
+ركوب مجسم 3D: Game.registerInteractAction(root,{label:"اضغط F للركوب",onActivate}) + lockPlayer + setCamera في onUpdate
+عجل: wheel.rotation.x += dt * speed — ممنوع تفكيك الموديل بـ attach إلا للضرورة
+=== CUSTOM_3D FLEX CONTROL (إلزامي) ===
+مجسمات 3D المرفوعة = خام مرن: سلاح، عربية، موتسيكل، طيارة، أداة، مضرب، درع، آلة…
+تعرّف على المكونات: seat كرسي، light أنوار، storage خزن، window شباك، door باب، wheel عجل، barrel فوهة، weapon زناد/قبضة، engine محرك، steer مقود.
+Game.listParts / Game.findPart(root,"seat"|"wheel"|"door"|"light"|"storage"|"barrel")
+تخيّل عالي: ابنِ نظام تحكم يطابق الطلب حرفياً (FPS سلاح، WASD قيادة، ضربة مضرب، فتح خزن) من الصفر بدون enterVehicle/makeCatalogCar.
+حرّك ROOT فقط؛ الأجزاء animation محلية. أنوار=PointLight/emissive على الجزء مش لمبة كتالوج.
+نظرة شاملة: عندك findByName/listAllObjects/linkObject/raycastCenter/onTrigger/onClick/onUpdate/setShared/createBox/attachTo/setObjectVisible.
+اربط الكتالوج + الكائنات البرمجية + نواتج createBox بحرية — وعلّم المربوط بـ markProgrammed.
+UI السكربت فقط data-script-ui؛ امسحه بـ clearScriptUI؛ متصنّعش أزرار سواقة/رفيق من غير طلب صريح.
+الألوان: type:"color" في defineParams — مش كتابة #hex يدوي للمستخدم.
+BODY_PARTS (إلزامي — كل مفصل معروف بالعربي والإنجليزي):
+  ذراع/دراع/arm → rightArm | ذراع_شمال/leftArm | ساعد/forearm
+  ايد/يد/hand → rightHand | راس/head | بطن/belly | صدر/chest
+  رجل/leg | قدم/foot | كتف/shoulder | كوع/elbow | ركبة/knee
+  Game.resolvePartName("ذراع") · Game.getBone(0,"ذراع") · Game.setLimb(0,"ذراع",{rx:-1.2})
+  Game.raiseArm(0,"يمين") — يرفع الذراع (مش الإيد بس) للضرب/المطرقة
+  Game.holdInHand(0, mesh|"المطرقة", "ذراع"|"ايد"|"راس"|"قدم")
+MEDIA_PARAMS (إلزامي عند طلب صورة/صوت/فيديو/ملف):
+  type:"image"|"video"|"audio"|"file"|"pdf" + type:"color" للألوان (منتقي لون — مش كتابة #hex)
+  مثال: {key:"sfx",label:"صوت",type:"audio",value:""} · {key:"col",label:"لون",type:"color",value:"#ff0000"}
+الكولايدر: أسماء wall/حائط أو isWall:true؛ متصغّرش المجسم لدرجة يختفي التصادم.
+
+PLAYER_IDENTITY: كل لاعب مربوط بـ username التسجيل + صورته (avatar).
+  Game.getMyName() / getMyUsername() → اسم التسجيل اللي سجّل بيه اللاعب (مش id تقني)
+  Game.getMyAvatar() → صورة البروفايل (dataURL/url) لنفس الحساب
+  Game.getAllPlayers() → [{id,name/username,avatar,local,mesh,position}]
+  Game.getRoster() → [{id,name,isHost}] أسماء الدخول للغرفة
+  Game.getNetPlayers() → لاعبين السيرفر بأسماء التسجيل + avatar إن وُجد
+RULE: لما تتعامل مع لاعبين السيرفر استخدم name/username من getAllPlayers/getRoster — ده نفس الاسم الظاهر في اللوبي وصورته.
+مثال ترحيب بالاسم المسجّل:
+  var p=Game.getAllPlayers()||[]; p.forEach(function(x){ /* x.name + x.avatar */ });
+MULTIPLAYER_PARITY: Scripted systems MUST feel like the football field — every player sees the same world.
+ENGINE_AUTO_SYNC (always on online):
+  Game.setPosition/setRotation/setVisible/setScale → auto net
+  Game.syncObject(root) → root + up to 48 children local transforms (orbiting lamps, moving parts)
+  Game.setShared(key,val) / getShared / onShared → flags & state for ALL players
+  Game.broadcast(event, payload) / onBroadcast → custom events for ALL
+  Game.drawStroke(board, points, style) / getDrawStrokes / clearDraw / onDraw → whiteboard strokes sync
+  Game.holdItem(name|mesh) / releaseItem → held props visible on other clients (like the football)
+  Game.onTrigger enter/exit → auto-broadcast re-fire on others
+  Host periodically re-sends shared + recent strokes + holds for late joiners
+RULE: If the local player can see it, every online player MUST see it. Prefer setShared/drawStroke/holdItem/syncObject over local-only vars.
+EXAMPLE ball hold: Game.holdItem(ballMesh); ... Game.releaseItem(ballMesh);
+EXAMPLE board: Game.drawStroke("board1", [{x:0,y:1,z:0},{x:0.2,y:1.1,z:0}], {color:"#f00",width:0.02});
+EXAMPLE toggle: Game.setShared("spin_"+name, true); spinning=Game.getShared("spin_"+name,true);
+=== VEHICLE_BUILD_PLAYBOOK (أسلوب المحرك — إلزامي عشان متبنيش غلط) ===
+الهدف: عربية/موتسيكل/طيارة تتحرك صح زي فهم Grok للموقع — مش كتالوج، مش enterVehicle.
+FORBIDDEN مطلقاً:
+  makeCatalogCar / makeCar / makeInteractiveCar / tagVehicleParts / enterVehicle / exitVehicle
+  userData.isVehicle=true على سكربت (بيظهر أزرار سواقة/رفيق الغلط)
+  scene.add لأي عجلة/كرسي — لازم تحت root فقط
+  تحريك العجلة بـ position عالمي — العجلة child + rotation.x محلي فقط
+PATTERN الصحيح (نسخ العقلية دي):
+  1) جذر واحد: var car = root;  // أو Group تحت root
+  2) جسم: createBox/BoxGeometry للهيكل + أجزاء (سقف، صدام، أنوار) كـ children
+  3) 4 عجلات: var w=new THREE.Group(); wheelMesh; car.add(w); w.position.set(+/-x, y, +/-z)
+  4) قيادة في onUpdate:
+       if(Game.isKeyDown("KeyW")) speed += accel*dt;
+       if(Game.isKeyDown("KeyS")) speed -= accel*dt;
+       if(Game.isKeyDown("KeyA")) yaw += steer*dt;
+       if(Game.isKeyDown("KeyD")) yaw -= steer*dt;
+       root.rotation.y = yaw;
+       root.position.x += Math.sin(yaw)*speed*dt;
+       root.position.z += Math.cos(yaw)*speed*dt;
+       wheels.forEach(function(w){ w.rotation.x += speed*dt*3; });
+  5) ركوب: Game.registerInteractAction(root,{label:"اركب",onActivate:function(){
+       Game.lockPlayer(true); riding=true; }});
+       في onUpdate لو riding: playerMesh يلتصق بمقعد محلي + setCamera خلف العربية
+  6) Game.syncObject(root) كل فريم للحركة الأونلاين
+  7) defineParams: speed, accel, color (type:"color"), steer — مش أرقام سحرية
+MOTOSIKL: نفس الفكرة بعجلتين + ميل body.rotation.z عند الانعطاف
+طيارة: أضف pitch (KeyW/S على rotation.x) + thrust على اتجاه look
+شكل مشهور (بوجاتي/...): شبّه بالخيال بألوان ونسب — ممنوع استدعاء كتالوج
+لو المستخدم رفع GLB: حرّك الـ root فقط؛ listParts للعجل لو موجودة؛ spin محلي
+PARAM_UNITS_RULE: Any value with units (meters, seconds, degrees, ohms, volts, px, intensity) MUST be Game.defineParams entry. Arrow UI reads defineParams — without it params panel is empty.
+SCRIPTED_OBJECT_ROOT_RULES (CRITICAL — prevents خطأ في تكوين المجسم):
+  Signature MUST be: (function (Game, root) { ... })(Game, root);
+  ALWAYS build under root: Game.createBox / createCylinder / createSphere ADD under root automatically.
+  Coordinates are RELATIVE to root (x,y,z near 0). NEVER huge world coords.
+  if (!root) return; at start. root.add(mesh) is OK for custom THREE meshes.
+  Do NOT use scene.add. Do NOT rely on Game.findByName for parts you just created — keep local refs.
+  EVERY size/radius/height/thickness/intensity/count MUST be in Game.defineParams — no magic numbers.
+  Units example: floorSize, wallHeight, radius, intensity, speed, duration, color.
+=== HIERARCHY / ALL MODELS (CRITICAL — never tear composite objects) ===
+WORLD MODEL: ANY catalog/custom object is ONE root Group. All visual parts are CHILDREN
+  in local space (seats, wheels, walls, doors, lights, meshes…). Moving ROOT moves all.
+FORBIDDEN when animating car OR building OR custom3d OR furniture OR any composite:
+  - Game.findByName on seat/wheel/light part names and moving them in world coords
+  - Setting child.position to world X/Z (makes seats orbit the car)
+  - Creating extra seat/light boxes that follow the car with separate onUpdate
+  - scene.add(part) for anything that should stay on the vehicle
+CORRECT pattern:
+  var car = Game.findByName("سيارة حمراء 1"); // returns ROOT group only
+  if(!car||!car.mesh) return;
+  car.mesh.position.x += speed * dt;  // or Game.setPosition(car.mesh, x,y,z)
+  car.mesh.rotation.y = yaw;           // yaw the ROOT only
+  // children (seats, headlights) auto-follow — DO NOT touch them
+Wheels: optional local spin only: child.rotation.x += dt*10; NEVER child.position in world.
+Lights: vehicle headlights are already children. Do NOT place a separate lamp from catalog
+  in front of the car each frame. If user wants a custom lamp on the car:
+  Game.attachTo(lampName, carName, {x:0,y:1.2,z:2.2}) once — then only move car root.
+Game.attachTo(childNameOrMesh, parentNameOrMesh, localOffset{x,y,z}) parents child under parent.
+Game.getVehicleRoot(nameOrMesh) climbs to nearest ancestor/userData.isVehicle group.
+Game.moveRoot(name, x,y,z) / Game.rotateRoot(name, yaw) — always operate on vehicle/building ROOT.
+Detection: mesh.userData.isVehicle === true means this Group is the car root.
+If request is "خلي العربية تتحرك": ONLY translate/rotate the vehicle root in onUpdate.
+RULE_NO_SCREEN_SPAM: NEVER call Game.toast / Game.subtitle / Game.blackBars with messages like تم / اكتمل / نجح / done / complete / OK unless the USER explicitly asked to show that text on screen. Prefer silent success. Only toast on real errors if useful.
+HTTP + PACK API (always available):
+  Game.http.get(url) -> Promise<{ok,status,data}>
+  Game.http.post(url, body) -> Promise<{ok,status,data}>
+  Game.http.json(url) -> Promise<data>
+  Game.pack.hasData() / getCurrentLevel() / getScriptedObjects() / getWorldObjects() / getAssets() / find(name)
+  The comprehensive save (الملف الشامل) is AUTO-loaded into state.levels — use Game.pack.* to read it. NEVER ask user to re-upload inside script.
+  Prefer Game.defineParams for apiUrl keys. Handle CORS failures with Game.toast.
+object_name=كائن_جديد
+level=لفل 1
+lang=JavaScript
+type=scripted_object — نفس قوة برمجة الملاعب/العمائر + بناء تحت root
+TEST_MODE: تحريك الكائن في الاختبار لا يُحفظ — عند الخروج تُستعاد أماكن البناء فقط.
+
+=== ربط قوي ثنائي الاتجاه (LEVEL SCRIPT ↔ SCRIPTED OBJECT ↔ CATALOG) ===
+أي سكربت يقدر يتحكم في: كائنات الكتالوج + الكائنات البرمجية + نواتج createBox
+Game.findByName("حائط متوسط 1") / listAllObjects() / markProgrammed("حائط متوسط 1")
+Game.linkObject("حائط متوسط 1", { radius:2.5, onTouch:function(info){ if(info.exit)return; Game.setObjectVisible("البيت", true); } })
+Game.setShared("flag", true) / getShared — تواصل بين سكربت اللفل وسكربت الكائن البرمجي
+لما تربط حائط 1 بحدث → يظهر ⚙️ مبرمج جنب اسمه في قائمة الكائنات
+مثال بيت يظهر عند لمس حائط: var house=Game.findByName("البيت"); if(house) house.mesh.visible=false; Game.linkObject("حائط متوسط 1",{onTouch:function(i){if(i.exit)return; Game.setObjectVisible("البيت",true);}});
+=== ربط اختياري بعالم البناء (WORLD LINK — OPTIONAL) ===
+الكائن البرمجي يشتغل لوحده تحت root — مش لازم يرتبط بأي حاجة في العالم.
+لو حابب تربطه بكائنات موجودة في المشهد (حائط، بيت، عربية، باب...):
+  Game.findByName("حائط متوسط 1") → جذر من الكتالوج/العالم
+  Game.findPart(houseOrRoot, "wall") / findPart("بيت 1", "باب") → جزء داخل المجسم
+  Game.listWorldObjects() → قائمة أسماء الجذور في العالم
+  Game.listParts(name) → أجزاء تحت جذر
+  Game.onTrigger(worldMesh, r, fn) / onClick / registerInteractAction — على جزء عالم أو جزء تحت root
+  أي تغيير موضع/حالة: setPosition / setShared / syncObject / broadcast → أونلاين
+مثال بيت: أنشئ البيت تحت root؛ أو اربط حائط موجود:
+  var w=Game.findByName("حائط متوسط 1"); if(w&&w.mesh) Game.onTrigger(w.mesh, 2, function(info){ if(info.exit)return; Game.setShared("hit_wall1",true); });
+مثال جزء محلي تحت root: var wall1=Game.findPart(root,"حائط"); Game.onTrigger(wall1,2,fn);
+NO CONFUSION: world link اختياري بالكامل — تقدر تنشئ كائن مستقل بدون findByName للعالم.
+
+=== PARAMS (CRITICAL) ===
+كل قيمة لها وحدة أو ملف لازم في Game.defineParams — وإلا لوحة البارHawaرز فاضية.
+أنواع: number, text, color, boolean, file, image, video, audio, pdf
+لصور/فيديو/صوت/ملفات: type:"image"|"video"|"audio"|"file" مع accept مناسب
+مثال فيديو على سبورة:
+  Game.defineParams([{key:"vid",label:"فيديو",type:"video",value:""},{key:"w",label:"عرض",type:"number",value:2}]);
+  // ثم Game.params.vid بعد رفع المستخدم
+
+=== تحكم لاعب↔لاعب (مفتوح أونلاين) ===
+Game.teleportPlayer(nameOrId, x,y,z)
+Game.affectPlayer(nameOrId, "teleport"|"health"|"lock"|"input"|"camera"|"subtitle", data)
+Game.setPlayerHealthRemote(nameOrId, hp)
+Game.lockPlayer(nameOrId, true|false)
+Game.forcePlayerInput(nameOrId, {up,down,left,right})
+مثال لوحة أسماء: onClick اسم → Game.teleportPlayer(info.name, 10,0,5)
+أي تأثير على لاعب آخر يجب setShared/broadcast/affectPlayer — مش متغير محلي فقط
+
+=== SAFE CODE STYLE (منع undefined) ===
+ALWAYS: if (!root) return; at start
+ALWAYS: if (Game && Game.onUpdate) Game.onUpdate(function(dt){...});
+NEVER call Game.foo if unsure — guard: if (typeof Game.foo === "function") Game.foo(...)
+createBox/Sphere ترجع {mesh,name} — استخدم lamp.mesh مش lamp لوحده بدون فحص
+var m = (lamp && lamp.mesh) ? lamp.mesh : lamp; if (!m) return;
+Signature: (function(Game,root){...})(typeof Game!=="undefined"?Game:null,typeof root!=="undefined"?root:null);
+Write sync like the football field: professional multiplayer-first code
+runtime=Full GameAPI (play + test + multiplayer)
+
+=== اللاعبون (محلي + سيرفر) ===
+Game.getMyName() / getMyUsername() → اسم التسجيل (username) في اللوبي
+Game.getMyAvatar()            → صورة البروفايل لنفس الحساب
+Game.getLocalPlayer()         → أنا {mesh,position,name,avatar?}
+Game.getAllPlayers()          → كل الموجودين (محلي+أونلاين)
+  كل عنصر: { local, name/username, avatar, mesh, position, id? }
+Game.getNetPlayers()          → لاعبين السيرفر فقط
+Game.getRoster()              → قائمة الغرفة {id,name,isHost}
+Game.getNearestPlayer(mesh)   → أقرب لاعب للمجسم
+Game.isHost() Game.isOnline() Game.getMyNetId()
+ممنوع: findByName("لاعب")
+
+مثال قائمة أسماء داخل الكائن:
+  var names=[];
+  (Game.getAllPlayers()||[]).forEach(function(p){
+    names.push(p.name||p.id||"لاعب");
+  });
+  Game.subtitle("اللي جوه: "+names.join(" · "));
+
+مثال ترحيب باسمي عند الدخول:
+  Game.onTrigger(root, 12, function(info){
+    if(info&&info.exit){ Game.subtitle(""); return; }
+    Game.subtitle("اهلا يا "+(Game.getMyName()||"لاعب"));
+  });
+
+=== onTrigger / onClick / تفاعل (مهيأ + world position) ===
+Game.onTrigger(meshOrRoot, radius, fn)  // enter + exit (info.exit===true)
+Game.onClick(mesh, fn)
+Game.registerInteractAction(mesh,{id,label,icon,priority,radius,onActivate})
+Game.onUpdate(function(dt){ ... })  // يعمل في play والاختبار
+المسافات تُحسب من getWorldPosition — اشتغل على root أو أي mesh ابن.
+
+=== صلاحيات كاملة زي برمجة الموقع ===
+لاعب: teleport lock forceInput limbs firstPerson camera shake cutscene
+شاشة: subtitle toast blackBars
+هاتف: registerPhoneApp openPhone
+أسلحة/تفاعل: registerInteractAction — أي مركبة متحركة = تصميم+قيادة من الصفر (ممنوع enterVehicle/makeCatalogCar نهائياً)
+عالم: findByName setPosition create* addObject removeObject media
+شبكة: netSend onNet
+
+=== بناء الشكل ===
+(function(Game,root){ ... })  — مركز (0,0,0) تحت root فقط للهيكل.
+ممنوع posX/posZ لبناء الهيكل. باقي التحكم Game.* حر.
+
+=== VEHICLES — إبداع الـ AI فقط (إلزامي مطلق) ===
+يسري على أي مركبة متحركة: عربية، موتسيكل، طيارة، مركب، قارب، دبابة، دراجة…
+ممنوع تمامًا: makeCatalogCar / makeInteractiveCar / makeCar / tagVehicleParts
+ممنوع تمامًا: enterVehicle / exitVehicle / setVehicleEngine / toggleVehicleEngine / getVehicleState
+ممنوع: الاعتماد على نظام ركوب/سواقة/رفيق الموقع أو findByName لسيارة كتالوج.
+صمم تحت root من الصفر بـ THREE: نسب وتفاصيل حسب الطلب (لو طلب بوجاتي ابنِ شكل يشبهها أنت).
+جسم + عجل/أجنحة + مقصورة + أبواب pivots = refs محلية فقط.
+الركوب والنزول والقيادة والطيران = onUpdate + keydown + lockPlayer + setCamera من الصفر.
+مثال باب: var pivot=new THREE.Group(); pivot.add(doorMesh); root.add(pivot); pivot.rotation.y=openAmt;
+مثال قيادة يدوية: root.position += dir*speed*dt ؛ root.rotation.y += steer ؛ عجلات.rotation.x += spin؛
+ممنوع تعيين userData.isVehicle=true أو interactiveType="vehicle" — ده بيظهر أزرار سواقة/رفيق الموقع.
+استخدم userData.customDrive=true فقط + F/keys يدوي بدون enterVehicle.
+=== TEST MODE POSITION (إلزامي) ===
+المحرك يحفظ لقطة أماكن قبل الاختبار ويرجعها عند الخروج — متتعتمدش على إنك تسيب root متنقل.
+لو سكربتك بيحرّك root أثناء اللعب: احفظ spawnPos عند البداية وفي cleanup ارجع root.position.copy(spawnPos).
+ممنوع persist/serialize من داخل سكربت الاختبار يكتب مكان جديد على البناء.
+
+=== WORLD GRAPHICS (جرافيكس العالم من الكائن البرمجي) ===
+من داخل (function(Game,root){...}) تقدر تغيّر شكل العالم زي قسم البرمجة:
+  Game.setGraphicsQuality(0..5 | "low"|"medium"|"high"|"ultra")
+  Game.setShadows(true|false) · Game.setShadowMapSize(512|1024|2048)
+  Game.setSunIntensity(1.2) · Game.setSunPosition(40,60,30) · Game.setSunColor("#fff5e0")
+  Game.setAmbientIntensity(0.5) · Game.setAmbientColor("#ffffff")
+  Game.setDrawDistance(200) · Game.setPixelRatio(0.8)
+  Game.setWorldGraphics({ quality:4, shadows:true, sunIntensity:1.3, ambient:0.45 })
+  Game.getWorldGraphics() — قراءة الحالة الحالية
+مثال مشهد ليلي: Game.setWorldGraphics({quality:3,shadows:true,sunIntensity:0.35,ambient:0.2,sunColor:"#6b8cff"});
+مثال أداء ضعيف: Game.setWorldGraphics({quality:1,shadows:false,pixelRatio:0.55,drawDistance:100});
+
+=== TEMPLATE ===
+(function(Game,root){
+  "use strict"; if(!root)return;
+  var OBJECT_NAME="كائن_جديد";
+  try{root.userData.instanceName=OBJECT_NAME;}catch(e){}
+  function box(x,y,z,w,h,d,c){var m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshStandardMaterial({color:c!=null?c:0x888888}));m.position.set(x,y,z);root.add(m);return m;}
+  box(0,0.05,0,10,0.1,10,0x5C4033);
+  if(Game&&Game.onTrigger){
+    Game.onTrigger(root,10,function(info){
+      if(info&&info.exit){if(Game.subtitle)Game.subtitle("");return;}
+      var n=(Game.getMyName&&Game.getMyName())||"لاعب";
+      if(Game.subtitle)Game.subtitle("اهلا يا "+n);
+    });
+  }
+})(typeof Game!=="undefined"?Game:null,typeof root!=="undefined"?root:null);
+
+=== RULES FOR AI ===
+1) كود نظيف فقط — بدون markdown.
+2) استخدم getMyName / getAllPlayers للأسماء والسيرفر.
+3) onTrigger يدعم info.exit عند الخروج.
+4) هيكل تحت root — تحكم اللفل عبر Game حر.
+
+=== COLLISION / MESH SOLID (مهم جدًا — ممنوع هواء) ===
+المحرك فيه تصادم حقيقي لكل Mesh:
+  mesh.userData.forceMeshCollision = true;  // فعّل تصادم per-mesh
+  mesh.userData.solid = true;
+  mesh.userData.noCollision = false;       // لو true = هواء
+  mesh.userData.isWall = true;             // حيطة تمنع المرور
+  mesh.userData.blocksPlayer = true;
+  mesh.userData.walkable = true;           // أرضية/سطح
+  mesh.userData.isFloor = true;
+Game.setSolid(meshOrName, true)   — صلب
+Game.setWall(meshOrName, true)    — حيطة
+Game.setNoCollision(meshOrName, true) — هواء/تريجر
+Game.createBox({...}) و root.add(mesh) تحت الكائن البرمجي → صلب افتراضيًا.
+ممنوع تسيب حوائط بدون forceMeshCollision — هتبقى هواء.
+root.userData.forceMeshCollision = true دائمًا للكائن البرمجي.
+5) نفّذ طلب المستخدم بالضبط.
+
+=== LIVE WORLD INVENTORY (ALL MODELS — authoritative) ===
+RULE FOR ANY MODEL (car, building, custom 3D, furniture, prop, machine):
+  1) findByName ONLY matches ROOT objects in buildObjects (instanceName).
+  2) Every mesh/group under a root is a LOCAL part — moves automatically with the root.
+  3) NEVER set child.position to world coordinates. That tears the model apart.
+  4) To move/rotate/scale the whole thing: change ROOT only (position / rotation.y / scale).
+  5) Optional local animation: child.rotation only, or child.position in LOCAL offsets — never copy root world x/z onto children each frame.
+  6) Lights/seats/doors/windows/wheels/columns under a root are NOT separate findByName targets.
+  7) DOORS: open with LOCAL rotation on the door child (hinge). NEVER world position.
+     Example: var d=findPart(root,"door"); d.rotation.y = angle;
+  8) WHEELS: spin with LOCAL rotation.x while ROOT moves. NEVER wheel.position in world.
+     Example: var w=findPart(root,"wheel"); w.rotation.x += dt*speed;
+  9) Helper: function findPart(root,s){var f=null;root.traverse(function(c){if(f)return;var n=(c.name||"").toLowerCase();if(n.indexOf(String(s).toLowerCase())>=0)f=c;});return f;}
+- ROOT "road bridge traffic 1" type=[scripted,ix:scripted_object] @(-23.6,0.2,12.3) | LOCAL_PARTS: 184wall, 805mesh, 251group (do not findByName/move in world)
+- ROOT "road bridge traffic 2" type=[scripted,ix:scripted_object] @(-104.6,0.2,-27.5) | LOCAL_PARTS: 184wall, 805mesh, 251group (do not findByName/move in world)
+- ROOT "road bridge traffic 3" type=[scripted,ix:scripted_object] @(-178.1,0.2,-45.5) | LOCAL_PARTS: 184wall, 805mesh, 251group (do not findByName/move in world)
+- ROOT "tuktuk 1" type=[scripted,ix:scripted_object] @(-139.0,0.1,64.1) | LOCAL_PARTS: 267mesh, 10group (do not findByName/move in world)
+- ROOT "tuktuk 2" type=[scripted,ix:scripted_object] @(-144.7,0.1,64.9) | LOCAL_PARTS: 267mesh, 10group (do not findByName/move in world)
+- ROOT "tuktuk 3" type=[scripted,ix:scripted_object] @(-149.8,0.1,68.4) | LOCAL_PARTS: 267mesh, 10group (do not findByName/move in world)
+- ROOT "tuktuk 4" type=[scripted,ix:scripted_object] @(-156.5,0.1,66.3) | LOCAL_PARTS: 267mesh, 10group (do not findByName/move in world)
+- ROOT "tuktuk 5" type=[scripted,ix:scripted_object] @(-162.5,0.1,65.6) | LOCAL_PARTS: 267mesh, 10group (do not findByName/move in world)
+- ROOT "tuktuk 6" type=[scripted,ix:scripted_object] @(-168.3,0.1,64.4) | LOCAL_PARTS: 267mesh, 10group (do not findByName/move in world)
+- ROOT "tuktuk 7" type=[scripted,ix:scripted_object] @(-134.9,0.1,64.7) | LOCAL_PARTS: 267mesh, 10group (do not findByName/move in world)
+UNIVERSAL PATTERNS:
+  MOVE whole model:  root.position.x/y/z  or Game.moveRoot(name,x,y,z)
+  ROTATE whole:      root.rotation.y = yaw  or Game.rotateRoot(name,yaw)
+  WRONG orbit bug:   part.position.x = root.position.x + cos(t)  // tears model
+  RIGHT slide:       root.position.x = startX + Math.sin(t) * amp
+  LOCAL spin only:   wheel.rotation.x += dt * spin  (child stays parented)
+  Attach extra prop: Game.attachTo(childName, rootName, {x,y,z}) once, then move root only
+Game.listParts(name) lists local parts for inspection — still animate ROOT only unless user asked to move one local part in local space.
+
+=== CUSTOM_3D_LIBRARY (كل المجسمات المرفوعة — حتى لو مش موضوعة في العالم) ===
+(empty library)
+استخدم findByName على instanceName بعد الوضع في العالم، ثم listParts/findPart للتحكم.
+أي مجسم 3D = مرن: سلاح/عربية/موتسيكل/أداة/مضرب — تحكم يدوي كامل بدون أنظمة الموقع.
+
+=== PLACED_CUSTOM_3D_WITH_PARTS ===
+(no custom3d placed in world yet)
+
+=== EXISTING_LEVEL_SCRIPTS (قسم البرمجة العادية — كل الملفات الموجودة) ===
+مهم: اقرأ الكود تحت. لو فيه جرافيكس/كاميرا/HUD — متستحوذش. اربط ومدّ الموجود.
+(مفيش ملفات برمجة عادية في اللفل ده)
+
+=== EXISTING_SCRIPTED_OBJECTS (قسم الكائنات المبرمجة — كل الأكواد) ===
+--- SO[0] name="road bridge traffic" len=96357 ---
+(function (Game, root) {
+  "use strict";
+  if (!Game || !root) return;
+  var THREE = Game.THREE || (typeof window !== "undefined" ? window.THREE : null);
+  if (!THREE) return;
+  if (typeof Game.onUpdate !== "function") return;
+
+  var OBJECT_NAME = "طريق_كوبري_ومرور";
+  try { root.userData.instanceName = OBJECT_NAME; } catch (e) {}
+  try { if (typeof root.userData.__rtCleanup === "function") root.userData.__rtCleanup(); } catch (e) {}
+  root.userData.forceMeshCollision = true;
+
+  // =====================================================================
+  // 1) PARAMS — كل رقم له وحدة هنا (متر / ثانية / درجة / كجم)
+  // =====================================================================
+  if (typeof Game.defineParams === "function") {
+    Game.defineParams([
+      { key: "asphaltColor", label: "لون الأسفلت", type: "color", value: "#2b2b30" },
+      { key: "lineColor", label: "لون خطوط الطريق", type: "color", value: "#f2f2f2" },
+      { key: "deckColor", label: "لون جسم الكوبري (خرسانة)", type: "color", value: "#8a8a90" },
+      { key: "railColor", label: "لون الحواجز الجانبية", type: "color", value: "#b9b9bf" },
+      { key: "pillarColor", label: "لون الأعمدة", type: "color", value: "#6d6d73" },
+
+      { key: "roadWidth", label: "عرض الطريق والكوبري (م)", type: "number", value: 10, min: 7, max: 20, step: 0.5 },
+      { key: "mainLength", label: "طول الطريق الرئيسي المستقيم (م)", type: "number", value: 200, min: 80, max: 600, step: 10 },
+      { key: "rampLength", label: "طول مطلع الكوبري (م)", type: "number", value: 50, min: 20, max: 150, step: 5 },
+      { key: "rampHeight", label: "ارتفاع الكوبري (م)", type: "number", value: 6, min: 2, max: 14, step: 0.5 },
+      { key: "deckLength", label: "طول المشوار فوق الكوبري قبل اللفة (م)", type: "number", value: 40, min: 10, max: 150, step: 5 },
+      { key: "turnRadius", label: "نصف قطر اللفة (م)", type: "number", value: 28, min: 14, max: 80, step: 1 },
+      { key: "turnDropPercent", label: "نسبة النزول أثناء اللفة من ارتفاع الكوبري (%)", type: "number", value: 45, min: 0, max: 90, step: 5 },
+      { key: "turnRight", label: "اللفة يمين (بدل شمال)", type: "boolean", value: false },
+      { key: "downRampLength", label: "طول نزلة الكوبري بعد اللفة (م)", type: "number", value: 55, min: 20, max: 200, step: 5 },
+      { key: "bankDeg", label: "ميل أرضية اللفة للداخل (درجة)", type: "number", value: 3, min: 0, max: 10, step: 0.5 },
+      { key: "verticalSmoothing", label: "تنعيم بداية ونهاية الميل (م)", type: "number", value: 12, min: 4, max: 30, step: 1 },
+      { key: "deckThickness", label: "سمك جسم الكوبري (م)", type: "number", value: 0.8, min: 0.3, max: 2, step: 0.1 },
+      { key: "roadBase", label: "ارتفاع سطح الأسفلت عن الأرض (م)", type: "number", value: 0.06, min: 0.02, max: 0.3, step: 0.01 },
+      { key: "groundWorldY", label: "ارتفاع الأرض الفعلي في العالم (م)", type: "number", value: 0, min: -5, max: 20, step: 0.05 },
+      { key: "railings", label: "حواجز على الكوبري", type: "boolean", value: true },
+      { key: "railHeight", label: "ارتفاع الحاجز (م)", type: "number", value: 1.0, min: 0.5, max: 2, step: 0.1 },
+      { key: "railWidth", label: "سمك الحاجز (م)", type: "number", value: 0.35, min: 0.15, max: 0.8, step: 0.05 },
+      { key: "pillarSpacing", label: "المسافة بين أعمدة الكوبري (م)", type: "number", value: 12, min: 6, max: 30, step: 1 },
+
+      { key: "trafficEnabled", label: "تشغيل عربيات الطريق (بوتات)", type: "boolean", value: true },
+      { key: "trafficCount", label: "عدد العربيات", type: "number", value: 10, min: 0, max: 20, step: 1 },
+      { key: "trafficSeed", label: "رقم عشوائي لتوزيع الألوان والأماكن", type: "number", value: 7, min: 1, max: 9999, step: 1 },
+      { key: "cruiseSpeed", label: "سرعة العربيات المعتادة (م/ث)", type: "number", value: 11, min: 3, max: 25, step: 0.5 },
+      { key: "speedVariation", label: "اختلاف سرعة السواقين (± %)", type: "number", value: 15, min: 0, max: 40, step: 1 },
+      { key: "carAccel", label: "تسارع العربية (م/ث²)", type: "number", value: 3.2, min: 1, max: 8, step: 0.1 },
+      { key: "carBrake", label: "أقصى فرملة (م/ث²)", type: "number", value: 7, min: 3, max: 12, step: 0.5 },
+      { key: "aiSmartness", label: "ذكاء السواق (0 غبي ... 1 شاطر)", type: "number", value: 0.6, min: 0, max: 1, step: 0.05 },
+      { key: "carLength", label: "طول العربية (م)", type: "number", value: 4.3, min: 3, max: 6, step: 0.1 },
+      { key: "carWidth", label: "عرض العربية (م)", type: "number", value: 1.85, min: 1.4, max: 2.4, step: 0.05 },
+      { key: "carMass", label: "وزن العربية (كجم)", type: "number", value: 1200, min: 600, max: 4000, step: 50 },
+      { key: "carRestitution", label: "ارتداد الصدمة (0 يلزق ... 1 يرتد)", type: "number", value: 0.3, min: 0, max: 0.9, step: 0.05 },
+      { key: "stunThreshold", label: "أقل تغيّر سرعة يوقّف العربية بعد الصدمة (م/ث)", type: "number", value: 1.2, min: 0.3, max: 6, step: 0.1 },
+      { key: "stunTime", label: "مدة وقوف العربية بعد الصدمة (ث)", type: "number", value: 1.6, min: 0.3, max: 6, step: 0.1 },
+      { key: "slideFriction", label: "احتكاك الانزلاق بعد الصدمة (م/ث²)", type: "number", value: 5.5, min: 1, max: 12, step: 0.5 },
+      { key: "reverseSpeed", label: "سرعة الرجوع للخلف للتصحيح (م/ث)", type: "number", value: 2.4, min: 1, max: 6, step: 0.1 },
+      { key: "lodDistance", label: "مسافة إظهار التفاصيل الدقيقة للعربية (م)", type: "number", value: 90, min: 30, max: 300, step: 10 },
+      { key: "drawDistance", label: "أقصى مسافة لظهور العربيات (م)", type: "number", value: 450, min: 100, max: 1500, step: 50 },
+
+      { key: "tukName", label: "اسم التوك توك في العالم", type: "text", value: "توك_توك" },
+      { key: "assistTukTuk", label: "التوك توك يطلع وينزل ويميل مع الطريق والكوبري", type: "boolean", value: true },
+      { key: "tukRide", label: "ارتفاع محور التوك توك فوق سطح الطريق (م)", type: "number", value: 0, min: -0.5, max: 0.8, step: 0.01 },
+      { key: "tukSnap", label: "أقصى مسافة التصاق بسطح الطريق (م)", type: "number", value: 0.9, min: 0.2, max: 3, step: 0.1 },
+      { key: "tukHeightRate", label: "سرعة التصاق التوك توك بالسطح (1/ث)", type: "number", value: 16, min: 2, max: 40, step: 1 },
+      { key: "tukTiltRate", label: "سرعة ميل التوك توك مع الأرض (1/ث)", type: "number", value: 9, min: 1, max: 30, step: 0.5 },
+      { key: "tukMass", label: "وزن التوك توك وقت الصدمة (كجم)", type: "number", value: 900, min: 200, max: 4000, step: 50 },
+      { key: "tukPushback", label: "ارتداد التوك توك للخلف عند الاصطدام (0-1)", type: "number", value: 0.35, min: 0, max: 1, step: 0.05 },
+      { key: "playerPushCars", label: "اللاعب ماشي على رجله يزق العربيات", type: "boolean", value: true },
+      { key: "playerMass", label: "وزن اللاعب وقت الصدمة (كجم)", type: "number", value: 250, min: 60, max: 2000, step: 10 },
+
+      { key: "playerGroundFix", label: "تصحيح ارتفاع اللاعب (يقع من الكوبري عادي ولا يتشال فوقه وهو تحته)", type: "boolean", value: true },
+      { key: "playerFootOffset", label: "فرق ارتفاع قدم اللاعب عن مركز مجسمه (م) — عدّله لو القدم غاطسة/طايرة", type: "number", value: 0, min: -2, max: 2, step: 0.05 },
+      { key: "driversOn", label: "سواقين جوه العربيات (يظهروا ويلفوا الدركسيون)", type: "boolean", value: true },
+      { key: "driverExit", label: "السواق ينزل ويخبط على العائق لو الطريق اتقفل", type: "boolean", value: true },
+      { key: "exitWaitMin", label: "أقل مدة انتظار قبل ما السواق ينزل (ث)", type: "number", value: 5, min: 2, max: 40, step: 1 },
+      { key: "exitWaitMax", label: "أقصى مدة انتظار قبل ما السواق ينزل (ث)", type: "number", value: 9, min: 2, max: 60, step: 1 },
+      { key: "maxDriversOut", label: "أقصى عدد سواقين نازلين في نفس الوقت", type: "number", value: 3, min: 1, max: 8, step: 1 },
+      { key: "walkSpeed", label: "سرعة مشي السواق (م/ث)", type: "number", value: 1.9, min: 0.8, max: 4, step: 0.1 },
+      { key: "knockInFront", label: "السواق يقف قدام العائق (بدل جنب شباكه)", type: "boolean", value: true },
+      { key: "knockMaxTime", label: "أقصى مدة يفضل ي
+/* ... truncated ... */
+--- END SO[0] ---
+--- SO[1] name="tuktuk" len=64966 ---
+(function (Game, root) {
+  "use strict";
+  if (!Game || !root) return;
+  var THREE = Game.THREE || (typeof window !== "undefined" ? window.THREE : null);
+  if (!THREE) return;
+  if (typeof Game.onUpdate !== "function") return;
+
+  var OBJECT_NAME = "توك_توك";
+  try { root.userData.instanceName = OBJECT_NAME; } catch (e) {}
+  root.userData.forceMeshCollision = true;
+  root.userData.customDrive = true;
+  try { if (typeof root.userData.__tukCleanup === "function") root.userData.__tukCleanup(); } catch (e) {}
+
+  // =====================================================================
+  // 1) PARAMS — كل قيمة لها وحدة (متر / ثانية / درجة) هنا
+  // =====================================================================
+  if (typeof Game.defineParams === "function") {
+    Game.defineParams([
+      { key: "bodyColor", label: "لون الهيكل", type: "color", value: "#1e9e55" },
+      { key: "roofColor", label: "لون السقف", type: "color", value: "#f4c20d" },
+      { key: "accentColor", label: "لون الزخارف", type: "color", value: "#d62839" },
+      { key: "ledColor", label: "لون إضاءة الليد", type: "color", value: "#00e5ff" },
+      { key: "ledRainbow", label: "ليد بألوان متغيرة", type: "boolean", value: true },
+      { key: "bannerText", label: "كتابة الزجاج الأمامي", type: "text", value: "ما شاء الله" },
+      { key: "plateText", label: "رقم اللوحة", type: "text", value: "توك توك ١٢٣٤" },
+
+      { key: "maxSpeed", label: "السرعة القصوى (م/ث)", type: "number", value: 18, min: 5, max: 45, step: 0.5 },
+      { key: "reverseMaxSpeed", label: "سرعة الرجوع القصوى (م/ث)", type: "number", value: 5, min: 1, max: 15, step: 0.5 },
+      { key: "accel", label: "التسارع (م/ث²)", type: "number", value: 6.5, min: 1, max: 20, step: 0.5 },
+      { key: "brakePower", label: "قوة الفرامل (م/ث²)", type: "number", value: 15, min: 3, max: 40, step: 1 },
+      { key: "handbrakePower", label: "قوة فرامل اليد (م/ث²)", type: "number", value: 24, min: 5, max: 50, step: 1 },
+      { key: "rolling", label: "احتكاك الأرض (م/ث²)", type: "number", value: 1.4, min: 0, max: 6, step: 0.1 },
+      { key: "drag", label: "مقاومة الهواء (1/ث)", type: "number", value: 0.12, min: 0, max: 1, step: 0.01 },
+      { key: "steerMaxDeg", label: "أقصى زاوية للعجلة الأمامية (درجة)", type: "number", value: 36, min: 10, max: 55, step: 1 },
+      { key: "steerResponse", label: "سرعة استجابة التوجيه (1/ث)", type: "number", value: 7, min: 1, max: 20, step: 0.5 },
+      { key: "maxLateralAccel", label: "أقصى تسارع جانبي (م/ث²)", type: "number", value: 9, min: 3, max: 25, step: 0.5 },
+      { key: "leanAmount", label: "ميل الهيكل في المنعطف (راديان لكل م/ث²)", type: "number", value: 0.009, min: 0, max: 0.03, step: 0.001 },
+      { key: "suspensionRate", label: "سرعة رد فعل التعليق (1/ث)", type: "number", value: 9, min: 2, max: 25, step: 0.5 },
+      { key: "collision", label: "التصادم مع الحوائط", type: "boolean", value: true },
+
+      { key: "camDistance", label: "مسافة الكاميرا (م)", type: "number", value: 6.5, min: 2.5, max: 16, step: 0.5 },
+      { key: "camHeightDeg", label: "ارتفاع الكاميرا الافتراضي (درجة)", type: "number", value: 16, min: -2, max: 80, step: 1 },
+      { key: "camFov", label: "زاوية الرؤية (درجة)", type: "number", value: 62, min: 35, max: 100, step: 1 },
+      { key: "speedFovBoost", label: "زيادة الزاوية عند السرعة (درجة)", type: "number", value: 8, min: 0, max: 25, step: 1 },
+      { key: "camSensitivity", label: "حساسية الماوس (راديان/بكسل)", type: "number", value: 0.0045, min: 0.001, max: 0.015, step: 0.0005 },
+      { key: "camKeySpeed", label: "سرعة تدوير الكاميرا بالأسهم (راديان/ث)", type: "number", value: 1.8, min: 0.5, max: 5, step: 0.1 },
+      { key: "camFollow", label: "سرعة تتبع الكاميرا للاتجاه (1/ث)", type: "number", value: 4.5, min: 1, max: 15, step: 0.5 },
+      { key: "camRecenterDelay", label: "مهلة رجوع الكاميرا للخلف (ث)", type: "number", value: 2.5, min: 0.5, max: 10, step: 0.5 },
+      { key: "camLerp", label: "نعومة الكاميرا (0-1)", type: "number", value: 0.4, min: 0.05, max: 1, step: 0.05 },
+      { key: "roofFade", label: "تشفيف السقف لما الكاميرا تعلى", type: "boolean", value: true },
+
+      { key: "interactRadius", label: "مسافة الركوب (م)", type: "number", value: 3.4, min: 1.5, max: 8, step: 0.1 },
+      { key: "headlights", label: "كشافات التوك توك", type: "boolean", value: true },
+      { key: "soundOn", label: "صوت الموتور والكلاكس", type: "boolean", value: true },
+      { key: "soundVolume", label: "مستوى الصوت (0-1)", type: "number", value: 0.5, min: 0, max: 1, step: 0.05 },
+      { key: "showHint", label: "إظهار تعليمات التحكم عند الركوب", type: "boolean", value: true },
+
+      { key: "riderLift", label: "ضبط ارتفاع الراكب (م)", type: "number", value: 0, min: -0.3, max: 0.3, step: 0.01 },
+      { key: "flipArmSide", label: "عكس ميل الذراعين جانبياً", type: "boolean", value: false },
+      { key: "flipKnee", label: "عكس ثني الركبة", type: "boolean", value: false },
+      { key: "riderYawOffsetDeg", label: "تعديل اتجاه الراكب (درجة)", type: "number", value: 0, min: -180, max: 180, step: 15 }
+    ]);
+  }
+
+  function PR(key) { var p = Game.params; return p ? p[key] : undefined; }
+  function PN(key, def) {
+    var v = PR(key);
+    if (v === undefined || v === null || v === "") return def;
+    v = Number(v);
+    return isFinite(v) ? v : def;
+  }
+  function PB(key, def) {
+    var v = PR(key);
+    if (v === undefined || v === null) return def;
+    if (typeof v === "string") return v === "true" || v === "1";
+    return !!v;
+  }
+  function PS(key, def) {
+    var v = PR(key);
+    return (v === undefined || v === null || v === "") ? def : String(v);
+  }
+
+  // استدعاء آمن لأي دالة في Game (typeof + try/catch)
+  function call(name) {
+    var f = Game[name];
+    if (typeof f !== "function") return undefined;
+    try { return f.apply(Game, Array.prototype.slice.call(arguments, 1)); } catch (e) { return undefined; }
+  }
+  function down(code) { return !!call("isKeyDown", code); }
+
+  // =====================================================================
+  // 2) رياضيات مساعدة
+  // =====================================================================
+  var PI = Math.PI, TAU = Math.PI * 2;
+  function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
+  function lerp(a, b, t) { return a + (b - a) * t; }
+  function damp(cur, target, rate, dt) { return cur + (target - cur) * (1 - Math.exp(-rate * dt)); }
+  function wrap(a) { while (a > PI) a -= TAU; while (a < -PI) a += TAU; return a; }
+  function smooth(e0, e1, x) { var t = clamp((x - e0) / (e1 - e0), 0, 1); return t * t * (3 - 2 * t); }
+  function sgn(x) { return x < 0 ? -1 : (x > 0 ? 1 : 0); }
+
+  // =====================================================================
+  // 3) أبعاد الموديل (متر) — الأصل عند محور العجل الخلفي على الأرض، المقدمة عند -Z
+  // =====================================================================
+  var DIM = {
+    wheelBase: 2.0,
+    rearR: 0.33, rearW: 0.20, rearX: 0.70,
+    frontR: 0.31, frontW: 0.17, frontZ: -2.0
+  };
+  var BAR = { x: 0, y: 1.22, z: -0.82 };      // مركز الهاندل
+  var GRIP = { x: 0.37, y: 0, z: 0.06 };      // مكان القبضة بالنسبة للهاندل
+  var SEAT = { x: 0, y: 0, z: -0.30 };        // أصل اللاعب (القدمين) وهو قاعد: الحوض 0.96 فوق الأرض = ارتفاع الكرسي
+  var RIDER = {
+    shoulderX: 0.20, shoulderY: 1.50,
+    upperArm: 0.31, foreArm: 0.29,
+    thighRx: -1.45, shinRx: 1.50, kneeSpread: 0.10
+  };
+  var MOUNT_TIME = 0.8, DISMOUNT_TIME = 0.7, BAR_RATIO = 0.58;
+
+  // =====================================================================
+  // 4) الحالة
+  // =====================================================================
+  var S = {
+    mode: "idle", t: 0, modeT: 0, lastToggle: -99, cleaned: false, errLogged: false,
+    v: 0, yaw: root.rotation.y, steerIn: 0, steerVis: 0, steerEff: 0, yawRate: 0, accel: 0, lat: 0,
+    pitch: 0, roll: 0, wSpinR: 0, wSpinF: 0, barAngle: 0, throttleVis: 0,
+    brakeOn: false, reverseOn: false, throttleOn: false,
+    camAzOff: 0, camPitch: PN("camHeig
+/* ... truncated ... */
+--- END SO[1] ---
+
+=== قواعد الربط الذكي (COOPERATIVE RESOURCES) ===
+1) كاميرا/جرافيكس: setCameraFeel / setGraphicsQuality (merge). setCamera فقط لكات سين قصير + clearCamera.
+2) جمل/HUD: عنصر DOM بـ id فريد أو Game.subtitle/toast — متمسحش طبقة تانية.
+3) أزرار/مفاتيح: setKeybind فردي؛ متقفلش input إلا مؤقت.
+4) ممتلكات/عربية: استحواذ مؤقت أثناء التفاعل فقط + cleanup.
+5) onUpdate/triggers: listeners منفصلة لكل سكربت.
+6) الكائن ده + برمجة اللفل يشتغلوا مع بعض بدون إلغاء.
+
+
+
+=== PLAYER_CONTROL_VISION_V221 (توجيهات — مش قوالب أنيميشن) ===
+الغرض: إعطاء التلقائي/البرمجة رؤية وقدرة على التحكم بشخصية اللاعب المدمجة في المحرك.
+ممنوع لصق قوالب أنيميشن جاهزة طويلة إلا إذا طلب المستخدم حركة معيّنة بالاسم.
+المطلوب = فهم الإمكانية + بناء الحركة من الصفر حسب الطلب.
+
+--- واقع المحرك v2.21 (قسم البرمجة: onStart/onUpdate) ---
+1) اللاعب متاح عبر:
+   game.player.position | game.player.mesh | game.player.yaw | game.player.velocity | game.player.grounded
+   game.player.setLimb(name, rx, ry, rz)
+   game.player.setSpeed(mul) | game.player.setColor(hex) | game.player.hideCape(v)
+2) أسماء المفاصل التي يفهمها المحرك (بعد jkey):
+   rArm lArm rForearm lForearm rLeg lLeg rShin lShin rFoot lFoot spine head
+   مرادفات مقبولة: rightArm leftArm arm_r forearm leg shin foot torso chest waist neck
+   عربي للسكربتات: ذراع ذراع_يمين ذراع_شمال ساعد رجل ساق قدم جذع صدر راس رأس
+3) محاور الدوران: راديان. على الذراع/الرجل غالباً -X أو حسب إشارة الريج = اتجاه أمام الشخصية.
+4) ترتيب الإطارات: onUpdate يعمل قبل animRig — لو setLimb فقط، المشي قد يمسح الوضعية.
+   الحل الموثوق في v2.21:
+   - اكتشف Object3D للمفصل من game.player.mesh (هيكل الريج) وثبّت الدوران في updateMatrixWorld، أو
+   - أعد setLimb كل فريم طوال الحركة مع دمج تدريجي (lerp) للوضعية.
+5) مفيش في وضع اللعب الحالي ضمان لـ lockPlayerAnim / getBone من كائن game البسيط.
+   APIs المذكورة في وثائق أقدم (raiseArm, holdInHand, createRiggedCharacter, applyPlayerPosePreset…)
+   اعتبرها هدفاً عند توفرها — لا تعتمد عليها كأنها مضمونة في كل نسخة.
+6) الكائنات الأخرى: game.find(name) → {position, rotation, scale, mesh, hide, show, dist}
+   scene.traverse للبحث بالاسم. حرّك/دوّر/كبّر/أخفِ/لوّن حسب الطلب.
+
+--- رؤية التلقائي عند طلب أنيميشن/تحكم لاعب ---
+A) حلّل الطلب: إيه المفصل؟ إيه المحور؟ مدة؟ لوب؟ تفاعل مع كائن؟
+B) ابنِ مفاتيح زمنية بسيطة: keys = [[t, {bone:[rx,ry,rz]}], ...] ثم قيّمها بـ ease بين المفاتيح كل onUpdate.
+C) لا تنسخ مكتبة أنيميشن كاملة في الرد إلا لو المستخدم طلب «ملف جاهز» أو «نظام قتال كامل».
+D) للحركة الواحدة: 5–15 سطر كافية (setLimb + زمن + عودة للراحة).
+E) للجسم الكامل: حرّك جذع + ذراعين + رجلين معاً؛ ممنوع نصف جسم يطفو أو ينزل تحت الأرض.
+F) بعد انتهاء الحركة: حرّر المفاصل أو ارجع لوضعية راحة عشان المشي الطبيعي يرجع.
+G) HUD السكربت: عنصر بـ data-script-ui="1" و pointer-events:none — يتشال عند الخروج من الاختبار.
+H) cleanup: امسح listeners والـ DOM والـ meshes اللي السكربت أضافها.
+
+--- أمثلة توجيهية (فكرة فقط — مش قوالب للنسخ الأعمى) ---
+• «لوّح باليد» → مفتاحان على rArm/rForearm مع loop قصير ثم stop.
+• «ارفع الراس» → head.x موجب/سالب حسب الريج، لمدة الطلب.
+• «اقعد» → leg + shin بزوايا جلوس + torso خفيف؛ loop أو hold حتى أمر.
+• «افتح الباب» → game.find("الباب") + تدوير المحور المناسب، مش أنيميشن لاعب إلا لو طُلب.
+
+--- ملف مرجعي اختياري في المشروع ---
+samples أو ملفات المستخدم قد تحتوي HawaCtrl / hawa-control-master:
+  play / set / move / rotate / defineAnim / listBones / listObjects
+استخدمها كمرجع قدرة، لا تلصقها كاملة إلا عند طلب نظام تحكم شامل.
+
+
+=== INPUT_MOBILE_DESKTOP_V221 (توجيهات — موبايل + كومبيوتر) ===
+كل نظام تحكم (قتال، باب، مركبة، أنيميشن لاعب، قائمة) يجب أن يشتغل على الموبايل والكومبيوتر بنفس المنطق.
+
+المبدأ الموحّد:
+- اقرأ الإدخال عبر game.key('KeyX') و/أو game.touch — مصدر واحد للنتيجة.
+- ممنوع شرط وحيد: «كليك يمين فقط» أو «hover» بدون بديل لمس.
+- على الموبايل: game.touch.show([{id,label,pos}]) ثم كل onUpdate:
+    game.setKey('KeyW', game.touch.isDown('id'))  أو  if (game.touch.wasPressed('id')) ...
+- على الكومبيوتر: ماوس/كيبورد؛ نفس دوال game.key تبقى صالحة.
+- game.touch.isMobile() للكشف؛ لو true اعرض أزرار اللمس، لو false اعتمد كيبورد/ماوس.
+- cleanup: game.touch.hide() عند إيقاف السكربت؛ data-script-ui على أي DOM إضافي.
+- مواضع الأزرار: br bl bc tr tl mr ml (safe-area على الموبايل).
+- القتال/التفاعل: زر «ضرب/تفاعل/حماية» لمس = نفس فعل الكليك أو KeyE/KeyF.
+- لا تعتمد pointerdown على window وحده بدون أزرار touch — على الموبايل pointer قد يُستهلك للجويستيك.

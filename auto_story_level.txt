@@ -1,3 +1,29 @@
+=== API_TRUTH_V900 (إلزامي — يتفوّق على أي وصف أقدم في هذا الملف) ===
+الدوال الموجودة فعلاً في واجهة Game لكائنات المحرك وملفات البرمجة (وضع اختبار + بناء + أونلاين + أوفلاين):
+- Game.THREE, Game.scene, Game.params, Game.defineParams([...]), Game.onUpdate(function(dt){...})
+- Game.findByName(name) و Game.find(name) → { name, props, mesh, object, position, rotation, scale, hide(), show(), hideBody(), dist() } أو null
+- Game.listAllObjects() → مصفوفة بنفس الشكل
+- Game.key(code), Game.setKey(code,bool), Game.isKeyDown(code), Game.forcePlayerInput(slot, input)
+- Game.getCoords(), Game.getPlayerForward(), Game.getLocalPlayer(), Game.getMyName(), Game.getPlayerId()
+- Game.setPlayerPosition(i,x,y,z,opt), Game.teleportPlayer(i,x,y,z,{yaw}), Game.setPlayerYaw(i,yaw)
+- Game.holdPlayerPosition(i,bool), Game.lockPlayer(i,bool), Game.lockPlayerAnim(), Game.unlockPlayerAnim()
+- Game.setPlayerLimb(i,name,rx,ry,rz,opt), Game.getBone(i,name)
+- Game.setCamera(i,cfg), Game.clearCamera()
+- Game.subtitle(text) — الوقت ثابت — ومفيش Game.say
+- Game.setHud(html), Game.clearHud()
+- Game.registerInteractAction(root, cfg)
+- Game.syncObject(mesh) (أونلاين فقط)
+- Game.getShared(key, default), Game.setShared(key, value) (محلي أوفلاين، وبيتبعت أونلاين)
+- Game.netEvent(toSlot, type, payload), Game.onNetEvent(fn) (أونلاين)
+- Game.getRemotePlayers(), Game.isNetworked() (أونلاين)
+- Game.hitWorld(ox,oy,oz,dx,dy,dz,maxD) → مسافة لأول سطح صلب أو null
+- Game.voice.* (صوت — أونلاين)
+
+أسماء ممنوعة: ما تستخدمش أي دالة مش في القائمة فوق. دول مش موجودين في المحرك: listWorldObjects, linkObject, setObjectVisible, markProgrammed, createBox, attachTo, onTrigger, onClick, findPart, listParts, setPosition, clearScriptUI, setPlayerForm, enterVehicle, makeCatalogCar, raycastCenter, netSend, Game.say.
+الشكل الصحيح لملف البرمجة: (function (Game, root) { "use strict"; ... })(typeof Game !== "undefined" ? Game : null, typeof root !== "undefined" ? root : null);
+ممنوع: var Game = ... داخل الملف.
+=== نهاية API_TRUTH_V900 ===
+
 === CREATIVE_MESH_POLICY_V1 (أعلى من أي مثال شكل في هذا الملف) ===
 لا تستخدم قوالب شكل ثابتة. كل طلب = تصميم ثلاثي الأبعاد جديد من الصفر.
 لا تعِد استخدام نفس نسب/ألوان/ترتيب الأجزاء لطلبات مختلفة حتى لو النوع متشابه (مركبة، وحش، سفينة).
@@ -159,6 +185,39 @@ FIDELITY_FIRST = التزم بمضمون طلب المستخدم. لكن:
 • مركبات: نظام قيادة كامل (F ركوب، WASD، كاميرا، نزول) مش مجسم واقف.
 • مباني: هيكل + باب تفاعلي + إضاءة داخلية حسب الطلب.
 • الجودة: كود نظيف، مزامنة أونلاين، بدون spam توست، بدون أخطاء كونسول.
+
+=== ALL_AUTOS_MUST_MATCH_V780 (قانون إجباري — أعلى أولوية) ===
+أي طلب «عدّل التلقائي» يُطبَّق على الملفات المناسبة للسياق — مع احترام الفصل:
+أوفلاين (بدون SYNC):
+  AUTO_PC_PROG.txt | AUTO_PC_PROBJ.txt | AUTO_PHONE_PROG.txt | AUTO_PHONE_PROBJ.txt
+أونلاين (SYNC+):
+  AUTO_PC_PROG_SYNC.txt | AUTO_PC_PROBJ_SYNC.txt | AUTO_PHONE_PROG_SYNC.txt | AUTO_PHONE_PROBJ_SYNC.txt
++ auto_story_level.txt للكائنات العادية عند الحاجة.
+فصل إلزامي: كومبيوتر لا يمسّ هاتف، هاتف لا يمسّ كومبيوتر، أوفلاين لا يمسّ *_SYNC، أونلاين لا يمسّ ملفات بدون SYNC.
+لو طلب المستخدم «عدّل التلقائي» وهو على PC+أوفلاين+برمجة → عدّل AUTO_PC_PROG فقط (والنسخ المقابلة إن طلب صراحة الكل).
+
+=== FUNNY_IS_EXAMPLE_ONLY_V790 (قانون إجباري — ممنوع النسخ كقالب) ===
+ملف samples/hawa-funny-motion.js (وحركة FUNNY) = مثال تقني فقط لطريقة تحريك المفاصل والشخصية.
+  1) ممنوع نسخه كاملاً أو شبه كامل عند أي طلب مستخدم (حتى لو طلب «حركة فاني» أو «مضحك»).
+  2) ممنوع اعتباره قالباً افتراضياً لأي سكربت تلقائي أو كائن برمجي أو برمجة.
+  3) المسموح فقط: استلهام أسلوب الربط بالمفاصل (discover joints / setPlayerLimb / hooks)
+     وبناء حركة جديدة تناسب طلب المستخدم من الصفر.
+  4) لو المستخدم طلب حركة مخصصة: اكتب كوداً جديداً — لا تلصق محتوى FUNNY.
+  5) أسماء/ثوابت/تعليقات FUNNY (HawaFunny, CFG.talk, LINES, عجلة ناروتو…) ممنوعة في مخرجات التلقائي
+     إلا إذا طلب المستخدم صراحةً «نفس سكربت الفاني الموجود».
+
+=== CUSTOM_PLAYER_ANIM_ONLINE_V781 (قانون إجباري — حركة اللاعب) ===
+أي سكربت يغيّر مفاصل/وضعية اللاعب المحلي (setPlayerLimb / hooks / updateMatrixWorld / anim مخصص):
+  1) لازم يظهر بنفس الشكل عند كل اللاعبين أونلاين — مش محلي فقط.
+  2) الطريقة المعتمدة في المحرك (آلية مزامنة — مش قالب FUNNY):
+     - window.__HawaFunnyNetPack = () => compactPoseOrNull
+     - window.__HawaFunnyNetApply = (remote, pack, dt) => apply on remote.rig
+     - المحرك يبعت الحقل funny داخل state ويطبّقه بدل animRig للبعيدين.
+     (الأسماء التاريخية __HawaFunnyNet* هي قناة المحرك فقط — لا تعني نسخ سكربت الفاني)
+  3) بديل مقبول: Game.setShared('anim_'+slot, pack) + تطبيق على getRemotePlayers() كل فريم.
+  4) ممنوع الاعتماد على عشوائية غير متزامنة (Math.random على كل جهاز) — ابعت الناتج أو seed مشترك.
+  5) RULE: لو اللاعب المحلي شايف الحركة، كل لاعب أونلاين لازم يشوفها.
+
 === MULTIPLAYER_SYNC_V616 (تلقائي من المحرك) ===
 المحرك يزامن تلقائي (state.autoSyncAll=true):
   - سكربتات البرمجة العادية تتعيد على كل لاعب بعيد (getLocalPlayer يرجع البعيد أثناء المرآة).
@@ -1367,3 +1426,29 @@ Game.updateRigAnimation(mesh, dt, {moving,running,crouching,dancing,jumping})
 5) onUpdate / triggers: كل سكربت يضيف listener خاص بيه؛ متمسحش listeners التانيين.
 6) الهدف: ملفات القسمين تشتغل مع بعض بدون ما واحد يلغي التاني.
 
+
+
+=== PLAYER_CONTROL_VISION_V221 (توجيهات تلقائي اللفل — مش قوالب) ===
+عند أي طلب يخص حركة/أنيميشن/تحكم بشخصية اللاعب أو تحريك كائن:
+
+1) الإمكانية موجودة: ريج اللاعب المدمج قابل للتحكم مفصلياً من قسم البرمجة.
+2) المفاصل الفعلية: rArm lArm rForearm lForearm rLeg lLeg rShin lShin rFoot lFoot spine head
+   (مرادفات إنجليزي/عربي مقبولة عبر تطبيع الاسم).
+3) API العملي في اللعب: game.player.setLimb(name,rx,ry,rz) + game.player.position/mesh/yaw
+   + game.find(name) للكائنات + game.key / forcePlayerInput / setHud.
+4) ابنِ الحركة من وصف المستخدم (زاوية، مدة، تكرار) — ممنوع إسقاط قوالب أنيميشن طويلة
+   أو مكتبة حركات جاهزة إلا إذا طلب صراحة «نظام كامل» أو «ملف برمجة جاهز».
+5) ثبّت الوضعية ضد animRig (إعادة التطبيق كل فريم أو hook على العظمة) طوال مدة الحركة.
+6) بعد الانتهاء: أعد التحرير أو وضعية الراحة حتى لا يعلق اللاعب.
+7) كائن المشهد: حرّك بالاسم (موضع/دوران/مقياس/ظهور/لون) بدون اختراع APIs غير موجودة.
+8) UI السكربت: data-script-ui فقط؛ لا يفسد وضع البناء.
+9) أونلاين: فضّل مسارات رسمية لمزامنة الشكل إن وُجدت؛ وإلا وثّق أن التحكم محلي.
+10) الهدف: التلقائي «يشوف» إن الشخصية قابلة للتحريك المفصلي ويختار أبسط تنفيذ صحيح للطلب.
+
+
+=== INPUT_MOBILE_DESKTOP_V221 (تلقائي اللفل — موبايل + كومبيوتر) ===
+أي تحكم تبنيه للتلقائي: اعمل للموبايل والكومبيوتر معاً.
+- كومبيوتر: key / mouse
+- موبايل: game.touch.show + isDown/wasPressed أو setKey كل فريم
+- نفس شروط القرب والتفاعل (dist) على الجهازين
+- ممنوع تصميم يعتمد على كليك يمين فقط من غير زر حماية/فعل على الشاشة

@@ -427,6 +427,8 @@ body.is-mobile .param-panel{
 /* أزرار مشروع / حذف / تخزين */
 .danger-btn{border-color:rgba(244,63,94,.45)!important;color:#fecdd3!important}
 .danger-btn:hover{background:rgba(244,63,94,.18)!important}
+#bPlayNet.playnet-ask{border-color:rgba(250,204,21,.55)!important;color:#fde68a!important;animation:playnetPulse 1.6s ease-in-out infinite}
+@keyframes playnetPulse{0%,100%{box-shadow:0 0 0 0 rgba(250,204,21,0)}50%{box-shadow:0 0 0 3px rgba(250,204,21,.22)}}
 #storageModal{
   position:fixed;inset:0;z-index:80;background:rgba(0,0,0,.55);
   display:flex;align-items:center;justify-content:center;padding:16px;

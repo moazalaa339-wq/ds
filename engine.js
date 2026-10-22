@@ -217,7 +217,9 @@ const defOf = id => S.sdefs.find(x => x.id === id);
 
 /* ---------- الحالة ---------- */
 const S = {objs:[], scripts:[], sdefs:[], sel:null, mode:'build', tool:'select', gz:'move', item:'cube', section:'objects',
-  snap:.5, nid:1, sid:1, did:1, mid:1, dirty:1, err:[], hr:null, fly:false, media:{}, paramOpen:false};
+  snap:.5, nid:1, sid:1, did:1, mid:1, dirty:1, err:[], hr:null, fly:false, media:{}, paramOpen:false,
+  /* playNet: null = لم يُختر بعد | 'offline' | 'online' — اختيار مرة واحدة لكل مشروع */
+  playNet: null};
 const OBJ = new Map(), MESH = new Map(), K = {};
 /* مفاتيح افتراضية (موبايل/سكربت) — تتعامل ككيبورد حقيقي لأي نظام يقرأ keyDown */
 const VK = Object.create(null);
@@ -434,6 +436,8 @@ function castRay(r) {
   return {p: [o.x + d.x * best.t, o.y + d.y * best.t, o.z + d.z * best.t], n: best.n};
 }
 function spotFor(info, h) {
+  // الوضع في أي مكان: الكائن بيتحط بالظبط على السطح اللي عليه المؤشر (من غير ما يتزحزح بعيد أو يتقفل لو قريب من كائن تاني).
+  // لسه بيلزق في السطح اللي بيلمسه ومبيدخلش فيه (الأرض/وش الكائن) — بس تداخله مع الجيران مسموح.
   const isR = info.bt === 'respawn' || info.bt === 'online_spawn', sc = info.sc, base = !!info.base && !isR;
   const hx = sc[0] / 2, hy = isR ? 0 : sc[1] / 2, hz = sc[2] / 2, lo = base ? 0 : hy;
   const [nx, ny, nz] = h.n, g = S.snap, c = h.p.slice();
@@ -441,17 +445,8 @@ function spotFor(info, h) {
   if (g) { c[0] = Math.round(c[0] / g) * g; c[2] = Math.round(c[2] / g) * g; }
   const top = ny > .5 || isR;
   let cen = c[1];
-  const boxAt = y => isR ? {id: -1, x0: c[0] - PR, x1: c[0] + PR, y0: y, y1: y + PH, z0: c[2] - PR, z1: c[2] + PR}
-                         : {id: -1, x0: c[0] - hx, x1: c[0] + hx, y0: y - hy, y1: y + hy, z0: c[2] - hz, z1: c[2] + hz};
-  if (top) cen = supportY({id: -1, x0: c[0] - hx, x1: c[0] + hx, z0: c[2] - hz, z1: c[2] + hz}) + hy;
-  for (let k = 0; k < 24; k++) {
-    if (!top && cen - hy < 0) cen = hy;
-    const b = boxAt(cen), bl = blockers(b);
-    if (!bl) break;
-    if (top) cen = Math.max(cen + .25, bl.y1 + hy);
-    else { c[0] += nx * .25; cen += ny * .25; c[2] += nz * .25; }
-    if (k === 23) return {p: c, yc: cen, ok: false};
-  }
+  if (top) cen = h.p[1] + hy;            // على السطح المضغوط عليه نفسه، مش فوق أعلى كائن تحت البصمة
+  else if (cen - hy < 0) cen = hy;       // جنب كائن: مبينزلش تحت الأرض
   if (isR) return {p: [c[0], cen, c[2]], yc: cen, ok: true};
   return {p: [c[0], cen - hy + lo, c[2]], yc: cen, ok: true};
 }
@@ -473,7 +468,120 @@ function nextOnlineSlot() {
 function updOnRsBtn() {
   const n = countOnlineSpawns();
   const el = $('#onRsN'); if (el) el.textContent = n + '/3';
-  const b = $('#bOnRs'); if (b) b.classList.toggle('on', S.tool === 'online_spawn');
+  const b = $('#bOnRs');
+  if (b) {
+    b.classList.toggle('on', S.tool === 'online_spawn');
+    const offline = S.playNet === 'offline';
+    b.disabled = !!offline;
+    b.style.opacity = offline ? '.35' : '';
+    b.title = offline
+      ? 'نقاط الأونلاين غير متاحة — المشروع أوفلاين'
+      : 'نقطة بدء أونلاين (حد أقصى 3 لاعبين)';
+  }
+}
+function syncPlayNetUI() {
+  const b = document.getElementById('bPlayNet');
+  if (!b) return;
+  const m = S.playNet;
+  if (m === 'online') {
+    b.innerHTML = '🌐<i>أونلاين</i>';
+    b.title = 'المشروع أونلاين (مزامنة لاعبين) — لا يمكن التغيير';
+    b.classList.add('on');
+    b.classList.remove('playnet-ask');
+  } else if (m === 'offline') {
+    b.innerHTML = '📴<i>أوفلاين</i>';
+    b.title = 'المشروع أوفلاين (محلي فقط) — لا يمكن التغيير';
+    b.classList.add('on');
+    b.classList.remove('playnet-ask');
+  } else {
+    b.innerHTML = '❓<i>أونلاين / أوفلاين</i>';
+    b.title = 'اختر مرة واحدة: أونلاين أو أوفلاين لهذا المشروع';
+    b.classList.remove('on');
+    b.classList.add('playnet-ask');
+  }
+  try { updOnRsBtn(); } catch (_) {}
+}
+function removeAllOnlineSpawns() {
+  const ids = S.objs.filter(o => o.type === 'online_spawn').map(o => o.id);
+  for (const id of ids) {
+    try {
+      const m = MESH.get(id);
+      if (m) { scene.remove(m); MESH.delete(id); }
+      OBJ.delete(id);
+      try { removePreview(id); } catch (_) {}
+    } catch (_) {}
+  }
+  if (ids.length) S.objs = S.objs.filter(o => o.type !== 'online_spawn');
+  if (S.tool === 'online_spawn') setTool('select');
+  try { updOnRsBtn(); hier(); chg(); } catch (_) {}
+}
+function applyPlayNetMode(mode, opts) {
+  const m = mode === 'online' ? 'online' : (mode === 'offline' ? 'offline' : null);
+  if (!m) return false;
+  S.playNet = m;
+  if (m === 'offline') removeAllOnlineSpawns();
+  syncPlayNetUI();
+  try { chg(); } catch (_) {}
+  try { save(); } catch (_) {}
+  if (!(opts && opts.silent)) {
+    try {
+      tip(m === 'online'
+        ? '✔ المشروع أونلاين — التلقائي يدعم مزامنة اللاعبين'
+        : '✔ المشروع أوفلاين — محلي بدون مزامنة · نُقاط الأونلاين اتشالت');
+    } catch (_) {}
+  }
+  return true;
+}
+function uiPlayNetChoice() {
+  return new Promise(resolve => {
+    const { actions, msgEl } = HawaUI._open(
+      'تفعيل المشروع — اختيار مرة واحدة فقط\n\n' +
+      '• أوفلاين: لعب محلي فقط · تُحذف نقاط بدء الأونلاين · التلقائي بدون مزامنة لاعبين\n' +
+      '• أونلاين: نفس منطق الأوفلاين + مزامنة أونلاين بين اللاعبين\n\n' +
+      'لا يمكن التبديل لاحقاً إلا بعد حذف المشروع بالكامل.'
+    );
+    msgEl.style.whiteSpace = 'pre-wrap';
+    const off = document.createElement('button');
+    off.type = 'button';
+    off.className = 'hd-cancel';
+    off.textContent = '📴 أوفلاين';
+    off.onclick = () => { HawaUI._close(); resolve('offline'); };
+    const on = document.createElement('button');
+    on.type = 'button';
+    on.className = 'hd-ok';
+    on.textContent = '🌐 أونلاين';
+    on.onclick = () => { HawaUI._close(); resolve('online'); };
+    actions.appendChild(off);
+    actions.appendChild(on);
+    setTimeout(() => on.focus(), 30);
+  });
+}
+async function ensurePlayNetChosen(forceAsk) {
+  if (window.HAWA_PLAY_ONLY) return S.playNet || 'offline';
+  if (S.playNet === 'online' || S.playNet === 'offline') {
+    if (forceAsk) {
+      await uiAlert('هذا المشروع مُفعَّل كـ «' + (S.playNet === 'online' ? 'أونلاين' : 'أوفلاين') + '».\nلا يمكن التغيير. احذف المشروع بالكامل إن أردت اختياراً جديداً.');
+    }
+    syncPlayNetUI();
+    return S.playNet;
+  }
+  if (!forceAsk) {
+    await uiAlert('لاحظ: هذا المشروع لم يُسأل بعد عن وضع اللعب (أونلاين / أوفلاين).\nاختر الآن — الاختيار مرة واحدة فقط.');
+  }
+  const choice = await uiPlayNetChoice();
+  if (choice !== 'online' && choice !== 'offline') {
+    syncPlayNetUI();
+    return null;
+  }
+  applyPlayNetMode(choice);
+  return S.playNet;
+}
+async function onPlayNetBtn() {
+  if (S.playNet === 'online' || S.playNet === 'offline') {
+    await uiAlert('المشروع مُفعَّل كـ «' + (S.playNet === 'online' ? 'أونلاين' : 'أوفلاين') + '».\nالاختيار مرة واحدة فقط — احذف المشروع بالكامل لو حابب تغيّر.');
+    return;
+  }
+  await ensurePlayNetChosen(true);
 }
 
 /* ---------- الكائنات ---------- */
@@ -545,6 +653,7 @@ function placeNow(info, pos) {
     return add('sobj', pos, {def: d.id, name: d.name, p: JSON.parse(JSON.stringify(p)), base: !!info.base, scl: [...info.sc]});
   }
   if (info.bt === 'online_spawn') {
+    if (S.playNet === 'offline') { tip('⚠ المشروع أوفلاين — نقاط الأونلاين غير متاحة'); return null; }
     if (countOnlineSpawns() >= 3) { tip('⚠ الحد الأقصى 3 نقاط أونلاين'); return null; }
     const slot = nextOnlineSlot();
     if (!slot) { tip('⚠ مفيش سلو متاح'); return null; }
@@ -793,7 +902,32 @@ function axT(r, p, a) { const w = new T.Vector3(r.origin.x - p[0], r.origin.y - 
 let drag = null;
 function startDrag(h, e) {
   const o = OBJ.get(S.sel);
-  drag = {o, ax: h.ax, mode: h.mode, pid: e.pointerId, t0: axT(ray(e).ray, o.pos, AX[h.ax]), pos: [...o.pos], rot: [...o.rot], scl: [...o.scl], x0: e.clientX, y0: e.clientY};
+  drag = {o, ax: h.ax, mode: h.mode, pid: e.pointerId, t0: axT(ray(e).ray, o.pos, AX[h.ax]), pos: [...o.pos], rot: [...o.rot], scl: [...o.scl], x0: e.clientX, y0: e.clientY, rec: h};
+  dragLight(h, true);
+}
+/* المحور اللي ماسكه (ماوس أو لمس) ينوّر أصفر، والباقي يخفّ شوية */
+function dragLight(rec, on) {
+  if (!rec) return;
+  try {
+    for (const h of HIT) {
+      if (h.mode !== rec.mode) continue;
+      for (const v of h.vis) {
+        v.material.opacity = on ? (h === rec ? 1 : .28) : .95;
+        if (h === rec) v.material.color.set(on ? 0xfff06a : AXC[h.ax]);
+      }
+      if (on && h === rec) { h.vis.forEach(v => v.scale.setScalar(1)); }
+    }
+    if (on && HOV && HOV !== rec) { HOV = null; }
+  } catch (_) {}
+  S.dirty = 1;
+}
+function endDrag(commit) {
+  if (!drag) return false;
+  const rec = drag.rec;
+  drag = null;
+  dragLight(rec, false);
+  if (commit) { try { chg(); } catch (_) {} }
+  return true;
 }
 /* مناطق لمس الأسهم/الحلقات أكبر على الموبايل (إصبع مش ماوس) */
 let _fatHits = false;
@@ -988,7 +1122,7 @@ cv.addEventListener('pointerleave', () => { S.hr = null; });
 function _endPointerGesture() {
   mv = null; rmb = false;
   if (S.boxdel) { S.boxdel = null; try { _marqueeShow(null); } catch (_) {} }
-  if (drag) { drag = null; try { chg(); } catch (_) {} }
+  if (drag) endDrag(true);
 }
 cv.addEventListener('pointercancel', e => { if (S.mode === 'build') _endPointerGesture(); });
 cv.addEventListener('lostpointercapture', e => { if (S.mode === 'build' && drag && (drag.pid == null || e.pointerId === drag.pid)) _endPointerGesture(); });
@@ -1003,7 +1137,7 @@ cv.addEventListener('pointerup', e => {
     else tip('مفيش كائنات جوه المستطيل');
     return;
   }
-  if (drag) { drag = null; chg(); return; }
+  if (drag) { endDrag(true); return; }
   // على الموبايل اللمسة القصيرة تتنفّذ من touchend عشان مفيش دبل-كليك
   if (m.b === 0 && m.moved < 5 && !(typeof MOB !== 'undefined' && MOB.on && e.pointerType === 'touch')) click(e);
 });
@@ -1095,6 +1229,7 @@ $('#bFly').onclick = toggleFly;
 $('#bPar').onclick = () => { document.body.classList.toggle('noside'); $('#bPar').classList.toggle('on', !document.body.classList.contains('noside')); setTimeout(resize, 30); };
 $('#bRs').onclick = () => setTool(S.tool === 'respawn' ? 'select' : 'respawn');
 $('#bOnRs').onclick = () => {
+  if (S.playNet === 'offline') { tip('⚠ المشروع أوفلاين — نقاط الأونلاين غير متاحة'); return; }
   if (S.tool === 'online_spawn') { setTool('select'); }
   else {
     if (countOnlineSpawns() >= 3) { tip('⚠ عندك بالفعل 3 نقاط أونلاين — احذف واحدة الأول'); return; }
@@ -1492,6 +1627,7 @@ let refNames = null, mkc = 0, pmTex = null;
 function globalRefs() {    // ملفات البرمجة العامة المفعّلة اللي بتذكر اسم الكائن
   if (refNames) return refNames;
   refNames = new Map();
+  for (const d of (S.sdefs || [])) for (const o of S.objs) if (o.name && o.name.length > 1 && o.type !== 'sobj' && d.code && d.code.includes(o.name)) { if (!refNames.has(o.id)) refNames.set(o.id, []); refNames.get(o.id).push({id: d.id, name: d.name, enabled: true, code: d.code}); }
   for (const sc of S.scripts) if (sc.enabled) for (const o of S.objs) if (o.name && o.name.length > 1 && sc.code.includes(o.name)) { if (!refNames.has(o.id)) refNames.set(o.id, []); refNames.get(o.id).push(sc); }
   return refNames;
 }
@@ -1688,6 +1824,31 @@ function fitNameStyle(name) {
   const fs = n <= 8 ? 12.5 : n <= 12 ? 11.5 : n <= 18 ? 10.5 : n <= 26 ? 9.5 : 9;
   return `font-size:${fs}px`;
 }
+function openScriptParams(id) {
+  const s = S.scripts.find(x => +x.id === +id); if (!s) return;
+  const sch = schemaOf(s.code);
+  if (!s.p) s.p = {};
+  for (const e of sch) if (s.p[e.key] === undefined) s.p[e.key] = e.value;
+  let m = document.getElementById('scrParamModal');
+  if (!m) {
+    m = document.createElement('div'); m.id = 'scrParamModal';
+    m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:200;display:flex;align-items:center;justify-content:center;';
+    m.addEventListener('click', ev => { if (ev.target === m) m.hidden = true; });
+    document.body.appendChild(m);
+  }
+  const holder = {p: s.p};
+  m.innerHTML = `<div style="background:#14161c;color:#eee;border-radius:12px;padding:16px;min-width:300px;max-width:90vw;max-height:80vh;overflow:auto;direction:rtl">`
+    + `<h4 style="margin:0 0 10px">${esc(s.name)} · البارامترات</h4>`
+    + (sch.length ? sch.map(e => paramRow(holder, e.key, e.label, e)).join('') : '<p>مفيش defineParams في الملف ده</p>')
+    + `<div style="text-align:left;margin-top:10px"><button data-close>إغلاق</button></div></div>`;
+  m.hidden = false;
+  m.querySelector('[data-close]').onclick = () => { m.hidden = true; };
+  m.querySelectorAll('[data-p]').forEach(inp => {
+    const k = inp.dataset.p, e = sch.find(x => x.key === k);
+    const h = () => applyParamValue(holder, k, inp.type === 'checkbox' ? inp.checked : inp.value, e);
+    inp.addEventListener('input', h); inp.addEventListener('change', h);
+  });
+}
 function pList() {
   const on = S.scripts.filter(s => s.enabled).length;
   $('#pCount').textContent = `${on} / ${S.scripts.length} مفعّل`;
@@ -1700,6 +1861,7 @@ function pList() {
       <div class="pc-meta"><em>${s.enabled ? 'مفعّل' : 'متوقف'}</em>${n ? `<em> · ${n}</em>` : ''}</div>
       <div class="pc-btns">
         <button data-tg="${s.id}" class="${s.enabled ? 'bad' : 'ok'}" title="${s.enabled ? 'إلغاء التفعيل' : 'تفعيل'}">${s.enabled ? 'إيقاف' : 'تفعيل'}</button>
+        <button data-sp="${s.id}" title="بارامترات">⚙</button>
         <button data-ed="${s.id}" title="تعديل">${ic('pen')}</button>
         <button data-dl="${s.id}" class="red" title="حذف">${ic('trash')}</button>
       </div></div>`;
@@ -1708,6 +1870,7 @@ function pList() {
 $('#pList').onclick = async e => {
   const t = e.target.closest('button');
   if (t) {
+    if (t.dataset.sp != null) { openScriptParams(+t.dataset.sp); return; }
     const id = +(t.dataset.tg || t.dataset.ed || t.dataset.dl);
     const s = S.scripts.find(x => +x.id === id);
     if (!s) return;
@@ -1954,12 +2117,84 @@ if (_sUp) _sUp.onclick = () => { const fl = $('#fl'); if (fl) { fl.dataset.m = '
 /* ---------- حفظ / تحميل / تلقائي ---------- */
 
 /* ---------- تخزين كلي: مجلد كامل (مشروع + وسائط ملفات حقيقية) ---------- */
+
+/* ---------- تخزين تلقائي عبر السيرفر المحلي ----------
+   المشروع بيتحفظ في مكان ثابت على الجهاز (~/HawaEngineData/project) من خلال http_server.py.
+   مش بيعتمد على البورت ولا على إذن المتصفح ولا على مجلد المحرك — فلو بعت المحرك لحد أو حدّثته،
+   مشروعه بيفتح لوحده من غير ما يختار مكان تخزين. بيشتغل كمان على الموبايل (مفيش showDirectoryPicker هناك). */
+function makeServerDir(base, label) {
+  const enc = encodeURIComponent;
+  const join = n => (base ? base + '/' : '') + n;
+  const notFound = n => { const e = new Error('not found: ' + n); e.name = 'NotFoundError'; return e; };
+  const listAt = async rel => {
+    const r = await fetch('/api/fs/list?path=' + enc(rel), { cache: 'no-store' });
+    if (!r.ok) return null;
+    const j = await r.json();
+    return j && j.ok ? j.items : null;
+  };
+  const fileHandle = (name, rel) => ({
+    kind: 'file', name,
+    async getFile() {
+      const r = await fetch('/api/fs/read?path=' + enc(rel), { cache: 'no-store' });
+      if (!r.ok) throw notFound(rel);
+      const blob = await r.blob();
+      return new File([blob], name);
+    },
+    async createWritable() {
+      const chunks = [];
+      return {
+        async write(c) { chunks.push(c); },
+        async close() {
+          const blob = new Blob(chunks);
+          // ملفات كبيرة (وسائط) متغيرتش من آخر حفظ → متتكتبش تاني
+          let fp = null;
+          if (blob.size > 32768 && window.crypto && crypto.subtle) {
+            try {
+              const h = await crypto.subtle.digest('SHA-1', await blob.arrayBuffer());
+              fp = blob.size + ':' + Array.from(new Uint8Array(h)).map(b => b.toString(16).padStart(2, '0')).join('');
+              if (StoreFS._fp.get(rel) === fp) return;
+            } catch (_) { fp = null; }
+          }
+          const r = await fetch('/api/fs/write?path=' + enc(rel), { method: 'POST', body: blob });
+          if (!r.ok) throw new Error('server write failed: ' + rel);
+          if (fp) StoreFS._fp.set(rel, fp);
+        }
+      };
+    }
+  });
+  return {
+    kind: 'directory',
+    name: label || (base.split('/').pop() || 'project'),
+    async getDirectoryHandle(name, opts) {
+      const rel = join(name);
+      if (opts && opts.create) {
+        const r = await fetch('/api/fs/mkdir?path=' + enc(rel), { method: 'POST' });
+        if (!r.ok) throw new Error('mkdir failed: ' + rel);
+      } else if (!(await listAt(rel))) throw notFound(rel);
+      return makeServerDir(rel);
+    },
+    async getFileHandle(name, opts) {
+      return fileHandle(name, join(name));
+    },
+    async *entries() {
+      const items = (await listAt(base)) || [];
+      for (const it of items) {
+        yield [it.name, it.kind === 'directory' ? makeServerDir(join(it.name)) : fileHandle(it.name, join(it.name))];
+      }
+    }
+  };
+}
+
 const StoreFS = {
   dbName: 'hawa_fs_v1',
   storeName: 'handles',
   handle: null,
   mode: 'local',
   label: 'متصفح (localStorage)',
+  _fp: new Map(),
+  legacy: null,
+  _saving: false,
+  _again: false,
   async _idb() {
     return new Promise((resolve, reject) => {
       const r = indexedDB.open(this.dbName, 1);
@@ -1992,11 +2227,56 @@ const StoreFS = {
   supportsFolder() {
     return typeof window.showDirectoryPicker === 'function';
   },
+  isFolderLike() { return !!this.handle && (this.mode === 'folder' || this.mode === 'server'); },
+  /** تخزين تلقائي من السيرفر المحلي — أول اختيار. يرجّع true | 'migrate' | false */
+  async initServer() {
+    if (location.protocol === 'file:') return false;
+    let info = null;
+    try {
+      const ctl = typeof AbortController === 'function' ? new AbortController() : null;
+      const to = ctl ? setTimeout(() => ctl.abort(), 2500) : 0;
+      const r = await fetch('/api/fs/ping', { cache: 'no-store', signal: ctl ? ctl.signal : undefined });
+      if (to) clearTimeout(to);
+      if (r.ok) info = await r.json();
+    } catch (_) { info = null; }
+    if (!info || !info.ok) return false;
+    this.handle = makeServerDir('', 'HawaEngineData/project');
+    this.mode = 'server';
+    this.label = 'تلقائي: ' + (info.dir || 'HawaEngineData/project');
+    this.serverDir = info.dir || '';
+    this.needsGesture = false;
+    this.legacy = null;
+    // مشروع قديم في مجلد اخترته قبل كده (IndexedDB)؟ لو التخزين التلقائي لسه فاضي → انقله مرة واحدة
+    if (!info.exists && this.supportsFolder()) {
+      try {
+        const h = await this._idbGet('dir');
+        if (h) { this.legacy = h; return 'migrate'; }
+      } catch (_) {}
+    }
+    return true;
+  },
+  async readFromLegacy() {
+    if (!this.legacy) return null;
+    const keep = this.handle;
+    try {
+      let p = 'prompt';
+      try { p = await this.legacy.queryPermission({ mode: 'read' }); } catch (_) {}
+      if (p !== 'granted') p = await this.legacy.requestPermission({ mode: 'read' });
+      if (p !== 'granted') return null;
+      this.handle = this.legacy;
+      return await this.readFolder();
+    } catch (e) { console.warn('legacy read', e); return null; }
+    finally { this.handle = keep; }
+  },
   async init() {
     this.handle = null;
     this.mode = 'none';
     this.label = 'لم يُحدَّد';
     this.needsGesture = false;
+    try {
+      const sv = await this.initServer();
+      if (sv) return sv;
+    } catch (e) { console.warn('StoreFS server', e); }
     if (!this.supportsFolder()) {
       this.label = 'المتصفح لا يدعم مجلدات';
       return false;
@@ -2152,6 +2432,8 @@ const StoreFS = {
       sid: (data && data.sid) || S.sid,
       did: (data && data.did) || S.did,
       mid: (data && data.mid) || S.mid || 1,
+      playNet: (data && (data.playNet === 'online' || data.playNet === 'offline')) ? data.playNet
+        : (S.playNet === 'online' || S.playNet === 'offline' ? S.playNet : null),
       player: (data && data.player) || null,
       exportedAt: new Date().toISOString()
     };
@@ -2203,8 +2485,10 @@ const StoreFS = {
     // التقط أي ملفات في media/ مش متفهرسة
     try {
       const mediaDir = await root.getDirectoryHandle('media');
+      const indexedFiles = new Set(Object.keys(index).map(k => String((index[k] && index[k].file) || '').split('/').pop()));
       for await (const [name, ent] of mediaDir.entries()) {
         if (ent.kind !== 'file') continue;
+        if (indexedFiles.has(name)) continue;      // متفهرس خلاص — متتكررش
         const idGuess = name.split('_')[0];
         if (media[idGuess]) continue;
         try {
@@ -2222,17 +2506,28 @@ const StoreFS = {
       sdefs: lean.sdefs || [],
       media,
       nid: lean.nid, sid: lean.sid, did: lean.did, mid: lean.mid,
+      playNet: lean.playNet === 'online' || lean.playNet === 'offline' ? lean.playNet : null,
       player: lean.player || null
     };
   },
   async saveAll() {
     const data = this.snapshot();
-    // ممنوع تخزين المشروع في المتصفح — المجلد فقط
-    if (!this.handle || this.mode !== 'folder') {
+    // ممنوع تخزين المشروع في المتصفح — مجلد أو التخزين التلقائي بس
+    if (!this.isFolderLike()) {
       console.warn('saveAll: لا يوجد مجلد تخزين');
       return data;
     }
-    try { await this.writeFolder(data); } catch (e) { console.warn('folder save', e); throw e; }
+    // حفظة واحدة في الوقت — لو جه تغيير أثناء الحفظ نعيد بعد ما تخلص (عشان الكتابة متتداخلش)
+    if (this._saving) { this._again = true; return data; }
+    this._saving = true;
+    try {
+      let d = data;
+      do {
+        this._again = false;
+        try { await this.writeFolder(d); } catch (e) { console.warn('folder save', e); throw e; }
+        if (this._again) d = this.snapshot();
+      } while (this._again);
+    } finally { this._saving = false; }
     return data;
   },
   async loadPreferred() {
@@ -2271,6 +2566,7 @@ const StoreFS = {
     return lines.join('<br>') || 'المجلد فارغ';
   },
   async ensureFolderOrPrompt(force) {
+    if (this.mode === 'server' && this.handle) return true;
     if (this.handle && !force) return true;
     if (!this.supportsFolder()) {
       await uiAlert('المتصفح لا يدعم تخزين المجلدات.\nاستخدم Chrome أو Edge على الكمبيوتر.\nبدون مجلد لن يتم حفظ المشروع.');
@@ -2316,11 +2612,11 @@ const StoreFS = {
 
 function save() {
   // تخزين المجلد فقط — لا localStorage للمشروع
-  if (!StoreFS.handle) return;
-  try { StoreFS.saveAll(); } catch (e) { console.warn(e); }
+  if (!StoreFS.isFolderLike()) return;
+  StoreFS.saveAll().catch(e => console.warn(e));
 }
 
-let svT; let rfT; function chg() { clearTimeout(rfT); rfT = setTimeout(() => { refNames = null; }, 500); S.dirty = 1; clearTimeout(svT); svT = setTimeout(save, 400); refreshLive(); }
+let svT; let rfT; function chg() { refNames = null; try { hier(); } catch (_) {} clearTimeout(rfT); rfT = setTimeout(() => { refNames = null; try { hier(); } catch (_) {} }, 500); S.dirty = 1; clearTimeout(svT); svT = setTimeout(save, 400); refreshLive(); }
 function ensureLive() {
   for (const [pid, id] of [['progP', 'pLive'], ['sobjP', 'sLive']]) {
     const root = document.getElementById(pid);
@@ -2387,6 +2683,14 @@ function loadData(d, append) {
     if (d.player && typeof d.player === 'object' && typeof PCFG !== 'undefined') {
       try { Object.assign(PCFG, d.player); } catch (_) {}
     }
+    // وضع اللعب: online | offline | null (لم يُسأل)
+    if (d.playNet === 'online' || d.playNet === 'offline') {
+      S.playNet = d.playNet;
+      if (S.playNet === 'offline') removeAllOnlineSpawns();
+    } else {
+      S.playNet = null;
+    }
+    try { syncPlayNetUI(); } catch (_) {}
   }
   try { SCH.clear(); } catch (_) {}
   if (!append && d.builderCam) {
@@ -2394,6 +2698,10 @@ function loadData(d, append) {
   }
   hier(); pList(); sList(); inspect(); chg();
   try { save(); } catch (_) {}
+  // مشروع قديم بدون playNet → اسأل المستخدم بعد التحميل
+  if (!append && !window.HAWA_PLAY_ONLY && S.playNet !== 'online' && S.playNet !== 'offline') {
+    setTimeout(() => { try { ensurePlayNetChosen(false); } catch (_) {} }, 400);
+  }
 }
 function packProjectSnapshot(name) {
   return {
@@ -2405,6 +2713,7 @@ function packProjectSnapshot(name) {
     sdefs: JSON.parse(JSON.stringify(S.sdefs)),
     media: JSON.parse(JSON.stringify(S.media || {})),
     nid: S.nid, sid: S.sid, did: S.did, mid: S.mid || 1,
+    playNet: S.playNet === 'online' || S.playNet === 'offline' ? S.playNet : null,
     player: (typeof PCFG !== 'undefined') ? JSON.parse(JSON.stringify(PCFG)) : null,
     builderCam: getBuilderCam(),
     exportedAt: new Date().toISOString()
@@ -2499,14 +2808,24 @@ async function wipeProjectTotal() {
   S.media = {};
   S.nid = 1; S.sid = 1; S.did = 1; S.mid = 1;
   S.sel = null; S.paramOpen = false;
+  S.playNet = null; // مشروع جديد → لازم يختار أونلاين/أوفلاين من جديد
   try { SCH.clear(); } catch (_) {}
   try { localStorage.removeItem('hawa2'); } catch (_) {} // قديم إن وُجد
   try { closeParamPanel(); } catch (_) {}
   hier(); pList(); sList(); inspect();
   try { demo(); } catch (_) { /* لو مفيش demo */ }
   chg();
+  try { syncPlayNetUI(); } catch (_) {}
   try { save(); } catch (_) {}
   try { tip('✔ المشروع اتصفر'); } catch (_) {}
+  // بعد الحذف: اسأل وضع اللعب للمشروع الجديد
+  try { await ensurePlayNetChosen(true); } catch (_) {}
+  if (StoreFS.mode === 'server') {
+    try { await fetch('/api/fs/wipe', { method: 'POST' }); StoreFS._fp.clear(); } catch (_) {}
+    try { await StoreFS.saveAll(); } catch (_) {}
+    await uiAlert('تم حذف المشروع بالكامل. التخزين تلقائي — ابدأ من جديد.');
+    return;
+  }
   await uiAlert('تم حذف المشروع بالكامل.\nالآن اختر مجلد التخزين للمشروع الجديد.');
   // مشروع جديد → لازم يختار مكان التخزين
   try {
@@ -2536,9 +2855,10 @@ function showStorageInfo() {
   const sdefs = S.sdefs.length;
   const mediaN = Object.keys(S.media || {}).length;
   const folderOk = StoreFS.supportsFolder();
-  const hasFolder = !!(StoreFS.mode === 'folder' && StoreFS.handle);
-  const folderName = hasFolder ? (StoreFS.handle.name || 'مجلد') : '— لم يُحدَّد —';
-  const modeTxt = hasFolder ? 'مجلد كامل على الجهاز' : 'لم يتم اختيار مجلد بعد';
+  const hasFolder = StoreFS.isFolderLike();
+  const isSrv = StoreFS.mode === 'server';
+  const folderName = isSrv ? (StoreFS.serverDir || 'HawaEngineData/project') : (hasFolder ? (StoreFS.handle.name || 'مجلد') : '— لم يحدد —');
+  const modeTxt = isSrv ? 'تلقائي (مكان ثابت على الجهاز — من غير اختيار مجلد)' : (hasFolder ? 'مجلد كامل على الجهاز' : 'لم يتم اختيار مجلد بعد');
   body.innerHTML = `
     <div class="st-row"><span>وضع التخزين</span><b id="stMode">${modeTxt}</b></div>
     <div class="st-row"><span>المجلد الحالي</span><b id="stLabel">${folderName}</b></div>
@@ -2547,12 +2867,14 @@ function showStorageInfo() {
     <div class="st-row"><span>كائنات / برمجة / برمجي / وسائط</span><b>${objs} / ${scripts} / ${sdefs} / ${mediaN}</b></div>
     <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px">
       ${StoreFS.needsGesture ? '<button type="button" id="stActivate" class="go" style="flex:1;min-height:40px">تفعيل المجلد المحفوظ</button>' : ''}
-      <button type="button" id="stPick" class="go" style="flex:1;min-height:40px">${hasFolder && !StoreFS.needsGesture ? 'تغيير مكان التخزين' : 'تحديد مكان التخزين'}</button>
+      ${StoreFS.legacy ? '<button type="button" id="stLegacy" class="go" style="flex:1;min-height:40px">استيراد من المجلد القديم</button>' : ''}
+      ${isSrv ? '' : `<button type="button" id="stPick" class="go" style="flex:1;min-height:40px">${hasFolder && !StoreFS.needsGesture ? 'تغيير مكان التخزين' : 'تحديد مكان التخزين'}</button>`}
       <button type="button" id="stReveal" style="flex:1;min-height:40px" ${hasFolder ? '' : 'disabled'}>عرض مجلد التخزين</button>
     </div>
     <div id="stListing" class="mut small" style="margin-top:10px;max-height:180px;overflow:auto;line-height:1.65"></div>
     <p class="mut small" style="margin-top:8px;line-height:1.75">
       <b>لا يوجد تخزين في المتصفح.</b> كل شيء يُحفظ في مجلد الجهاز فقط (ملفات + وسائط).
+      ${isSrv ? '<br>التخزين تلقائي وخارج مجلد المحرك، فلو حدّثت المحرك أو بعته لحد مشروعه يفضل موجود.' : ''}
       «عرض مجلد التخزين» يعرض محتويات المجلد الحالي من الجهاز.
       ${folderOk ? '' : '<br><b>ملاحظة:</b> اختيار المجلد يحتاج متصفح يدعم File System Access (Chrome/Edge).'}
     </p>`;
@@ -2572,6 +2894,16 @@ function showStorageInfo() {
     } else {
       await uiAlert('فشل التفعيل. جرّب «تحديد مكان التخزين».');
     }
+  };
+  const legBtn = document.getElementById('stLegacy');
+  if (legBtn) legBtn.onclick = async () => {
+    legBtn.disabled = true;
+    const d = await StoreFS.readFromLegacy();
+    legBtn.disabled = false;
+    if (d) {
+      try { loadData(d, false); await StoreFS.saveAll(); StoreFS.legacy = null; tip('✔ اتنقل المشروع القديم للتخزين التلقائي'); } catch (e) { console.warn(e); }
+      showStorageInfo();
+    } else await uiAlert('معرفتش أقرا المجلد القديم (الإذن اترفض أو المشروع فاضي).');
   };
   const pick = document.getElementById('stPick');
   const reveal = document.getElementById('stReveal');
@@ -2623,6 +2955,8 @@ if (_bProjUp && _flProj) {
 }
 const _bWipe = document.getElementById('bWipe');
 if (_bWipe) _bWipe.onclick = () => wipeProjectTotal();
+const _bPlayNet = document.getElementById('bPlayNet');
+if (_bPlayNet) _bPlayNet.onclick = () => { try { onPlayNetBtn(); } catch (e) { console.warn(e); } };
 const _bStorage = document.getElementById('bStorage');
 if (_bStorage) _bStorage.onclick = () => showStorageInfo();
 const _storageClose = document.getElementById('storageClose');
@@ -2742,6 +3076,7 @@ const TouchUI = {
 
 const _autoCtxCache = {};
 async function loadAutoCtx(file) {
+  if (!file) return '';
   if (_autoCtxCache[file]) return _autoCtxCache[file];
   try {
     const r = await fetch(file, { cache: 'no-store' });
@@ -2755,13 +3090,51 @@ async function loadAutoCtx(file) {
   return '';
 }
 
+/** ملف التلقائي المناسب فقط — فصل جهاز × قسم × أونلاين/أوفلاين (ملف واحد، بدون تحميل الباقي) */
+function resolveAutoCtxFile(sec) {
+  const section = sec || (S.mode === 'play' ? 'play' : S.section);
+  // كائنات عادية: ملف القصة القديم (مش PROG/PROBJ)
+  if (section === 'objects' || section === 'play') return 'auto_story_level.txt';
+  if (section !== 'prog' && section !== 'sobj') return '';
+
+  const mobile = !!(typeof MOB !== 'undefined' && MOB.on);
+  const device = mobile ? 'PHONE' : 'PC';
+  const kind = section === 'sobj' ? 'PROBJ' : 'PROG';
+  // أوفلاين أو غير محدد → بدون SYNC | أونلاين فقط → *_SYNC
+  const sync = S.playNet === 'online' ? '_SYNC' : '';
+  // أسماء الملفات: AUTO_PC_PROG.txt … AUTO_PHONE_PROBJ_SYNC.txt
+  return `AUTO_${device}_${kind}${sync}.txt`;
+}
+
 function autoText(extraCtx) {
   const sec = S.mode === 'play' ? 'play' : S.section;
   const names = { play: 'play', prog: 'prog', sobj: 'sobj', objects: 'objects' };
   const sm = o => `id=${o.id} name=${o.name} type=${o.type} pos=[${o.pos.map(v => +v.toFixed(2))}] rot=[${o.rot.map(v => +v.toFixed(1))}] scl=[${o.scl.map(v => +v.toFixed(2))}] color=${o.color}${o.hidden ? ' hidden' : ''}${o.scripts && o.scripts.length ? ' scripts=' + o.scripts.join(',') : ''}`;
   const mobile = !!(typeof MOB !== 'undefined' && MOB.on);
-  let t = `HAWA_AUTO\nsec=${names[sec] || sec}\nmobile=${mobile ? '1' : '0'}\ndevice=${mobile ? 'mobile' : 'desktop'}\n${playerNote()}\n`;
+  const netMode = S.playNet === 'online' ? 'online' : (S.playNet === 'offline' ? 'offline' : 'unset');
+  let t = `HAWA_AUTO\nsec=${names[sec] || sec}\nmobile=${mobile ? '1' : '0'}\ndevice=${mobile ? 'mobile' : 'desktop'}\nplayNet=${netMode}\n${playerNote()}\n`;
   t += API + '\n\n';
+
+  // وضع المشروع: أوفلاين = محلي بدون مزامنة | أونلاين = نفس المنطق + مزامنة لاعبين
+  if (netMode === 'offline') {
+    t += `=== PROJECT_MODE_OFFLINE (إلزامي) ===
+المشروع أوفلاين — لعب محلي فقط.
+1) ممنوع أنظمة مزامنة لاعبين / NetMP / getRemotePlayers / setShared للشبكة / peer.
+2) ممنوع نقاط online_spawn أو منطق سلوتات أونلاين.
+3) ابنِ الميكانيكس للاعب المحلي الواحد فقط.
+4) التلقائي يركّز على تجربة محلية (موبايل + كومبيوتر) بدون شبكة.
+
+`;
+  } else if (netMode === 'online') {
+    t += `=== PROJECT_MODE_ONLINE (إلزامي) ===
+المشروع أونلاين — نفس منطق الأوفلاين المحلي + مزامنة بين اللاعبين.
+1) ابنِ أولاً منطق محلي صحيح، ثم أضف المزامنة (setShared / syncObject / NetMP / getRemotePlayers).
+2) RULE: لو اللاعب المحلي شايفه، كل لاعب أونلاين لازم يشوفه.
+3) نقاط online_spawn متاحة (حد 3). استخدمها عند الحاجة فقط.
+4) التلقائي يدعم موبايل + كومبيوتر مع الشبكة.
+
+`;
+  }
 
   // قاعدة إبداع الشكل — قبل أي سياق مرجعي (تكسر القوالب المتكررة)
   if (sec === 'prog' || sec === 'sobj' || sec === 'objects') {
@@ -2842,18 +3215,28 @@ function coordBlock() {
   const run = async (forceSec) => {
     if (forceSec) S.section = forceSec;
     const sec = S.mode === 'play' ? 'play' : S.section;
+    // تحميل ملف واحد فقط حسب: جهاز + قسم + أونلاين/أوفلاين — الباقي لا يُجلب
+    const file = resolveAutoCtxFile(sec);
     let ctx = '';
-    // برمجة + كائنات برمجية ← ملف السكربتات المرجعي
-    // كائنات عادية ← ملف مستوى/ستوري المرجعي
-    if (sec === 'prog' || sec === 'sobj') ctx = await loadAutoCtx('auto_scripted_object.txt');
-    else if (sec === 'objects') ctx = await loadAutoCtx('auto_story_level.txt');
+    if (file) {
+      ctx = await loadAutoCtx(file);
+      if (!ctx && (sec === 'prog' || sec === 'sobj')) {
+        // احتياطي نادر لو الملف ناقص
+        ctx = await loadAutoCtx('auto_scripted_object.txt');
+      }
+    }
     const { sec: s2, t } = autoText(ctx);
-    const tag = (typeof MOB !== 'undefined' && MOB.on) ? 'mobile' : 'desktop';
-    dl('hawa-auto-' + s2 + '-' + tag + '.txt', t);
-    try { tip('✔ تلقائي'); } catch (_) {}
+    const mobile = !!(typeof MOB !== 'undefined' && MOB.on);
+    const net = S.playNet === 'online' ? 'online' : (S.playNet === 'offline' ? 'offline' : 'unset');
+    const tag = (mobile ? 'phone' : 'pc') + '-' + net;
+    const outName = file
+      ? file.replace(/\.txt$/i, '') + '-export.txt'
+      : ('hawa-auto-' + s2 + '-' + tag + '.txt');
+    dl(outName, t);
+    try { tip('✔ تلقائي · ' + (file || s2)); } catch (_) {}
   };
-  const bA = $('#bAuto'), pA = $('#pAuto'), sA = $('#sAuto');
-  if (bA) bA.onclick = () => { run(null); };
+  // زر التلقائي الخارجي اتشال — يبقى داخل البرمجة والكائنات البرمجية فقط
+  const pA = $('#pAuto'), sA = $('#sAuto');
   if (pA) pA.onclick = () => { run('prog'); };
   if (sA) sA.onclick = () => { run('sobj'); };
 })();
@@ -4526,6 +4909,9 @@ function bigGame(rt, o, root) {
   const G2 = {
     THREE: T, scene,
     get params() { return resolvedParams(o.p); },
+    findByName: n => (rt.byName && rt.byName.get(n)) || null,
+    find: n => (rt.byName && rt.byName.get(n)) || null,
+    listAllObjects: () => (rt.byName ? Array.from(rt.byName.values()) : []),
     defineParams(list) { for (const e of list || []) if (e && e.key && o.p[e.key] === undefined) o.p[e.key] = e.value; },
     onUpdate(fn) { if (typeof fn === 'function') rt.ups.push(fn); },
     isKeyDown: c => keyDown(c),
@@ -4627,12 +5013,12 @@ function runBig(rt, o, root, code) {
   if (root.userData && root.userData.body) root.userData.body.visible = false;
   const body = root.userData.body;
   rt.bigs.push({o, m: root, base, body});
-  try { new Function('Game', 'root', code)(bigGame(rt, o, root), root); }
+  try { const G = bigGame(rt, o, root); try { window.Game = G; } catch (_) {} new Function('Game', 'root', code)(G, root); }
   catch (e) { fail(o.name || 'script', e); }
 }
 function runScene(rt, s) {
   const root = new T.Group(); scene.add(root); rt.sceneRoots.push(root);
-  try { new Function('Game', 'root', s.code)(bigGame(rt, {name: s.name, p: {}}, root), root); }
+  try { if (!s.p) s.p = {}; const G = bigGame(rt, {name: s.name, p: s.p}, root); try { window.Game = G; } catch (_) {} new Function('Game', 'root', s.code)(G, root); }
   catch (e) { fail(s.name, e); }
 }
 function cleanBig(rt) {
@@ -4642,6 +5028,7 @@ function cleanBig(rt) {
     if (b.body) b.body.visible = true;
   }
   for (const r of rt.sceneRoots) scene.remove(r);
+  if (rt.sceneBase) for (const c of scene.children.slice()) if (!rt.sceneBase.has(c)) scene.remove(c);
 }
 
 /* ---------- معاينة الكائنات البرمجية في وضع البناء ----------
@@ -4975,7 +5362,8 @@ const NetMP = {
     r.anim = {
       moving: !!msg.moving, run: !!msg.run, air: !!msg.air,
       ph: msg.walk || 0, sf: msg.sf || 0, hv: msg.hv || 0,
-      vy: msg.vy || 0, turn: msg.turn || 0, fz: msg.fz || 0, fx: msg.fx || 0, face: msg.face || null
+      vy: msg.vy || 0, turn: msg.turn || 0, fz: msg.fz || 0, fx: msg.fx || 0, face: msg.face || null,
+      funny: msg.funny || null
     };
     if (msg.cape && msg.cape.length) r.cape = msg.cape;
     // مركبة / ركوب
@@ -5058,6 +5446,8 @@ const NetMP = {
               r.rig.root.rotation.y = m.rotation.y;
             }
           }
+        } else if (a.funny && typeof window.__HawaFunnyNetApply === 'function') {
+          try { window.__HawaFunnyNetApply(r, a.funny, dt); } catch (e) {}
         } else {
           animRig(r.rig, dt, {
             moving: a.moving, run: a.run, air: a.air, ph: a.ph || 0,
@@ -5225,7 +5615,8 @@ const NetMP = {
       cape: this._capeState(),
       app: this._appearance(),
       cl: this._rigCl(),
-      veh: null, vp: null, vyaw: null, vrx: null, vrz: null, lean: null, vextra: null, face: this._faceSnap()
+      veh: null, vp: null, vyaw: null, vrx: null, vrz: null, lean: null, vextra: null, face: this._faceSnap(),
+      funny: (typeof window.__HawaFunnyNetPack === 'function') ? window.__HawaFunnyNetPack() : null
     };
     if (veh) Object.assign(msg, veh);
     this.broadcast(msg);
@@ -5349,6 +5740,17 @@ function playStart() {
   try { MOB.closeSheets(); MOB.setPlay(true); } catch (_) {}
   for (const id of [...PREV.keys()]) removePreview(id);
   try { S._buildCam = getBuilderCam(); } catch (_) { S._buildCam = null; }
+  // لقطة بناء كاملة قبل الاختبار — أي تعديل/خلق/تحريك أثناء اللعب لا يبقى بعد الخروج
+  try {
+    S._playBackup = {
+      objs: JSON.parse(JSON.stringify(S.objs)),
+      nid: S.nid,
+      scripts: JSON.parse(JSON.stringify(S.scripts || [])),
+      sdefs: JSON.parse(JSON.stringify(S.sdefs || [])),
+      sid: S.sid,
+      did: S.did
+    };
+  } catch (_) { S._playBackup = null; }
   sel(null); S.mode = 'play'; syncMarks(); S.err = []; S.fly = false; updModes();
   $('#app').hidden = true; $('#play').hidden = false; attach(pvp);
   // أونلاين / وضع اللعب فقط: اخفِ «خروج للبناء» و«إعادة» — دول للاختبار من المحرّر بس
@@ -5390,7 +5792,7 @@ function playStart() {
     hold: false, locked: false, animLock: false, cam: null, camS: null, fPrev: false, prompt: ''};
   const groups = {};
   for (const o of S.objs) {
-    const m = MESH.get(o.id), sc = o.scripts.length > 0 || o.type === 'sobj';
+    const m = MESH.get(o.id), sc = o.scripts.length > 0 || o.type === 'sobj' || globalRefs().has(o.id);
     if (o.hidden) { m.visible = false; continue; }
     if (o.type === 'respawn' || o.type === 'online_spawn') { m.visible = false; if (o.type === 'respawn') rt.rs.push(o); continue; }
     if (o.type === 'light') continue;
@@ -5502,6 +5904,7 @@ return {
       rt.hooks.push(h);
     } catch (e) { fail(s.name || 'script', e); }
   };
+  rt.sceneBase = new Set(scene.children);
   // 1) قسم البرمجة: الملفات المفعّلة تشتغل مع اللعبة كلها
   for (const s of S.scripts) if (s.enabled) { if (isBig(s.code)) runScene(rt, s); else comp(s, {name: 'scene', props: {}}); }
   // 2) الكائنات في المشهد
@@ -5534,11 +5937,83 @@ function playStop() {
   rt.inst.forEach(i => { scene.remove(i); i.dispose(); }); scene.remove(rt.rig.root);
   RT = null; S.mode = 'build';
   try { if (S._buildCam) applyBuilderCam(S._buildCam); } catch (_) {}
-  for (const o of S.objs) { const m = MESH.get(o.id); m.matrixAutoUpdate = false; tf(o); look(o); }
-  for (const o of S.objs) refreshPreview(o);
+
+  // استعادة حالة البناء الأصلية (فصل كامل عن وضع الاختبار)
+  try {
+    const bak = S._playBackup;
+    if (bak && Array.isArray(bak.objs)) {
+      const bakIds = new Set(bak.objs.map(o => +o.id));
+      // احذف أي كائن اتخلق أثناء اللعب
+      for (const o of [...S.objs]) {
+        if (!bakIds.has(+o.id)) {
+          try {
+            const m = MESH.get(o.id);
+            if (m) { scene.remove(m); try { m.traverse(c => { if (c.geometry) c.geometry.dispose(); if (c.material) { const mats = Array.isArray(c.material) ? c.material : [c.material]; mats.forEach(mm => mm && mm.dispose && mm.dispose()); } }); } catch (_) {} }
+            MESH.delete(o.id); OBJ.delete(o.id);
+            try { removePreview(o.id); } catch (_) {}
+          } catch (_) {}
+          S.objs = S.objs.filter(x => x.id !== o.id);
+        }
+      }
+      // أعد خصائص الكائنات الأصلية (موضع/دوران/حجم/لون/إخفاء/باراميتر…)
+      const byId = new Map(bak.objs.map(o => [+o.id, o]));
+      for (const o of S.objs) {
+        const b = byId.get(+o.id);
+        if (!b) continue;
+        o.pos = Array.isArray(b.pos) ? [...b.pos] : [0, 0, 0];
+        o.rot = Array.isArray(b.rot) ? [...b.rot] : [0, 0, 0];
+        o.scl = Array.isArray(b.scl) ? [...b.scl] : [1, 1, 1];
+        if (b.color != null) o.color = b.color;
+        if (b.solid != null) o.solid = !!b.solid;
+        if (b.hidden != null) o.hidden = !!b.hidden;
+        if (b.name != null) o.name = b.name;
+        if (b.base != null) o.base = !!b.base;
+        if (b.def != null) o.def = b.def;
+        if (Array.isArray(b.scripts)) o.scripts = b.scripts.slice();
+        if (b.p && typeof b.p === 'object') o.p = JSON.parse(JSON.stringify(b.p));
+        // أعِد بناء الميش لو النوع/الخصائص الأساسية اتغيّرت بشكل جذري (نادر)
+        const m = MESH.get(o.id);
+        if (m) {
+          m.matrixAutoUpdate = false;
+          try { tf(o); look(o); } catch (_) {}
+        }
+      }
+      // لو اتحذف كائن أثناء اللعب — أعد إنشاؤه من اللقطة
+      const liveIds = new Set(S.objs.map(o => +o.id));
+      for (const b of bak.objs) {
+        if (liveIds.has(+b.id)) continue;
+        try {
+          const o = JSON.parse(JSON.stringify(b));
+          o.id = +b.id;
+          reg(o);
+        } catch (_) {}
+      }
+      if (bak.nid != null) S.nid = Math.max(+bak.nid || 1, ...S.objs.map(o => (+o.id || 0) + 1));
+      // السكربتات/التعريفات: نرجّعها لو اتعدّلت أثناء الاختبار (نادر)
+      if (Array.isArray(bak.scripts)) S.scripts = JSON.parse(JSON.stringify(bak.scripts));
+      if (Array.isArray(bak.sdefs)) S.sdefs = JSON.parse(JSON.stringify(bak.sdefs));
+      if (bak.sid != null) S.sid = +bak.sid;
+      if (bak.did != null) S.did = +bak.did;
+    } else {
+      for (const o of S.objs) {
+        const m = MESH.get(o.id);
+        if (m) { m.matrixAutoUpdate = false; try { tf(o); look(o); } catch (_) {} }
+      }
+    }
+  } catch (e) {
+    console.warn('[playStop] restore build state', e);
+    for (const o of S.objs) {
+      const m = MESH.get(o.id);
+      if (m) { m.matrixAutoUpdate = false; try { tf(o); look(o); } catch (_) {} }
+    }
+  }
+  S._playBackup = null;
+
+  for (const o of S.objs) { try { refreshPreview(o); } catch (_) {} }
+  try { hier(); pList(); sList(); inspect(); } catch (_) {}
   grid.visible = true; $('#play').hidden = true; $('#app').hidden = false; attach(vp);
   setTool(S.tool); sel(null); camUpdate(); updModes(); refNames = null; syncMarks();
-  try { drag = null; mv = null; MOB.resetBuildTouch(); MOB.detect(); MOB.syncPads(); setTimeout(() => { try { MOB.detect(); MOB.syncPads(); resize(); } catch (_) {} }, 120); } catch (_) {}
+  try { endDrag(false); mv = null; MOB.resetBuildTouch(); MOB.detect(); MOB.syncPads(); setTimeout(() => { try { MOB.detect(); MOB.syncPads(); resize(); } catch (_) {} }, 120); } catch (_) {}
 }
 function togglePlay() { S.mode === 'play' ? playStop() : playStart(); }
 $('#bTest').onclick = togglePlay;
@@ -5875,8 +6350,10 @@ const MOB = {
     this.lookTouch = null;
     cv.addEventListener('touchstart', e => {
       if (!this.on || S.mode !== 'build') return;
-      if (e.touches.length >= 2) {
-        const a = e.touches[0], b = e.touches[1];
+      // targetTouches = الأصابع اللي بدأت على الكانفس بس. إصبع الجويستيك (عنصر تاني) مش بيتحسب،
+      // عشان إصبع الكاميرا مع الجويستيك يلف الكاميرا بدل ما يعمل زووم.
+      if (e.targetTouches.length >= 2) {
+        const a = e.targetTouches[0], b = e.targetTouches[1];
         const dist = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
         this.pinch = { dist, d0: OB.dist };
         this.buildTouch = null;
@@ -5885,7 +6362,7 @@ const MOB = {
         e.preventDefault();
         return;
       }
-      const t = e.changedTouches[0] || e.touches[0];
+      const t = e.changedTouches[0] || e.targetTouches[0];
       if (!t) return;
       this.gizmoTouch = false;
       if (S.sel != null && gizmo.visible) {
@@ -5913,12 +6390,12 @@ const MOB = {
       if (!this.on || S.mode !== 'build') return;
       if (typeof drag !== 'undefined' && drag) {
         e.preventDefault();
-        if (drag.pid == null && e.touches[0]) { try { doDrag({ clientX: e.touches[0].clientX, clientY: e.touches[0].clientY }); } catch (_) {} }
+        if (drag.pid == null && e.targetTouches[0]) { try { doDrag({ clientX: e.targetTouches[0].clientX, clientY: e.targetTouches[0].clientY }); } catch (_) {} }
         return;
       }
       if (this.gizmoTouch) { e.preventDefault(); return; }
-      if (e.touches.length >= 2 && this.pinch) {
-        const a = e.touches[0], b = e.touches[1];
+      if (e.targetTouches.length >= 2 && this.pinch) {
+        const a = e.targetTouches[0], b = e.targetTouches[1];
         const dist = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
         const s = this.pinch.dist / Math.max(40, dist);
         OB.dist = clamp(this.pinch.d0 * s, 1.5, 400);
@@ -5928,8 +6405,8 @@ const MOB = {
       }
       if (this.lookTouch) {
         let t = null;
-        for (let i = 0; i < e.touches.length; i++) {
-          if (e.touches[i].identifier === this.lookTouch.id) { t = e.touches[i]; break; }
+        for (let i = 0; i < e.targetTouches.length; i++) {
+          if (e.targetTouches[i].identifier === this.lookTouch.id) { t = e.targetTouches[i]; break; }
         }
         if (t) {
           const dx = t.clientX - this.lookTouch.x, dy = t.clientY - this.lookTouch.y;
@@ -5945,8 +6422,12 @@ const MOB = {
     }, { passive: false });
     cv.addEventListener('touchend', e => {
       if (!this.on || S.mode !== 'build') return;
-      if (this.pinch && e.touches.length < 2) this.pinch = null;
-      if (this.gizmoTouch) this.gizmoTouch = false;
+      if (this.pinch && e.targetTouches.length < 2) {
+        this.pinch = null;
+        const r = e.targetTouches[0];
+        if (r) { this.lookTouch = { x: r.clientX, y: r.clientY, t: performance.now(), moved: 99, id: r.identifier }; this.buildTouch = this.lookTouch; }
+      }
+      if (this.gizmoTouch) { this.gizmoTouch = false; if (drag && drag.pid == null) endDrag(true); }
       if (this.lookTouch && e.changedTouches.length) {
         for (let i = 0; i < e.changedTouches.length; i++) {
           if (e.changedTouches[i].identifier === this.lookTouch.id) {
@@ -6092,6 +6573,7 @@ function boot() {
   if (!S.objs.length && !(d && d.objs && d.objs.length) && !window.HAWA_PLAY_ONLY) demo();
   ensureLive(); refreshLive(); ensureCoordUI();
   cats(); setTool('select'); setSec('objects'); setGz('move'); hier(); pList(); sList(); inspect(); resize(); camUpdate(); updModes(); updOnRsBtn();
+  try { syncPlayNetUI(); } catch (_) {}
   requestAnimationFrame(frame);
   if (window.HAWA_PLAY_ONLY) {
     const bar = document.getElementById('bar');
@@ -6108,6 +6590,18 @@ function boot() {
     try {
       const d2 = await StoreFS.loadPreferred();
       if (d2) try { loadData(d2, false); } catch (e) { console.warn(e); }
+    } catch (e) { console.warn(e); }
+  } else if (st === 'migrate') {
+    // أول مرة بعد التحديث: المشروع القديم في مجلد اخترته → نقله للتخزين التلقائي مرة واحدة
+    try {
+      await uiAlert('لقيت مشروعك القديم في مجلد على جهازك.\nاضغط «حسنًا» وسمح للمتصفح بقراءته عشان أنقله للتخزين التلقائي (مرة واحدة بس).');
+      const d2 = await StoreFS.readFromLegacy();
+      if (d2) {
+        try { loadData(d2, false); } catch (e) { console.warn(e); }
+        try { await StoreFS.saveAll(); StoreFS.legacy = null; tip('✔ اتنقل مشروعك للتخزين التلقائي'); } catch (e) { console.warn(e); }
+      } else {
+        await uiAlert('متنقلش. تقدر تنقله بعدين من «عرض التخزين» ← «استيراد من المجلد القديم».');
+      }
     } catch (e) { console.warn(e); }
   } else if (st === 'pending') {
     // مجلد محفوظ — اطلب ضغطة واحدة لتفعيل الإذن (مش اختيار مجلد من جديد)
@@ -6131,5 +6625,14 @@ function boot() {
     } catch (e) { console.warn(e); }
   }
   try { INTRO.start(); } catch (e) { console.warn(e); try { INTRO.finish(true); } catch (_) {} }
+  // بعد الإقلاع: لو المشروع بدون playNet اسأل (موبايل + كومبيوتر)
+  if (!window.HAWA_PLAY_ONLY) {
+    setTimeout(() => {
+      try {
+        if (S.playNet !== 'online' && S.playNet !== 'offline') ensurePlayNetChosen(false);
+        else syncPlayNetUI();
+      } catch (_) {}
+    }, 900);
+  }
 })();
 })();

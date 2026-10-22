@@ -72,8 +72,147 @@ def _read_json(handler):
         return {}
 
 
+
+# ---- Project storage (تخزين المشروع تلقائي: مكان ثابت لكل مستخدم، مستقل عن البورت والمتصفح ونسخة المحرك) ----
+# الافتراضي: ~/HawaEngineData/project   (تقدر تغيّره بمتغير البيئة HAWA_DATA)
+# لما تبعت المحرك لحد (أو تحدّث نسخته) مشروعه بيفضل موجود لأنه برّه مجلد المحرك.
+DATA_DIR = os.path.abspath(os.environ.get("HAWA_DATA") or os.path.join(os.path.expanduser("~"), "HawaEngineData"))
+PROJECT_DIR = os.path.join(DATA_DIR, "project")
+MAX_WRITE = 512 * 1024 * 1024
+
+
+def _ensure_project_dir():
+    try:
+        if not os.path.isdir(PROJECT_DIR):
+            os.makedirs(PROJECT_DIR)
+        return True
+    except Exception:
+        return False
+
+
+def _safe_project_path(rel):
+    """يرجّع مسار مطلق جوه PROJECT_DIR بس، أو None لو المسار بيهرب (.. أو مطلق)."""
+    rel = (rel or "").replace("\\", "/").strip("/")
+    parts = [p for p in rel.split("/") if p not in ("", ".")]
+    if any(p == ".." or ":" in p for p in parts):
+        return None
+    full = os.path.abspath(os.path.join(PROJECT_DIR, *parts))
+    root = os.path.abspath(PROJECT_DIR)
+    if full != root and not full.startswith(root + os.sep):
+        return None
+    return full
+
+
+def _read_raw(handler):
+    length = int(handler.headers.get("Content-Length") or 0)
+    if length <= 0:
+        return b""
+    if length > MAX_WRITE:
+        return None
+    return handler.rfile.read(length)
+
+
+def _bytes_response(handler, data, status=200, ctype="application/octet-stream"):
+    handler.send_response(status)
+    handler.send_header("Content-Type", ctype)
+    handler.send_header("Content-Length", str(len(data)))
+    handler.send_header("Cache-Control", "no-store")
+    handler.send_header("Access-Control-Allow-Origin", "*")
+    handler.end_headers()
+    handler.wfile.write(data)
+
+
+def _handle_fs_api(handler, method, path):
+    qs = parse_qs(urlparse(handler.path).query)
+    rel = (qs.get("path") or [""])[0]
+
+    if method == "GET" and path == "/api/fs/ping":
+        ok = _ensure_project_dir()
+        has = os.path.isfile(os.path.join(PROJECT_DIR, "hawa-project.json"))
+        return _json_response(handler, {"ok": ok, "dir": PROJECT_DIR, "exists": has})
+
+    full = _safe_project_path(rel)
+    if full is None:
+        return _json_response(handler, {"ok": False, "error": "bad path"}, 400)
+    if not _ensure_project_dir():
+        return _json_response(handler, {"ok": False, "error": "cannot create data dir"}, 500)
+
+    if method == "GET" and path == "/api/fs/list":
+        if not os.path.isdir(full):
+            return _json_response(handler, {"ok": False, "error": "not found"}, 404)
+        items = []
+        try:
+            for name in sorted(os.listdir(full)):
+                fp = os.path.join(full, name)
+                isdir = os.path.isdir(fp)
+                items.append({"name": name, "kind": "directory" if isdir else "file",
+                              "size": 0 if isdir else os.path.getsize(fp)})
+        except Exception as e:
+            return _json_response(handler, {"ok": False, "error": str(e)}, 500)
+        return _json_response(handler, {"ok": True, "items": items})
+
+    if method == "GET" and path == "/api/fs/read":
+        if not os.path.isfile(full):
+            return _json_response(handler, {"ok": False, "error": "not found"}, 404)
+        try:
+            with open(full, "rb") as f:
+                data = f.read()
+        except Exception as e:
+            return _json_response(handler, {"ok": False, "error": str(e)}, 500)
+        return _bytes_response(handler, data)
+
+    if method == "POST" and path == "/api/fs/mkdir":
+        try:
+            if not os.path.isdir(full):
+                os.makedirs(full)
+        except Exception as e:
+            return _json_response(handler, {"ok": False, "error": str(e)}, 500)
+        return _json_response(handler, {"ok": True})
+
+    if method == "POST" and path == "/api/fs/write":
+        data = _read_raw(handler)
+        if data is None:
+            return _json_response(handler, {"ok": False, "error": "too large"}, 413)
+        if full == os.path.abspath(PROJECT_DIR):
+            return _json_response(handler, {"ok": False, "error": "bad path"}, 400)
+        try:
+            parent = os.path.dirname(full)
+            if not os.path.isdir(parent):
+                os.makedirs(parent)
+            tmp = full + ".tmp"
+            with open(tmp, "wb") as f:
+                f.write(data)
+            if os.path.exists(full):
+                os.remove(full)
+            os.rename(tmp, full)
+        except Exception as e:
+            return _json_response(handler, {"ok": False, "error": str(e)}, 500)
+        return _json_response(handler, {"ok": True, "size": len(data)})
+
+    if method == "POST" and path == "/api/fs/wipe":
+        try:
+            import shutil
+            shutil.rmtree(PROJECT_DIR, ignore_errors=True)
+            _ensure_project_dir()
+        except Exception as e:
+            return _json_response(handler, {"ok": False, "error": str(e)}, 500)
+        return _json_response(handler, {"ok": True})
+
+    if method == "POST" and path == "/api/fs/delete":
+        try:
+            if os.path.isfile(full):
+                os.remove(full)
+        except Exception as e:
+            return _json_response(handler, {"ok": False, "error": str(e)}, 500)
+        return _json_response(handler, {"ok": True})
+
+    return None
+
+
 def _handle_api(handler, method, path):
     _cleanup_old_rooms()
+    if path.startswith("/api/fs/"):
+        return _handle_fs_api(handler, method, path)
     # POST /api/lan/create
     if method == "POST" and path == "/api/lan/create":
         data = _read_json(handler)
@@ -427,6 +566,7 @@ def main():
     print("  Hawa Engine - Local + LAN Server")
     print("========================================")
     print("  Folder: %s" % ROOT)
+    print("  Project data: %s" % PROJECT_DIR)
     print("  PID:    %s" % os.getpid())
     print("  Local:  %s" % build_url)
     print("  Game:   %s" % game_url)
