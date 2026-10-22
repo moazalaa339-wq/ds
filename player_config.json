@@ -1,0 +1,19 @@
+{
+  "style": "suit",
+  "skin": "#f5c08f",
+  "skinD": "#e0a070",
+  "hair": "#3a2616",
+  "iris": "#2a3f5a",
+  "shirt": "#f1f1ee",
+  "jacket": "#34415e",
+  "pants": "#34415e",
+  "tie": "#c0392b",
+  "shoes": "#1d1b1b",
+  "belt": "#1d1b1b",
+  "hairStyle": "short",
+  "beard": false,
+  "glasses": false,
+  "headScale": 1.0,
+  "rounded": false,
+  "proportions": "man"
+}

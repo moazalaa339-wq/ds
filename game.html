@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Hawa Game Launcher</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,Segoe UI,Tahoma,sans-serif;background:#0a1220;color:#e2e8f0;min-height:100vh;display:flex;align-items:center;justify-content:center}
+.wrap{width:min(520px,94vw);background:#111b2e;border:1px solid #2a3a5a;border-radius:18px;padding:28px;box-shadow:0 20px 60px rgba(0,0,0,.45)}
+h1{font-size:22px;margin-bottom:6px}
+.sub{color:#94a3b8;font-size:13px;margin-bottom:22px;line-height:1.6}
+.modes{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px}
+.modes button{padding:18px 12px;border-radius:14px;border:1px solid #2a3a5a;background:#0b1424;color:#e2e8f0;font:inherit;font-weight:700;cursor:pointer;transition:.15s}
+.modes button:hover{border-color:#38d9f5;background:#132033}
+.modes button.on{border-color:#38d9f5;background:rgba(56,217,245,.12);color:#7dd3fc}
+.panel{display:none;flex-direction:column;gap:12px}
+.panel.on{display:flex}
+label{font-size:12px;color:#94a3b8;font-weight:600}
+input,select{width:100%;padding:10px 12px;border-radius:10px;border:1px solid #2a3a5a;background:#0b1424;color:#e2e8f0;font:inherit}
+input:focus,select:focus{outline:none;border-color:#38d9f5}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.row button,.btn{flex:1;padding:11px 14px;border-radius:10px;border:1px solid #2a3a5a;background:#1a2740;color:#e2e8f0;font:inherit;font-weight:700;cursor:pointer}
+.row button.pri,.btn.pri{background:#0ea5e9;border-color:#0ea5e9;color:#062033}
+.row button.red{background:#b91c1c;border-color:#b91c1c}
+.row button:hover,.btn:hover{filter:brightness(1.08)}
+.msg{font-size:12.5px;color:#94a3b8;min-height:18px;line-height:1.5}
+.msg.ok{color:#4ade80}.msg.err{color:#f87171}
+.lobby{display:none;flex-direction:column;gap:10px;margin-top:8px}
+.lobby.on{display:flex}
+.slots{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.slot{background:#0b1424;border:1px dashed #2a3a5a;border-radius:12px;padding:14px 8px;text-align:center;min-height:88px}
+.slot.filled{border-style:solid;border-color:#38d9f5;background:rgba(56,217,245,.08)}
+.slot .av{font-size:28px;margin-bottom:4px}
+.slot .nm{font-size:12px;font-weight:700}
+.slot .mut{font-size:11px;color:#64748b}
+.codebox{background:#0b1424;border:1px solid #2a3a5a;border-radius:10px;padding:10px;font-family:Consolas,monospace;font-size:13px;letter-spacing:1px;text-align:center;direction:ltr}
+#playRoot{position:fixed;inset:0;display:none;background:#000;z-index:50}
+#playRoot.on{display:block}
+#playRoot canvas{width:100%;height:100%;display:block}
+#hud{position:absolute;top:12px;left:12px;right:12px;display:flex;justify-content:space-between;pointer-events:none;z-index:2}
+#hud .chip{pointer-events:auto;background:rgba(7,12,22,.75);border:1px solid #2a3a5a;padding:7px 12px;border-radius:999px;font-size:13px;font-weight:700}
+#hud button{pointer-events:auto;cursor:pointer;border:0;background:#b91c1c;color:#fff;padding:7px 14px;border-radius:999px;font:inherit;font-weight:700}
+.fileok{color:#4ade80;font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap" id="ui">
+  <h1>𓂀 Hawa · فتح اللعبة</h1>
+  <p class="sub">اختار وضع اللعب. الأونلاين اختياري: <b>إنترنت (PeerJS)</b> أو <b>شبكة محلية LAN</b> عبر WebRTC وتبادل كود الرووم — حد أقصى 3 لاعبين.</p>
+
+  <div class="modes">
+    <button type="button" id="mOff" class="on">🏠 أوفلاين</button>
+    <button type="button" id="mOn">🌐 أونلاين</button>
+  </div>
+
+  <div class="panel on" id="pOff">
+    <label>ملف اللعبة (game.zip أو game.json) — اختياري لو فاضي هيستخدم آخر مشروع محفوظ</label>
+    <input type="file" id="offFile" accept=".zip,.json">
+    <div class="msg" id="offMsg"></div>
+    <div class="row"><button type="button" class="pri" id="btnOffPlay">▶ ابدأ أوفلاين</button></div>
+  </div>
+
+  <div class="panel" id="pOn">
+    <label>ملف اللعبة (مطلوب قبل إنشاء/انضمام)</label>
+    <input type="file" id="onFile" accept=".zip,.json">
+    <div class="msg" id="onFileMsg"></div>
+
+    <label>نوع الشبكة (اختياري)</label>
+    <div class="row" id="netTypeRow">
+      <button type="button" id="ntPeer" class="on" title="يحتاج إنترنت — كود PeerJS قصير زي المحرك الكبير">🌐 إنترنت (PeerJS)</button>
+      <button type="button" id="ntLan" title="نفس الواي فاي / LAN — WebRTC عبر سيرفر Hawa المحلي، من غير نت">📡 شبكة محلية (LAN)</button>
+    </div>
+    <div class="msg" id="netTypeHint">إنترنت: كود قصير عبر PeerJS (يحتاج نت للربط فقط). اللعب نفسه P2P.</div>
+    <div class="msg ok" id="lanInfo" style="display:none"></div>
+
+    <div class="row">
+      <button type="button" id="btnCreate">إنشاء رووم</button>
+      <button type="button" id="btnJoin">انضمام لرووم</button>
+    </div>
+
+    <div id="createBox" style="display:none;flex-direction:column;gap:10px">
+      <label>اسم الرووم</label>
+      <input id="roomName" placeholder="مثلاً: غرفة الأصدقاء" maxlength="40">
+      <label>اسمك في اللوبي</label>
+      <input id="hostName" placeholder="المضيف" maxlength="20" value="مضيف">
+      <label class="mic-opt" style="display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none;padding:10px 12px;border-radius:10px;border:1px solid #2a3a5a;background:#0b1424">
+        <input type="checkbox" id="roomMic" checked style="width:18px;height:18px;accent-color:#22c55e;cursor:pointer">
+        <span style="flex:1;line-height:1.4"><b style="color:#e2e8f0">🎙 تفعيل المايك في الرووم</b><br><span style="font-size:11.5px;color:#94a3b8;font-weight:500">لو مفعّل، هيظهر زر المايك (B) لكل اللاعبين أثناء اللعب ويقدروا يسمعوا بعض</span></span>
+      </label>
+      <div class="msg" id="createMsg"></div>
+      <div class="row"><button type="button" class="pri" id="btnDoCreate">إنشاء وبدء اللوبي</button></div>
+      <div id="hostCodeBox" style="display:none">
+        <label>كود الرووم (ابعته لأصحابك — ينضمّوا بيه)</label>
+        <div class="codebox" id="hostCode">—</div>
+        <div class="msg" id="hostCodeHelp">اللاعبين يحطوا الكود ده عندهم عشان ينضموا. في وضع LAN لازم يفتحوا نفس رابط السيرفر المحلي (من جهاز المضيف).</div>
+      </div>
+    </div>
+
+    <div id="joinBox" style="display:none;flex-direction:column;gap:10px">
+      <label>اسم الرووم (بالظبط)</label>
+      <input id="joinRoomName" placeholder="اسم الرووم" maxlength="40">
+      <label>كود الشبكة من المضيف</label>
+      <input id="joinCode" placeholder="الصق الكود هنا" maxlength="64" style="direction:ltr;text-align:left">
+      <label>اسمك</label>
+      <input id="joinName" placeholder="لاعب" maxlength="20" value="لاعب">
+      <div class="msg" id="joinMsg"></div>
+      <div class="row"><button type="button" class="pri" id="btnDoJoin">انضمام</button></div>
+    </div>
+
+    <div class="lobby" id="lobby">
+      <div class="msg ok" id="lobbyTitle">اللوبي</div>
+      <div class="slots" id="slots"></div>
+      <div class="row">
+        <button type="button" class="pri" id="btnStart" style="display:none">▶ بدء الرووم</button>
+        <button type="button" class="red" id="btnKick" style="display:none">طرد آخر منضم</button>
+        <button type="button" id="btnLeave">خروج</button>
+      </div>
+      <div class="msg" id="lobbyMsg"></div>
+    </div>
+  </div>
+</div>
+
+<div id="playRoot">
+  <div id="hud">
+    <div class="chip" id="pName">—</div>
+    <button type="button" id="btnExit">خروج</button>
+  </div>
+</div>
+
+<script src="three.min.js"></script>
+<script src="jszip.min.js"></script>
+<script src="peerjs.min.js"></script>
+<script src="play-runtime.js"></script>
+<script src="game-data.js"></script>
+<script>
+let mode = 'off';
+let gameData = null;
+// لو اللعبة متصدرة وفيها game-data.js مدمج
+if (typeof window.HAWA_EMBEDDED_GAME === 'object' && window.HAWA_EMBEDDED_GAME) {
+  gameData = window.HAWA_EMBEDDED_GAME;
+  setTimeout(() => {
+    const m1 = document.getElementById('offMsg');
+    const m2 = document.getElementById('onFileMsg');
+    const txt = '✔ لعبة مدمجة: «' + (gameData.name || '') + '» · ' + ((gameData.objs||[]).length) + ' كائن · جاهزة للعب';
+    if (m1) { m1.className = 'msg ok'; m1.textContent = txt; }
+    if (m2) { m2.className = 'msg ok fileok'; m2.textContent = txt; }
+  }, 50);
+}
+let net = null;
+let isHost = false;
+let mySlot = 1;
+let roomPlayers = [];
+let netType = 'peerjs'; // 'peerjs' | 'lan'
+let roomVoice = true;
+
+const $ = s => document.querySelector(s);
+function show(el, on) { el.classList.toggle('on', !!on); el.style.display = on ? (el.classList.contains('panel') || el.classList.contains('lobby') ? '' : '') : ''; }
+$('#mOff').onclick = () => { mode='off'; $('#mOff').classList.add('on'); $('#mOn').classList.remove('on'); $('#pOff').classList.add('on'); $('#pOn').classList.remove('on'); };
+$('#mOn').onclick = () => { mode='on'; $('#mOn').classList.add('on'); $('#mOff').classList.remove('on'); $('#pOn').classList.add('on'); $('#pOff').classList.remove('on'); };
+
+async function loadGameFile(file) {
+  if (!file) return null;
+  const name = file.name.toLowerCase();
+  if (name.endsWith('.json')) {
+    const t = await file.text();
+    return JSON.parse(t);
+  }
+  if (name.endsWith('.zip') && window.JSZip) {
+    const z = await JSZip.loadAsync(file);
+    const f = z.file('game.json') || z.file(/game\.json$/i)[0];
+    if (!f) throw new Error('مفيش game.json جوه الملف');
+    return JSON.parse(await f.async('string'));
+  }
+  throw new Error('صيغة غير مدعومة — استخدم .zip أو .json');
+}
+
+$('#offFile').onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try {
+    gameData = await loadGameFile(f);
+    $('#offMsg').className = 'msg ok';
+    $('#offMsg').textContent = '✔ تم التعرف: «' + (gameData.name || 'بدون اسم') + '» · ' + (gameData.objs||[]).length + ' كائن';
+  } catch (err) {
+    gameData = null;
+    $('#offMsg').className = 'msg err';
+    $('#offMsg').textContent = '⚠ ' + (err.message || err);
+  }
+};
+$('#onFile').onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try {
+    gameData = await loadGameFile(f);
+    $('#onFileMsg').className = 'msg ok fileok';
+    $('#onFileMsg').textContent = '✔ تم التعرف على الملف وصالح للعب · اسم اللعبة: «' + (gameData.name || 'بدون اسم') + '» · نقاط أونلاين: ' + ((gameData.onlineSpawns||[]).length);
+  } catch (err) {
+    gameData = null;
+    $('#onFileMsg').className = 'msg err';
+    $('#onFileMsg').textContent = '⚠ ' + (err.message || err);
+  }
+};
+
+$('#btnOffPlay').onclick = async () => {
+  if (!gameData) {
+    // حاول من localStorage مشروع البناء
+    try {
+      const d = JSON.parse(localStorage.getItem('hawa2') || 'null');
+      if (d && d.objs) gameData = { name: 'مشروع محلي', objs: d.objs, scripts: d.scripts||[], sdefs: d.sdefs||[], offlineSpawns: (d.objs||[]).filter(o=>o.type==='respawn').map(o=>({pos:o.pos,name:o.name})), onlineSpawns: [] };
+    } catch(_){}
+  }
+  if (!gameData) { $('#offMsg').className='msg err'; $('#offMsg').textContent='⚠ ارفع ملف اللعبة أو ابنِ مشروع في وضع البناء أولاً'; return; }
+  startPlay({ mode: 'offline', data: gameData, slot: 1, players: [{id:'local', name:'لاعب', slot:1}] });
+};
+
+
+/* نوع الشبكة */
+netType = 'peerjs';
+function setNetType(t) {
+  netType = t;
+  $('#ntPeer').classList.toggle('on', t === 'peerjs');
+  $('#ntLan').classList.toggle('on', t === 'lan');
+  const hint = $('#netTypeHint');
+  const lanInfo = $('#lanInfo');
+  if (t === 'peerjs') {
+    hint.textContent = 'إنترنت (PeerJS): كود قصير زي المحرك الكبير — يحتاج نت للربط فقط، اللعب P2P.';
+    lanInfo.style.display = 'none';
+  } else {
+    hint.textContent = 'LAN: نفس الواي فاي. السيرفر المحلي بيولّد كود الرووم، والاتصال WebRTC من غير نت.';
+    lanInfo.style.display = 'block';
+    lanInfo.textContent = 'جاري قراءة عنوان الشبكة المحلية…';
+    fetch('/api/lan/info').then(r => r.json()).then(j => {
+      if (j && j.urls && j.urls.length) {
+        lanInfo.innerHTML = '✔ افتح على الأجهزة التانية: <b style="direction:ltr;display:inline-block">' + j.urls.map(u => u + '/game.html').join('</b> أو <b style="direction:ltr;display:inline-block">') + '</b>';
+      } else lanInfo.textContent = 'شغّل START_SERVER من جهاز المضيف وافتح نفس الرابط على الشبكة.';
+    }).catch(() => {
+      lanInfo.className = 'msg err';
+      lanInfo.textContent = '⚠ سيرفر LAN مش متاح — شغّل START_SERVER.bat وخلي الأجهزة على نفس الواي فاي.';
+    });
+  }
+}
+$('#ntPeer').onclick = () => setNetType('peerjs');
+$('#ntLan').onclick = () => setNetType('lan');
+
+$('#btnCreate').onclick = () => {
+  if (!gameData) { $('#onFileMsg').className='msg err'; $('#onFileMsg').textContent='⚠ ارفع ملف اللعبة أولاً قبل إنشاء رووم'; return; }
+  $('#createBox').style.display='flex'; $('#joinBox').style.display='none';
+};
+$('#btnJoin').onclick = () => {
+  if (!gameData) { $('#onFileMsg').className='msg err'; $('#onFileMsg').textContent='⚠ ارفع ملف اللعبة أولاً قبل الانضمام'; return; }
+  $('#joinBox').style.display='flex'; $('#createBox').style.display='none';
+};
+
+function renderSlots() {
+  const max = Math.min(3, Math.max(1, (gameData.onlineSpawns||[]).length || 3));
+  const box = $('#slots'); box.innerHTML = '';
+  for (let i=1;i<=max;i++) {
+    const p = roomPlayers.find(x => x.slot === i);
+    const d = document.createElement('div');
+    d.className = 'slot' + (p ? ' filled' : '');
+    d.innerHTML = p
+      ? `<div class="av">🧍</div><div class="nm">${esc(p.name)}</div><div class="mut">سلوت ${i}${p.host?' · مضيف':''}</div>`
+      : `<div class="av">⬜</div><div class="nm mut">فاضي</div><div class="mut">سلوت ${i}</div>`;
+    box.appendChild(d);
+  }
+}
+function esc(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+$('#btnDoCreate').onclick = async () => {
+  const rn = $('#roomName').value.trim();
+  const hn = $('#hostName').value.trim() || 'مضيف';
+  if (!gameData) { $('#createMsg').className='msg err'; $('#createMsg').textContent='⚠ حمّل ملف اللعبة الأول'; return; }
+  if (!rn) { $('#createMsg').className='msg err'; $('#createMsg').textContent='⚠ اكتب اسم الرووم'; return; }
+  isHost = true;
+  mySlot = 1;
+  roomPlayers = [{ id: 'host', name: hn, slot: 1, host: true }];
+  $('#createMsg').className='msg'; $('#createMsg').textContent = netType === 'lan' ? 'جاري إنشاء رووم LAN…' : 'جاري إنشاء رووم PeerJS…';
+  try {
+    const onPeerJoin = (peer) => {
+      const max = Math.min(3, Math.max(1, (gameData.onlineSpawns||[]).length || 3));
+      const used = new Set(roomPlayers.map(p=>p.slot));
+      let slot = 0; for (let i=1;i<=max;i++) if (!used.has(i)) { slot=i; break; }
+      if (!slot) { peer.send({t:'full'}); peer.close(); return; }
+      const pl = { id: peer.id, name: peer.playerName || ('لاعب '+slot), slot, host: false };
+      roomPlayers.push(pl);
+      renderSlots();
+      peer.send({ t:'welcome', slot, players: roomPlayers, roomName: rn, gameName: gameData.name });
+      broadcastLobby();
+    };
+    const onPeerLeave = (id) => {
+      roomPlayers = roomPlayers.filter(p => p.id !== id);
+      renderSlots(); broadcastLobby();
+    };
+    if (netType === 'lan') {
+      net = await HawaNet.createHostLan({
+        roomName: rn, hostName: hn,
+        onPeerJoin, onPeerLeave,
+        onPlayers(players) {
+          // حدّث الأسماء/السلوتات من السيرفر مع الإبقاء على اتصال WebRTC
+          if (Array.isArray(players) && players.length) {
+            roomPlayers = players.map(p => ({ id: p.id, name: p.name, slot: p.slot, host: !!p.host }));
+            renderSlots();
+          }
+        },
+        onMessage() {}
+      });
+      roomPlayers = [{ id: net.peerId, name: hn, slot: 1, host: true }];
+    } else {
+      net = await HawaNet.createHost({
+        roomName: rn, gameName: gameData.name,
+        onPeerJoin, onPeerLeave, onMessage() {}
+      });
+    }
+    $('#hostCode').textContent = net.code;
+    $('#hostCodeBox').style.display = 'block';
+    $('#createMsg').className='msg ok';
+    $('#createMsg').textContent = (netType === 'lan' ? '✔ رووم LAN جاهزة · الكود: ' : '✔ رووم PeerJS جاهزة · الكود: ') + net.code + ' — ابعت الكود لأصحابك';
+    $('#lobby').classList.add('on');
+    $('#lobbyTitle').textContent = 'لوبي «' + rn + '» · ' + (gameData.name||'');
+    $('#btnStart').style.display = 'block';
+    $('#btnKick').style.display = 'block';
+    renderSlots();
+  } catch (e) {
+    $('#createMsg').className = 'msg err';
+    $('#createMsg').textContent = '⚠ فشل إنشاء الشبكة: ' + (e.message||e);
+  }
+};
+
+$('#btnDoJoin').onclick = async () => {
+  const rn = $('#joinRoomName').value.trim();
+  const code = $('#joinCode').value.trim();
+  const jn = ($('#joinName') && $('#joinName').value.trim()) || 'لاعب';
+  if (!gameData) { $('#joinMsg').className='msg err'; $('#joinMsg').textContent='⚠ حمّل ملف اللعبة الأول'; return; }
+  if (netType === 'peerjs' && (!rn || !code)) { $('#joinMsg').className='msg err'; $('#joinMsg').textContent='⚠ اسم الرووم والكود مطلوبين'; return; }
+  if (netType === 'lan' && !code) { $('#joinMsg').className='msg err'; $('#joinMsg').textContent='⚠ الصق كود الرووم من المضيف'; return; }
+  isHost = false;
+  $('#joinMsg').className='msg'; $('#joinMsg').textContent = netType === 'lan' ? 'جاري الانضمام عبر LAN…' : 'جاري الانضمام عبر PeerJS…';
+  try {
+    const common = {
+      code,
+      roomName: rn || 'LAN',
+      playerName: jn,
+      onWelcome(msg) {
+        mySlot = msg.slot || 2;
+        roomPlayers = msg.players || [];
+        $('#createBox').style.display='none'; $('#joinBox').style.display='none';
+        $('#lobby').classList.add('on');
+        $('#btnStart').style.display='none'; $('#btnKick').style.display='none';
+        renderSlots();
+        $('#lobbyTitle').textContent = 'لوبي «' + (msg.roomName||rn||'LAN') + '» · سلوتك ' + mySlot;
+        $('#joinMsg').className = 'msg ok';
+        $('#joinMsg').textContent = '✔ انضمّيت · استنى المضيف يبدأ';
+      },
+      onLobby(players) { roomPlayers = players; renderSlots(); },
+      onStart(msg) { const v = (msg && msg.voice != null) ? !!msg.voice : true; startPlay({ mode:'online', data: gameData, slot: mySlot, players: roomPlayers, net, isHost: false, transport: netType, voice: v }); },
+      onMessage(from, msg) {
+        if (msg.t === 'state') HawaPlay.applyRemote(from, msg);
+        if (msg.t === 'kick' && msg.slot === mySlot) { alert('تم طردك من الرووم'); location.reload(); }
+      },
+      onClose() { $('#joinMsg').className='msg err'; $('#joinMsg').textContent='⚠ انقطع الاتصال'; }
+    };
+    if (netType === 'lan') {
+      net = await HawaNet.joinHostLan(common);
+    } else {
+      net = await HawaNet.joinHost(common);
+    }
+  } catch (e) {
+    $('#joinMsg').className = 'msg err';
+    $('#joinMsg').textContent = '⚠ ' + (e.message||e);
+  }
+};
+
+function broadcastLobby() {
+  if (!net || !isHost) return;
+  net.broadcast({ t: 'lobby', players: roomPlayers });
+}
+
+$('#btnStart').onclick = async () => {
+  if (!isHost || !net) return;
+  const micEl = document.getElementById('roomMic');
+  roomVoice = micEl ? !!micEl.checked : true;
+  if (netType === 'lan') {
+    try {
+      await fetch('/api/lan/start', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ code: net.code }) });
+    } catch (_) {}
+  }
+  net.broadcast({ t: 'start', voice: roomVoice });
+  startPlay({ mode:'online', data: gameData, slot: mySlot, players: roomPlayers, net, isHost: true, transport: netType, voice: roomVoice });
+};
+$('#btnKick').onclick = () => {
+  if (!isHost || !net) return;
+  const guests = roomPlayers.filter(p => !p.host);
+  if (!guests.length) { $('#lobbyMsg').textContent = 'مفيش حد يتطرد'; return; }
+  const last = guests[guests.length-1];
+  net.sendTo(last.id, { t: 'kick', slot: last.slot });
+  roomPlayers = roomPlayers.filter(p => p.id !== last.id);
+  renderSlots(); broadcastLobby();
+  $('#lobbyMsg').textContent = 'تم طرد ' + last.name;
+};
+$('#btnLeave').onclick = () => location.reload();
+$('#btnExit').onclick = () => { if (net) try { net.destroy(); } catch(_){ } location.reload(); };
+
+function startPlay(opts) {
+  try {
+    sessionStorage.setItem('hawa_game', JSON.stringify(opts.data));
+  } catch (e) { console.warn(e); }
+  const netCfg = {
+    mode: opts.mode || 'offline',
+    transport: opts.transport || (opts.net && opts.net.transport) || netType || 'peerjs',
+    slot: opts.slot || 1,
+    isHost: !!opts.isHost,
+    playerName: (opts.players && opts.players.find(p => p.slot === (opts.slot||1))) ? (opts.players.find(p => p.slot === (opts.slot||1)).name) : 'لاعب',
+    code: null,
+    players: opts.players || [],
+    voice: opts.voice != null ? !!opts.voice : true
+  };
+  // كود الغرفة = peer id بتاع المضيف
+  try {
+    if (opts.net) {
+      netCfg.code = opts.net.code || opts.net.peerId || null;
+      // اقفل الاتصال القديم قبل الانتقال عشان نعيده في play.html
+      try { opts.net.destroy(opts.transport === 'lan' || (opts.net && opts.net.transport === 'lan')); } catch (e) {}
+    }
+  } catch (e) {}
+  try { sessionStorage.setItem('hawa_play_meta', JSON.stringify(netCfg)); } catch (e) {}
+  location.href = 'play.html';
+}
+</script>
+</body>
+</html>
