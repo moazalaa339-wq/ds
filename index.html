@@ -10,6 +10,20 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<script>document.body.classList.add('intro-on');</script>
+
+<!-- ================= الانيميشن الافتتاحي ================= -->
+<div id="intro">
+  <div class="in-black"></div>
+  <div class="in-tint"></div>
+  <div class="in-scan"></div>
+  <div class="in-vig"></div>
+  <div class="in-bar t"></div>
+  <div class="in-bar b"></div>
+  <div class="in-title"><span class="in-logo">𓂀</span><b>HAWA</b><i>ENGINE</i><small>جارٍ الدخول إلى ورشة البناء</small></div>
+  <div class="in-flash"></div>
+  <button id="introSkip" type="button" title="تخطي (Space / Enter / Esc)">تخطي <span>⏭</span></button>
+</div>
 
 <!-- ================= طبقة البناء (Build) ================= -->
 <div id="app">
@@ -25,9 +39,14 @@
     <div class="grow"></div>
 
     <div class="seg">
+      <button id="bWipe" class="danger-btn" title="حذف كل المشروع بعد 3 تأكيدات">🗑<i>حذف الكلي</i></button>
+      <button id="bStorage" title="عرض مصدر التخزين المحلي">💾<i>عرض التخزين</i></button>
+    </div>
+    <div class="seg">
       <button id="bAuto" title="ملف تلقائي للذكاء الاصطناعي حسب القسم"><span data-ic="code"></span><i>تلقائي</i></button>
-      <button id="bSave" title="حفظ المشروع (Ctrl+S)"><span data-ic="save"></span><i>حفظ</i></button>
-      <button id="bLoad" title="تحميل مشروع"><span data-ic="load"></span><i>تحميل</i></button>
+      <button id="bSave" title="حفظ سريع في المتصفح"><span data-ic="save"></span><i>حفظ</i></button>
+      <button id="bProjDown" title="تنزيل المشروع كامل ZIP"><span data-ic="save"></span><i>تحميل المشروع</i></button>
+      <button id="bProjUp" title="رفع مشروع ZIP ومتابعة البناء"><span data-ic="load"></span><i>رفع المشروع</i></button>
     </div>
     <div class="seg">
       <button id="bConvert" title="تحويل المشروع إلى لعبة جاهزة للتوزيع …"><span data-ic="export"></span><i>تحويل إلى لعبة</i></button>
@@ -108,6 +127,7 @@
           <button id="gVis" data-a="vis" title="إظهار/إخفاء في الاختبار (H)"><span class="ico" data-ic="eye"></span><i id="gVisT">إخفاء</i></button>
         </div>
         <div class="gseg">
+          <button id="gParams" title="بارامترات الكائن البرمجي" style="display:none"><span class="ico">⚙</span><i>بارامترات</i></button>
           <button id="gDup" title="نسخ (Ctrl+D)"><span class="ico" data-ic="copy"></span><i>نسخ</i></button>
           <button id="gDel" class="red" title="حذف (Del)"><span class="ico" data-ic="trash"></span><i>حذف</i></button>
         </div>
@@ -115,6 +135,10 @@
       <div id="gzHint" class="gz-hint"></div>
     </div>
 
+    <div id="paramPanel" class="param-panel" hidden>
+      <div class="param-hd"><span id="paramTitle">بارامترات</span><button type="button" id="paramClose" title="إغلاق">✕</button></div>
+      <div id="paramBody" class="param-body"></div>
+    </div>
     <div id="coordPanel" class="coord-panel" hidden>
       <div class="cp-row"><b>X</b><span id="cx">0.000</span></div>
       <div class="cp-row"><b>Y</b><span id="cy">0.000</span></div>
@@ -176,11 +200,19 @@
   </div>
 </div>
 <input type="file" id="fl" accept=".json,.js,.txt" multiple hidden>
+<div id="storageModal" hidden>
+  <div class="storage-box">
+    <div class="storage-hd"><b>التخزين المحلي</b><button type="button" id="storageClose">✕</button></div>
+    <div id="storageBody" class="storage-body"></div>
+  </div>
+</div>
+<input type="file" id="flProj" accept=".zip,application/zip" hidden>
 
 <!-- واجهة الموبايل -->
 <div id="mBar" hidden>
   <button type="button" id="mDockBtn" title="القائمة">☰</button>
   <button type="button" id="mSideBtn" title="المشهد">📋</button>
+  <button type="button" id="mStorageBtn" title="التخزين">💾</button>
   <button type="button" id="mTestBtn" class="go" title="اختبر">▶</button>
 </div>
 <div id="mOverlay" hidden></div>
@@ -191,7 +223,7 @@
     <button type="button" id="mRun">جري</button>
   </div>
 </div>
-<div id="mBuildHint" hidden>إصبع = تدوير · إصبعين = زووم · لمسة = وضع/تحديد</div>
+<div id="mBuildHint" hidden>جويستيك حركة · إصبع تدوير · إصبعين زووم · لمسة تحديد</div>
 
 <script src="three.min.js"></script>
 <script src="jszip.min.js"></script>

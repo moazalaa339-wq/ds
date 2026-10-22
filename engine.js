@@ -85,6 +85,110 @@ game: THREE,scene,camera,time,score,addScore,say,respawn,key,setKey,forcePlayerI
 game.touch: show(list) hide() isDown(id) wasPressed(id) isMobile()`;
 
 
+
+/* ---------- حوارات داخل المحرك (بدل alert/confirm/prompt) ---------- */
+const HawaUI = {
+  _root: null,
+  ensure() {
+    if (this._root) return this._root;
+    let el = document.getElementById('hawaDialog');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'hawaDialog';
+      el.hidden = true;
+      el.innerHTML = `
+        <div class="hd-backdrop"></div>
+        <div class="hd-box" role="dialog" aria-modal="true">
+          <div class="hd-msg" id="hdMsg"></div>
+          <div class="hd-field" id="hdField" hidden>
+            <input type="text" id="hdInput" autocomplete="off" />
+          </div>
+          <div class="hd-actions" id="hdActions"></div>
+        </div>`;
+      document.body.appendChild(el);
+    }
+    this._root = el;
+    return el;
+  },
+  _open(msg, opts) {
+    const el = this.ensure();
+    const msgEl = el.querySelector('#hdMsg');
+    const field = el.querySelector('#hdField');
+    const input = el.querySelector('#hdInput');
+    const actions = el.querySelector('#hdActions');
+    msgEl.textContent = String(msg || '');
+    actions.innerHTML = '';
+    field.hidden = true;
+    el.hidden = false;
+    el.classList.add('on');
+    return { el, msgEl, field, input, actions };
+  },
+  _close() {
+    const el = this.ensure();
+    el.hidden = true;
+    el.classList.remove('on');
+  },
+  alert(msg) {
+    return new Promise(resolve => {
+      const { actions } = this._open(msg);
+      const ok = document.createElement('button');
+      ok.type = 'button';
+      ok.className = 'hd-ok';
+      ok.textContent = 'حسنًا';
+      ok.onclick = () => { this._close(); resolve(); };
+      actions.appendChild(ok);
+      setTimeout(() => ok.focus(), 30);
+    });
+  },
+  confirm(msg) {
+    return new Promise(resolve => {
+      const { actions } = this._open(msg);
+      const cancel = document.createElement('button');
+      cancel.type = 'button';
+      cancel.className = 'hd-cancel';
+      cancel.textContent = 'إلغاء';
+      cancel.onclick = () => { this._close(); resolve(false); };
+      const ok = document.createElement('button');
+      ok.type = 'button';
+      ok.className = 'hd-ok';
+      ok.textContent = 'تأكيد';
+      ok.onclick = () => { this._close(); resolve(true); };
+      actions.appendChild(cancel);
+      actions.appendChild(ok);
+      setTimeout(() => ok.focus(), 30);
+    });
+  },
+  prompt(msg, def) {
+    return new Promise(resolve => {
+      const { field, input, actions } = this._open(msg);
+      field.hidden = false;
+      input.value = def != null ? String(def) : '';
+      const cancel = document.createElement('button');
+      cancel.type = 'button';
+      cancel.className = 'hd-cancel';
+      cancel.textContent = 'إلغاء';
+      cancel.onclick = () => { this._close(); resolve(null); };
+      const ok = document.createElement('button');
+      ok.type = 'button';
+      ok.className = 'hd-ok';
+      ok.textContent = 'موافق';
+      const done = () => { const v = input.value; this._close(); resolve(v); };
+      ok.onclick = done;
+      input.onkeydown = e => {
+        if (e.key === 'Enter') { e.preventDefault(); done(); }
+        if (e.key === 'Escape') { e.preventDefault(); this._close(); resolve(null); }
+      };
+      actions.appendChild(cancel);
+      actions.appendChild(ok);
+      setTimeout(() => { input.focus(); input.select(); }, 30);
+    });
+  }
+};
+// واجهة مختصرة — لا تستخدم window.alert/confirm/prompt
+function uiAlert(msg) { return HawaUI.alert(msg); }
+function uiConfirm(msg) { return HawaUI.confirm(msg); }
+function uiPrompt(msg, def) { return HawaUI.prompt(msg, def); }
+
 function parseParams(code) {
   const o = {}, re = /^\s*\/\/\s*@param\s+(\w+)\s*=\s*(.+?)\s*$/gm; let m;
   while ((m = re.exec(code))) {
@@ -113,7 +217,7 @@ const defOf = id => S.sdefs.find(x => x.id === id);
 
 /* ---------- الحالة ---------- */
 const S = {objs:[], scripts:[], sdefs:[], sel:null, mode:'build', tool:'select', gz:'move', item:'cube', section:'objects',
-  snap:.5, nid:1, sid:1, did:1, dirty:1, err:[], hr:null, fly:false};
+  snap:.5, nid:1, sid:1, did:1, mid:1, dirty:1, err:[], hr:null, fly:false, media:{}, paramOpen:false};
 const OBJ = new Map(), MESH = new Map(), K = {};
 /* مفاتيح افتراضية (موبايل/سكربت) — تتعامل ككيبورد حقيقي لأي نظام يقرأ keyDown */
 const VK = Object.create(null);
@@ -206,6 +310,49 @@ const GM = {
 const OB = {t: new T.Vector3(0, 1, 0), yaw: .8, pitch: .55, dist: 22};
 const dirOf = (y, p) => { const cc = Math.cos(p); return [cc * Math.sin(y), Math.sin(p), cc * Math.cos(y)]; };
 const FLOOR_EPS = .25;
+
+/* ---------- آخر مكان للكاميرا (يُحفظ باستمرار) + حالة الانيميشن الافتتاحي ---------- */
+const LASTCAM_KEY = 'hawa-last-cam';
+const INTRO = {active: !!(typeof document !== 'undefined' && document.getElementById('intro')) && !window.HAWA_PLAY_ONLY, started: false};
+const LAST_CAM = (function () {          // نقرأه فوراً قبل أي شيء يقدر يكتب فوقه
+  try {
+    const c = JSON.parse(localStorage.getItem(LASTCAM_KEY) || 'null');
+    if (c && [c.tx, c.ty, c.tz, c.yaw, c.pitch, c.dist].every(v => Number.isFinite(+v))) return c;
+  } catch (_) {}
+  return null;
+})();
+let _lcTimer = 0;
+function persistCam(now) {
+  if (INTRO.active) return;               // ممنوع نحفظ أوضاع الكاميرا أثناء الانيميشن
+  const w = () => { try { localStorage.setItem(LASTCAM_KEY, JSON.stringify(getBuilderCam())); } catch (_) {} };
+  clearTimeout(_lcTimer);
+  if (now) w(); else _lcTimer = setTimeout(w, 350);
+}
+addEventListener('pagehide', () => persistCam(true));
+addEventListener('beforeunload', () => persistCam(true));
+
+function getBuilderCam() {
+  return {
+    tx: OB.t.x, ty: OB.t.y, tz: OB.t.z,
+    yaw: OB.yaw, pitch: OB.pitch, dist: OB.dist,
+    fly: !!S.fly
+  };
+}
+function applyBuilderCam(c) {
+  if (!c || typeof c !== 'object') return;
+  try {
+    OB.t.set(+c.tx || 0, +c.ty || 0, +c.tz || 0);
+    if (c.yaw != null) OB.yaw = +c.yaw;
+    if (c.pitch != null) OB.pitch = +c.pitch;
+    if (c.dist != null) OB.dist = Math.max(1.5, +c.dist || 22);
+    if (c.fly != null) {
+      S.fly = !!c.fly;
+      try { updModes(); } catch (_) {}
+    }
+    camUpdate();
+  } catch (e) { console.warn('applyBuilderCam', e); }
+}
+
 function camUpdate() {
   if (OB.t.y < 0) OB.t.y = 0;
   const minS = (FLOOR_EPS - OB.t.y) / OB.dist;
@@ -213,6 +360,7 @@ function camUpdate() {
   const d = dirOf(OB.yaw, OB.pitch);
   cam.position.set(OB.t.x + OB.dist * d[0], OB.t.y + OB.dist * d[1], OB.t.z + OB.dist * d[2]);
   cam.lookAt(OB.t); cam.updateMatrixWorld(); S.dirty = 1;
+  persistCam();
 }
 function lookAround(dx, dy) {
   const cp = cam.position.clone();
@@ -389,7 +537,12 @@ function add(type, pos, ex) {
 function placeNow(info, pos) {
   if (info.bt === 'sobj') {
     const d = info.def; if (!d) { tip('⚠ الكائن البرمجي غير موجود'); return null; }
-    return add('sobj', pos, {def: d.id, name: d.name, p: parseParams(d.code), base: !!info.base, scl: [...info.sc]});
+    // بارامترات مستقلة للكائن الموضوع (نسخة) — الكود يبقى من الملف الأم
+    const p = {};
+    for (const e of schemaOf(d.code)) p[e.key] = e.value !== undefined ? JSON.parse(JSON.stringify(e.value)) : e.value;
+    const parsed = parseParams(d.code);
+    for (const k of Object.keys(parsed)) if (p[k] === undefined) p[k] = parsed[k];
+    return add('sobj', pos, {def: d.id, name: d.name, p: JSON.parse(JSON.stringify(p)), base: !!info.base, scl: [...info.sc]});
   }
   if (info.bt === 'online_spawn') {
     if (countOnlineSpawns() >= 3) { tip('⚠ الحد الأقصى 3 نقاط أونلاين'); return null; }
@@ -547,7 +700,7 @@ AXC.forEach((c, i) => {   // أسهم النقل
   const g = new T.Group(), mt = mkm(c);
   const sh = new T.Mesh(new T.CylinderGeometry(.04, .04, 1.2, 8), mt); sh.position.y = .6;
   const cp = new T.Mesh(new T.ConeGeometry(.14, .4, 12), mt); cp.position.y = 1.4;
-  const hit = new T.Mesh(new T.CylinderGeometry(.18, .18, 1.7, 8), invis()); hit.position.y = .85;
+  const hit = new T.Mesh(new T.CylinderGeometry(.32, .32, 1.9, 10), invis()); hit.position.y = .9;
   [sh, cp].forEach(x => x.renderOrder = 999);
   g.add(sh, cp, hit); if (i === 0) g.rotation.z = -Math.PI / 2; if (i === 2) g.rotation.x = Math.PI / 2;
   GZ.move.add(g); HIT.push({m: hit, ax: i, mode: 'move', vis: [sh, cp]});
@@ -555,7 +708,7 @@ AXC.forEach((c, i) => {   // أسهم النقل
 AXC.forEach((c, i) => {   // حلقات التدوير
   const mt = mkm(c), g = new T.Group();
   const ring = new T.Mesh(new T.TorusGeometry(1.2, .045, 10, 80), mt);
-  const hit = new T.Mesh(new T.TorusGeometry(1.2, .16, 8, 48), invis());
+  const hit = new T.Mesh(new T.TorusGeometry(1.2, .28, 8, 48), invis());
   ring.renderOrder = 999; hit.renderOrder = 999;
   g.add(ring, hit); if (i === 0) g.rotation.y = Math.PI / 2; if (i === 1) g.rotation.x = Math.PI / 2;
   GZ.rot.add(g); HIT.push({m: hit, ax: i, mode: 'rotate', vis: [ring]});
@@ -564,7 +717,7 @@ AXC.forEach((c, i) => {   // مقابض الحجم
   const g = new T.Group(), mt = mkm(c);
   const sh = new T.Mesh(new T.CylinderGeometry(.03, .03, 1.2, 8), mt); sh.position.y = .6;
   const cp = new T.Mesh(new T.BoxGeometry(.26, .26, .26), mt); cp.position.y = 1.3;
-  const hit = new T.Mesh(new T.CylinderGeometry(.18, .18, 1.7, 8), invis()); hit.position.y = .85;
+  const hit = new T.Mesh(new T.CylinderGeometry(.32, .32, 1.9, 10), invis()); hit.position.y = .9;
   g.add(sh, cp, hit); if (i === 0) g.rotation.z = -Math.PI / 2; if (i === 2) g.rotation.x = Math.PI / 2;
   GZ.scl.add(g); HIT.push({m: hit, ax: i, mode: 'scale', vis: [sh, cp]});
 });
@@ -586,12 +739,22 @@ function setGz(m) {
   $('#gzHint').textContent = {move: 'اسحب السهم لتحريك الكائن على المحور', rotate: 'اسحب الحلقة لتدوير الكائن حول محورها', scale: 'اسحب المربع لتغيير الحجم'}[m];
   S.dirty = 1;
 }
+function updGzParamsBtn() {
+  const b = document.getElementById('gParams');
+  if (!b) return;
+  const o = OBJ.get(S.sel);
+  const show = !!(o && o.type === 'sobj' && S.mode === 'build');
+  b.style.display = show ? '' : 'none';
+  b.classList.toggle('on', !!S.paramOpen);
+}
 function ugizmo() {
+  try { updGzParamsBtn(); } catch (_) {}
+
   const o = OBJ.get(S.sel), g = $('#gz');
   if (!o || S.mode !== 'build') { gizmo.visible = false; g.hidden = true; return; }
   const cy = o.base ? o.pos[1] + o.scl[1] / 2 : o.pos[1];
   g.hidden = false; gizmo.visible = true; gizmo.position.set(o.pos[0], cy, o.pos[2]);
-  const gzMul = (typeof MOB !== 'undefined' && MOB.on) ? .13 : .22;
+  const gzMul = (typeof MOB !== 'undefined' && MOB.on) ? .32 : .22;
   gizmo.scale.setScalar(cam.position.distanceTo(gizmo.position) * gzMul); gizmo.updateMatrixWorld(true);
   const v = new T.Vector3(o.pos[0], cy + Math.max(.6, o.scl[1] / 2) + .5, o.pos[2]).project(cam);
   if (v.z > 1) { g.hidden = true; return; }
@@ -640,7 +803,8 @@ function doDrag(e) {
 function selHelper() {
   if (SELH) { scene.remove(SELH); SELH = null; }
   const m = S.sel != null && MESH.get(S.sel);
-  if (m && S.mode === 'build') {
+  // على الموبايل المستطيل الأخضر بيبوّظ المنظر — نعتمد على المحاور فقط
+  if (m && S.mode === 'build' && !(typeof MOB !== 'undefined' && MOB.on)) {
     SELH = new T.BoxHelper(m, 0x39ff7a); SELH.material.depthTest = false; SELH.renderOrder = 998;
     scene.add(SELH);
   }
@@ -653,7 +817,7 @@ function pickObj(rc) {
   for (const x of rc.intersectObjects(allMeshes(), true)) { let m = x.object; while (m && m.userData.id == null) m = m.parent; if (m) return m.userData.id; }
   return null;
 }
-function sel(id) { S.sel = id; inspect(); hierMark(); selHelper(); }
+function sel(id) { S.sel = id; inspect(); hierMark(); selHelper(); try { updGzParamsBtn(); if (S.paramOpen) openParamPanel(true); else closeParamPanel(); } catch (_) {} }
 function click(e) {
   const rc = ray(e), r = rc.ray;
   if (S.pick) {                         // وضع الكائن: اضغط أي كائن → يتحدد ويظهر إحداثياته
@@ -939,6 +1103,8 @@ function packGameData(name) {
     objs,
     scripts,
     sdefs,
+    media: JSON.parse(JSON.stringify(S.media || {})),
+    mid: S.mid || 1,
     objectCodes: objs.filter(o => o.type === 'sobj').map(o => {
       const d = sdefs.find(x => x.id === o.def);
       return { id: o.id, name: o.name, defId: o.def, defName: d && d.name, code: d && d.code, params: o.p, scripts: o.scripts };
@@ -982,11 +1148,11 @@ async function convertToGame() {
   }
   const nOn = countOnlineSpawns();
   if (nOn < 1) {
-    if (!confirm('مفيش نقاط أونلاين. هيتصدر اللعبة للأوفلاين فقط. تكمل؟')) return;
+    if (!await uiConfirm('مفيش نقاط أونلاين. هيتصدر اللعبة للأوفلاين فقط. تكمل؟')) return;
   } else if (nOn < 3) {
-    if (!confirm('عندك ' + nOn + ' نقطة أونلاين من 3. تكمل التحويل؟')) return;
+    if (!await uiConfirm('عندك ' + nOn + ' نقطة أونلاين من 3. تكمل التحويل؟')) return;
   }
-  const name = prompt('اسم اللعبة؟', 'لعبتي');
+  const name = await uiPrompt('اسم اللعبة؟', 'لعبتي');
   if (!name || !name.trim()) return tip('تم الإلغاء');
   tip('⏳ جاري تجهيز اللعبة الكاملة...');
 
@@ -1039,9 +1205,52 @@ async function convertToGame() {
 
     if (missing.length) {
       console.warn('ملفات ناقصة في الـ ZIP:', missing);
-      if (!confirm('بعض ملفات التشغيل مش اتلقطت (' + missing.join(', ') + ').\nهيتصدر الـ ZIP برضو. تكمل؟\n\nنصيحة: افتح المحرك عن طريق سيرفر محلي (مش file://) عشان كل الملفات تتحط.')) {
+      if (!await uiConfirm('بعض ملفات التشغيل مش اتلقطت (' + missing.join(', ') + ').\nهيتصدر الـ ZIP برضو. تكمل؟\n\nنصيحة: افتح المحرك عن طريق سيرفر محلي (مش file://) عشان كل الملفات تتحط.')) {
         tip('تم الإلغاء');
         return;
+      }
+    }
+
+    
+    // تضمين كل الوسائط المرفوعة في البارامترات
+    const mediaMap = Object.assign({}, S.media || {}, data.media || {});
+    const used = collectMediaRefs(data);
+    let mediaCount = 0;
+    for (const id of used) {
+      const m = mediaMap[id];
+      if (!m || !m.data) continue;
+      try {
+        const dataUrl = String(m.data);
+        const comma = dataUrl.indexOf(',');
+        const meta = comma > 0 ? dataUrl.slice(0, comma) : '';
+        const b64 = comma > 0 ? dataUrl.slice(comma + 1) : dataUrl;
+        const bin = atob(b64);
+        const arr = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+        const safe = String(m.name || id).replace(/[^\w\u0600-\u06FF.\-]+/g, '_');
+        const path = 'assets/' + id + '_' + safe;
+        zip.file(path, arr);
+        if (!included.includes(path)) included.push(path);
+        mediaCount++;
+      } catch (err) { console.warn('media pack', id, err); }
+    }
+    // أي data: مباشرة في البارامترات
+    for (const o of (data.objs || [])) {
+      if (!o.p) continue;
+      for (const [k, v] of Object.entries(o.p)) {
+        if (typeof v === 'string' && v.startsWith('data:') && v.length > 32) {
+          try {
+            const comma = v.indexOf(',');
+            const b64 = v.slice(comma + 1);
+            const bin = atob(b64);
+            const arr = new Uint8Array(bin.length);
+            for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+            const path = 'assets/inline_' + o.id + '_' + k + '.bin';
+            zip.file(path, arr);
+            if (!included.includes(path)) included.push(path);
+            mediaCount++;
+          } catch (_) {}
+        }
       }
     }
 
@@ -1057,10 +1266,21 @@ async function convertToGame() {
   } catch (e) {
     console.error(e);
     tip('⚠ فشل التصدير: ' + (e.message || e));
-    alert('فشل تحويل اللعبة:\n' + (e.message || e));
+    await uiAlert('فشل تحويل اللعبة:\n' + (e.message || e));
   }
 }
 $('#bConvert').onclick = convertToGame;
+(function bindParamsGear() {
+  const b = document.getElementById('gParams');
+  if (b) b.onclick = e => {
+    e.preventDefault(); e.stopPropagation();
+    const o = OBJ.get(S.sel);
+    if (!o || o.type !== 'sobj') return;
+    if (S.paramOpen) closeParamPanel(); else openParamPanel(true);
+    try { updGzParamsBtn(); } catch (_) {}
+  };
+  try { bindParamPanel(); } catch (_) {}
+})();
 $('#bOpenGame').onclick = () => { window.open('game.html', '_blank'); };
 S.showCoord = false; S.pick = false;
 S.boxdel = null; // {x0,y0,x1,y1} أثناء سحب الحذف المحيطي
@@ -1135,15 +1355,109 @@ function hier() {
 function hierMark() { $$('#hier [data-id]').forEach(d => d.classList.toggle('on', +d.dataset.id === S.sel)); }
 $('#hier').onclick = e => { const d = e.target.closest('[data-id]'); if (d) sel(+d.dataset.id); };
 $('#hq').oninput = hier;
-function paramRow(o, k, label, e) {
-  const v = o.p[k], t = e && e.type;
-  let inp;
-  if (t === 'boolean' || typeof v === 'boolean') inp = `<input type="checkbox" data-p="${k}" ${v ? 'checked' : ''}>`;
-  else if (t === 'color' || /^#[0-9a-f]{6}$/i.test(v)) inp = `<input type="color" data-p="${k}" value="${/^#[0-9a-f]{6}$/i.test(v) ? v : '#000000'}" style="flex:1">`;
-  else if (t === 'text' || typeof v === 'string') inp = `<input type="text" data-p="${k}" value="${esc(v ?? '')}" style="flex:1">`;
-  else inp = `<input type="number" data-p="${k}" value="${v}" step="${(e && e.step) || .5}"${e && e.min != null ? ` min="${e.min}"` : ''}${e && e.max != null ? ` max="${e.max}"` : ''} style="flex:1">`;
-  return `<div class="r"><b class="pl">${esc(label || PL[k] || k)}</b>${inp}</div>`;
+function mediaLabel(v) {
+  if (v == null || v === '') return 'لا يوجد';
+  const s = String(v);
+  if (s.startsWith('media:')) {
+    const id = s.slice(6);
+    const m = S.media && S.media[id];
+    return m ? (m.name || id) : id;
+  }
+  if (s.startsWith('data:')) return 'مرفق مضمّن';
+  if (s.length > 40) return s.slice(0, 28) + '…';
+  return s;
 }
+function paramAccept(t) {
+  t = String(t || '').toLowerCase();
+  if (t === 'audio' || t === 'sound') return 'audio/*';
+  if (t === 'image' || t === 'img' || t === 'texture') return 'image/*';
+  if (t === 'video') return 'video/*';
+  if (t === 'file') return '*/*';
+  return '';
+}
+function isMediaType(t) {
+  t = String(t || '').toLowerCase();
+  return t === 'audio' || t === 'sound' || t === 'image' || t === 'img' || t === 'texture' || t === 'video' || t === 'file' || t === 'media';
+}
+function paramRow(o, k, label, e) {
+  const v = o.p[k], ty = (e && e.type) || '';
+  let inp;
+  if (isMediaType(ty) || (typeof v === 'string' && (String(v).startsWith('media:') || String(v).startsWith('data:')))) {
+    const acc = paramAccept(ty) || '*/*';
+    inp = `<span class="media-name" title="${esc(mediaLabel(v))}">${esc(mediaLabel(v))}</span>`
+      + `<label class="media-btn">رفع<input type="file" accept="${acc}" data-p-file="${k}" hidden></label>`
+      + (v ? `<button type="button" class="media-clr" data-p-clr="${k}" title="مسح">✕</button>` : '');
+  } else if (ty === 'boolean' || typeof v === 'boolean') {
+    inp = `<input type="checkbox" data-p="${k}" ${v ? 'checked' : ''}>`;
+  } else if (ty === 'color' || (typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v))) {
+    inp = `<input type="color" data-p="${k}" value="${(typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v)) ? v : '#000000'}" style="flex:1">`;
+  } else if (ty === 'text' || ty === 'string' || (typeof v === 'string' && !isMediaType(ty))) {
+    inp = `<input type="text" data-p="${k}" value="${esc(v ?? '')}" style="flex:1">`;
+  } else {
+    inp = `<input type="number" data-p="${k}" value="${v}" step="${(e && e.step) || .5}"${e && e.min != null ? ` min="${e.min}"` : ''}${e && e.max != null ? ` max="${e.max}"` : ''} style="flex:1">`;
+  }
+  return `<div class="r param-row"><b class="pl">${esc(label || (e && e.label) || PL[k] || k)}</b>${inp}</div>`;
+}
+function applyParamValue(o, key, raw, schemaEntry) {
+  if (!o.p) o.p = {};
+  const e = schemaEntry || null;
+  const ty = e && e.type;
+  if (ty === 'boolean' || typeof o.p[key] === 'boolean') o.p[key] = !!raw;
+  else if (ty === 'color') o.p[key] = String(raw);
+  else if (ty === 'text' || ty === 'string' || isMediaType(ty)) o.p[key] = raw;
+  else if (typeof o.p[key] === 'string') o.p[key] = String(raw);
+  else {
+    const n = +raw;
+    o.p[key] = isNaN(n) ? raw : n;
+  }
+  // تحديث فوري للمعاينة / الضوء
+  if (o.type === 'light') {
+    const l = MESH.get(o.id) && MESH.get(o.id).children[0];
+    if (l) { l.intensity = o.p.intensity; l.distance = o.p.range; }
+  }
+  if (o.type === 'sobj') {
+    clearTimeout(prevT);
+    prevT = setTimeout(() => { try { refreshPreview(o); } catch (_) {} }, 120);
+  }
+  chg();
+}
+function storeMediaFile(file, cb) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    const id = 'm' + (S.mid++);
+    if (!S.media) S.media = {};
+    S.media[id] = { name: file.name || id, mime: file.type || 'application/octet-stream', data: reader.result };
+    cb('media:' + id);
+  };
+  reader.onerror = () => cb(null);
+  reader.readAsDataURL(file);
+}
+function resolveParamValue(v) {
+  if (typeof v === 'string' && v.startsWith('media:')) {
+    const m = S.media && S.media[v.slice(6)];
+    return m && m.data ? m.data : '';
+  }
+  return v;
+}
+function resolvedParams(p) {
+  const out = {};
+  if (!p) return out;
+  for (const k of Object.keys(p)) out[k] = resolveParamValue(p[k]);
+  return out;
+}
+function collectMediaRefs(data) {
+  const ids = new Set();
+  const scan = (v) => {
+    if (v == null) return;
+    if (typeof v === 'string') {
+      if (v.startsWith('media:')) ids.add(v.slice(6));
+    } else if (Array.isArray(v)) v.forEach(scan);
+    else if (typeof v === 'object') Object.values(v).forEach(scan);
+  };
+  scan(data);
+  return ids;
+}
+
 /* ---------- الكائنات المبرمجة: علامة حمرا + زر "عرض الملفات المتأثرة" ---------- */
 const PM = new Map();      // id -> {h: BoxHelper أحمر, sp: لافتة "مبرمج"}
 let refNames = null, mkc = 0, pmTex = null;
@@ -1176,6 +1490,84 @@ function syncMarks() {
 const _pb = new T.Box3();
 function markUpd() {
 }
+
+/* ---------- ترس بارامترات الكائن البرمجي (نسخة مستقلة عن الملف الأم) ---------- */
+function openParamPanel(force) {
+  const o = OBJ.get(S.sel);
+  if (!o || o.type !== 'sobj') { closeParamPanel(); return; }
+  const d = defOf(o.def);
+  if (!d) { closeParamPanel(); return; }
+  S.paramOpen = force != null ? !!force : true;
+  const panel = document.getElementById('paramPanel');
+  if (!panel) return;
+  panel.hidden = !S.paramOpen;
+  if (!S.paramOpen) return;
+  fillDefaults(o); // أضف مفاتيح جديدة من الأم فقط لو ناقصة — بدون مسح قيم الكائن
+  syncParamPanel();
+}
+function closeParamPanel() {
+  S.paramOpen = false;
+  const panel = document.getElementById('paramPanel');
+  if (panel) panel.hidden = true;
+}
+function syncParamPanel() {
+  const panel = document.getElementById('paramPanel');
+  const body = document.getElementById('paramBody');
+  const title = document.getElementById('paramTitle');
+  if (!panel || !body) return;
+  const o = OBJ.get(S.sel);
+  if (!o || o.type !== 'sobj' || !S.paramOpen) { panel.hidden = true; return; }
+  const d = defOf(o.def);
+  if (!d) { panel.hidden = true; return; }
+  panel.hidden = false;
+  if (title) title.textContent = (o.name || d.name || 'كائن') + ' · بارامترات';
+  const sch = schemaOf(d.code);
+  if (!sch.length) {
+    body.innerHTML = '<p class="mut small">لا يوجد defineParams في الملف الأم. الكود مشترك من الأم؛ البارامترات تظهر هنا لما تُعرَّف.</p>';
+    return;
+  }
+  body.innerHTML = sch.map(e => paramRow(o, e.key, e.label || e.key, e)).join('')
+    + '<p class="mut small" style="margin-top:8px">التغيير هنا على هذا الكائن فقط. الملف الأم لا يتأثر. تعديل كود الأم يطبّق على كل الكائنات التابعة.</p>';
+}
+function bindParamPanel() {
+  const panel = document.getElementById('paramPanel');
+  if (!panel || panel._bound) return;
+  panel._bound = true;
+  const body = document.getElementById('paramBody');
+  const close = document.getElementById('paramClose');
+  if (close) close.onclick = () => closeParamPanel();
+  if (!body) return;
+  body.addEventListener('input', e => {
+    const t = e.target, o = OBJ.get(S.sel); if (!o || !t.dataset.p) return;
+    const d = defOf(o.def);
+    const sch = d ? schemaOf(d.code).find(x => x.key === t.dataset.p) : null;
+    applyParamValue(o, t.dataset.p, t.type === 'checkbox' ? t.checked : t.value, sch);
+  });
+  body.addEventListener('change', e => {
+    const t = e.target, o = OBJ.get(S.sel); if (!o || !t) return;
+    const key = t.dataset.pFile || t.getAttribute('data-p-file');
+    if (key == null) return;
+    const file = t.files && t.files[0]; if (!file) return;
+    storeMediaFile(file, ref => {
+      if (!ref) return;
+      const d = defOf(o.def);
+      const sch = d ? schemaOf(d.code).find(x => x.key === key) : null;
+      applyParamValue(o, key, ref, sch);
+      syncParamPanel();
+      try { inspect(); } catch (_) {}
+    });
+  });
+  body.addEventListener('click', e => {
+    const b = e.target.closest('[data-p-clr]'); if (!b) return;
+    const o = OBJ.get(S.sel); if (!o) return;
+    const key = b.getAttribute('data-p-clr');
+    o.p[key] = '';
+    applyParamValue(o, key, '', null);
+    syncParamPanel();
+    try { inspect(); } catch (_) {}
+  });
+}
+
 function inspect() {
   const o = OBJ.get(S.sel), el = $('#ins');
   if (o && o.type === 'sobj') { const d = defOf(o.def); if (d && !isBig(d.code)) { const df = parseParams(d.code); for (const k in df) if (!(k in o.p)) o.p[k] = df[k]; } }
@@ -1216,7 +1608,12 @@ function refreshTf() {
 $('#ins').addEventListener('input', e => {
   const t = e.target, o = OBJ.get(S.sel); if (!o) return;
   const k = t.dataset.k, p = t.dataset.p;
-  if (p) { const pv = o.p[p]; o.p[p] = typeof pv === 'boolean' ? t.checked : typeof pv === 'string' ? t.value : +t.value; if (o.type === 'light') { const l = MESH.get(o.id).children[0]; l.intensity = o.p.intensity; l.distance = o.p.range; } if (o.type === 'sobj') { clearTimeout(prevT); prevT = setTimeout(() => refreshPreview(o), 350); } }
+  if (p) {
+    const d = o.type === 'sobj' ? defOf(o.def) : null;
+    const sch = d ? schemaOf(d.code).find(x => x.key === p) : null;
+    applyParamValue(o, p, t.type === 'checkbox' ? t.checked : t.value, sch);
+    try { syncParamPanel(); } catch (_) {}
+  }
   else if (k === 'pos' || k === 'rot' || k === 'scl') { const v = parseFloat(t.value); if (!isNaN(v)) { o[k][+t.dataset.i] = v; tf(o); selHelper(); } }
   else if (k === 'color') { o.color = t.value; recolor(o); }
   else if (k === 'solid') o.solid = t.checked;
@@ -1224,14 +1621,35 @@ $('#ins').addEventListener('input', e => {
   chg();
 });
 $('#ins').addEventListener('change', e => {
-  const o = OBJ.get(S.sel); if (!o) return;
-  if (e.target.dataset.k === 'hidden') { o.hidden = e.target.checked; look(o); refreshPreview(o); hier(); updVis(); selHelper(); chg(); }
-  if (e.target.id === 'addsc' && e.target.value) { o.scripts.push(+e.target.value); inspect(); chg(); }
+  const t = e.target, o = OBJ.get(S.sel); if (!o || !t) return;
+  if (t.dataset.pFile != null || t.getAttribute('data-p-file') != null) {
+    const key = t.dataset.pFile || t.getAttribute('data-p-file');
+    const file = t.files && t.files[0]; if (!file) return;
+    storeMediaFile(file, ref => {
+      if (!ref) return;
+      const d = o.type === 'sobj' ? defOf(o.def) : null;
+      const sch = d ? schemaOf(d.code).find(x => x.key === key) : null;
+      applyParamValue(o, key, ref, sch);
+      inspect();
+      try { syncParamPanel(); } catch (_) {}
+    });
+    return;
+  }
+  if (t.dataset.k === 'hidden') { o.hidden = t.checked; look(o); refreshPreview(o); hier(); updVis(); selHelper(); chg(); }
+  if (t.id === 'addsc' && t.value) { o.scripts.push(+t.value); inspect(); chg(); }
 });
 $('#ins').addEventListener('click', e => {
   const ff = e.target.closest('.ff'); if (ff) { openEd(+ff.dataset.fid, ff.dataset.fk === 'sobj' ? 'sobj' : 'script'); return; }
   const o = OBJ.get(S.sel), b = e.target.closest('button'); if (!o || !b) return;
   if (b.dataset.ff) { S.ffOpen = S.ffOpen === o.id ? null : o.id; inspect(); return; }
+  if (b.dataset.pClr || b.getAttribute('data-p-clr')) {
+    const key = b.dataset.pClr || b.getAttribute('data-p-clr');
+    o.p[key] = '';
+    applyParamValue(o, key, '', null);
+    inspect();
+    try { syncParamPanel(); } catch (_) {}
+    return;
+  }
   if (b.dataset.rm) { o.scripts = o.scripts.filter(i => i !== +b.dataset.rm); inspect(); chg(); }
   else if (b.dataset.a) act(b.dataset.a);
 });
@@ -1259,7 +1677,7 @@ function pList() {
       </div></div>`;
   }).join('') || '<p class="mut small" style="grid-column:1/-1">مفيش ملفات برمجة. اضغط ＋ ملف أو ⬆ رفع.</p>';
 }
-$('#pList').onclick = e => {
+$('#pList').onclick = async e => {
   const t = e.target.closest('button');
   if (t) {
     const id = +(t.dataset.tg || t.dataset.ed || t.dataset.dl);
@@ -1272,7 +1690,7 @@ $('#pList').onclick = e => {
     } else if (t.dataset.ed != null) {
       openEd(id, 'script');
     } else if (t.dataset.dl != null) {
-      if (!confirm('حذف الملف؟')) return;
+      if (!await uiConfirm('حذف الملف؟')) return;
       S.scripts = S.scripts.filter(x => +x.id !== id);
       S.objs.forEach(o => { o.scripts = (o.scripts || []).filter(i => +i !== id); });
       pList(); inspect(); chg();
@@ -1317,7 +1735,7 @@ function openEd(id, k) {
   try { const sm = document.getElementById('edSaveMsg'); if (sm) { sm.className = ''; sm.textContent = ''; } } catch (e) {}
   try { if (ta) ta.focus(); } catch (e) {}
 }
-function saveEd() {
+async function saveEd() {
   const flash = (msg, isErr) => {
     try {
       const el = document.getElementById('edSaveMsg');
@@ -1348,6 +1766,7 @@ function saveEd() {
     const newCode = ta ? String(ta.value || '') : (s.code || '');
     s.name = newName;
     s.code = newCode;
+    try { if (edK === 'sobj') SCH.clear(); } catch (_) {}
     if (edK === 'sobj') {
       for (const o of S.objs) {
         if (o.type === 'sobj' && +o.def === +s.id) {
@@ -1382,9 +1801,9 @@ function saveEd() {
   }
 }
 function closeEd() { showEd(false); }
-function deleteEd() {
+async function deleteEd() {
   if (edI == null) return;
-  if (!confirm('حذف الملف؟')) return;
+  if (!await uiConfirm('حذف الملف؟')) return;
   const id = +edI;
   if (edK === 'sobj') {
     try { invalidateGhostCache(id); } catch (e) {}
@@ -1400,9 +1819,9 @@ function deleteEd() {
   chg();
   tip('تم حذف الملف');
 }
-window.__hawaSaveEd = function () { try { return saveEd(); } catch (e) { console.error(e); alert('خطأ في الحفظ: ' + (e && e.message || e)); return false; } };
+window.__hawaSaveEd = async function () { try { return await saveEd(); } catch (e) { console.error(e); await uiAlert('خطأ في الحفظ: ' + (e && e.message || e)); return false; } };
 window.__hawaCloseEd = function () { try { closeEd(); } catch (e) { console.error(e); } };
-window.__hawaDelEd = function () { try { deleteEd(); } catch (e) { console.error(e); alert('خطأ في الحذف: ' + (e && e.message || e)); } };
+window.__hawaDelEd = async function () { try { await deleteEd(); } catch (e) { console.error(e); await uiAlert('خطأ في الحذف: ' + (e && e.message || e)); } };
 (function bindEd() {
   const s = $('#edS'), x = $('#edX'), d = $('#edD'), t = $('#edT'), ed = $('#ed');
   const bindClick = (el, fn) => {
@@ -1470,7 +1889,7 @@ function sList() {
       </div></div>`;
   }).join('') || '<p class="mut small" style="grid-column:1/-1">مفيش كائنات برمجية. اضغط ＋ كائن أو ⬆ رفع.</p>';
 }
-$('#sList').onclick = e => {
+$('#sList').onclick = async e => {
   const t = e.target.closest('button');
   if (!t) {
     const c = e.target.closest('[data-d]');
@@ -1489,7 +1908,7 @@ $('#sList').onclick = e => {
   }
   if (t.dataset.dd != null) {
     const id = +t.dataset.dd;
-    if (!confirm('حذف الكائن البرمجي وكل نسخه في المشهد؟')) return;
+    if (!await uiConfirm('حذف الكائن البرمجي وكل نسخه في المشهد؟')) return;
     try { invalidateGhostCache(id); } catch (e) {}
     S.sdefs = S.sdefs.filter(x => +x.id !== id);
     S.objs.filter(o => +o.def === id).forEach(o => delObj(o.id));
@@ -1505,7 +1924,355 @@ if (_sNew) _sNew.onclick = () => {
 if (_sUp) _sUp.onclick = () => { const fl = $('#fl'); if (fl) { fl.dataset.m = 'sobj'; fl.click(); } };
 
 /* ---------- حفظ / تحميل / تلقائي ---------- */
-function save() { try { localStorage.setItem('hawa2', JSON.stringify({objs: S.objs, scripts: S.scripts, sdefs: S.sdefs, nid: S.nid, sid: S.sid, did: S.did})); } catch (e) {} }
+
+/* ---------- تخزين كلي: مجلد كامل (مشروع + وسائط ملفات حقيقية) ---------- */
+const StoreFS = {
+  dbName: 'hawa_fs_v1',
+  storeName: 'handles',
+  handle: null,
+  mode: 'local',
+  label: 'متصفح (localStorage)',
+  async _idb() {
+    return new Promise((resolve, reject) => {
+      const r = indexedDB.open(this.dbName, 1);
+      r.onupgradeneeded = () => {
+        const db = r.result;
+        if (!db.objectStoreNames.contains(this.storeName)) db.createObjectStore(this.storeName);
+      };
+      r.onsuccess = () => resolve(r.result);
+      r.onerror = () => reject(r.error);
+    });
+  },
+  async _idbSet(key, val) {
+    const db = await this._idb();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(this.storeName, 'readwrite');
+      tx.objectStore(this.storeName).put(val, key);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  },
+  async _idbGet(key) {
+    const db = await this._idb();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(this.storeName, 'readonly');
+      const q = tx.objectStore(this.storeName).get(key);
+      q.onsuccess = () => resolve(q.result);
+      q.onerror = () => reject(q.error);
+    });
+  },
+  supportsFolder() {
+    return typeof window.showDirectoryPicker === 'function';
+  },
+  async init() {
+    this.handle = null;
+    this.mode = 'none';
+    this.label = 'لم يُحدَّد';
+    if (!this.supportsFolder()) {
+      this.label = 'المتصفح لا يدعم مجلدات';
+      return false;
+    }
+    try {
+      const h = await this._idbGet('dir');
+      if (h) {
+        const perm = await h.queryPermission({ mode: 'readwrite' });
+        if (perm === 'granted' || (perm === 'prompt' && (await h.requestPermission({ mode: 'readwrite' })) === 'granted')) {
+          this.handle = h;
+          this.mode = 'folder';
+          this.label = 'مجلد: ' + (h.name || 'جهاز');
+          try { localStorage.setItem('hawa2-store-mode', 'folder'); } catch (_) {}
+          return true;
+        }
+      }
+    } catch (e) { console.warn('StoreFS init', e); }
+    return false;
+  },
+  snapshot() {
+    if (typeof packProjectSnapshot === 'function') return packProjectSnapshot('autosave');
+    return {
+      format: 'hawa-project-v3',
+      objs: S.objs, scripts: S.scripts, sdefs: S.sdefs,
+      media: S.media || {}, nid: S.nid, sid: S.sid, did: S.did, mid: S.mid || 1
+    };
+  },
+  _safeName(name, id) {
+    const base = String(name || id || 'file').replace(/[^\w\u0600-\u06FF.\-]+/g, '_');
+    return (base || 'file').slice(0, 80);
+  },
+  _dataUrlToBytes(dataUrl) {
+    const s = String(dataUrl || '');
+    const comma = s.indexOf(',');
+    const b64 = comma > 0 ? s.slice(comma + 1) : s;
+    const bin = atob(b64);
+    const arr = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    return arr;
+  },
+  _bytesToDataUrl(bytes, mime) {
+    let bin = '';
+    const arr = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+    const chunk = 0x8000;
+    for (let i = 0; i < arr.length; i += chunk) {
+      bin += String.fromCharCode.apply(null, arr.subarray(i, i + chunk));
+    }
+    return 'data:' + (mime || 'application/octet-stream') + ';base64,' + btoa(bin);
+  },
+  async _ensureDir(parent, name) {
+    return parent.getDirectoryHandle(name, { create: true });
+  },
+  async _writeFile(dirHandle, name, content) {
+    const fh = await dirHandle.getFileHandle(name, { create: true });
+    const w = await fh.createWritable();
+    await w.write(content);
+    await w.close();
+  },
+  async _readFileText(dirHandle, name) {
+    const fh = await dirHandle.getFileHandle(name);
+    const file = await fh.getFile();
+    return file.text();
+  },
+  async _readFileBytes(dirHandle, name) {
+    const fh = await dirHandle.getFileHandle(name);
+    const file = await fh.getFile();
+    return new Uint8Array(await file.arrayBuffer());
+  },
+  /** حفظ كلي في المجلد: JSON منطقي + ملفات وسائط حقيقية + ملفات سكربت */
+  async writeFolder(data) {
+    if (!this.handle) return false;
+    const root = this.handle;
+    const mediaDir = await this._ensureDir(root, 'media');
+    const scriptsDir = await this._ensureDir(root, 'scripts');
+    const sdefsDir = await this._ensureDir(root, 'sdefs');
+
+    const mediaIndex = {};
+    const media = (data && data.media) || S.media || {};
+    for (const id of Object.keys(media)) {
+      const m = media[id];
+      if (!m) continue;
+      const fname = id + '_' + this._safeName(m.name, id);
+      mediaIndex[id] = { name: m.name || fname, mime: m.mime || 'application/octet-stream', file: 'media/' + fname };
+      try {
+        if (m.data && String(m.data).startsWith('data:')) {
+          const bytes = this._dataUrlToBytes(m.data);
+          await this._writeFile(mediaDir, fname, bytes);
+        }
+      } catch (e) { console.warn('media write', id, e); }
+    }
+
+    // بارامترات فيها data: مباشرة → ملفات
+    const objs = JSON.parse(JSON.stringify((data && data.objs) || S.objs || []));
+    for (const o of objs) {
+      if (!o.p) continue;
+      for (const k of Object.keys(o.p)) {
+        const v = o.p[k];
+        if (typeof v === 'string' && v.startsWith('data:') && v.length > 64) {
+          const mid = 'inline_' + o.id + '_' + k;
+          const fname = mid + '.bin';
+          try {
+            await this._writeFile(mediaDir, fname, this._dataUrlToBytes(v));
+            mediaIndex[mid] = { name: fname, mime: 'application/octet-stream', file: 'media/' + fname };
+            o.p[k] = 'media:' + mid;
+          } catch (_) {}
+        }
+      }
+    }
+
+    const scripts = (data && data.scripts) || S.scripts || [];
+    for (const s of scripts) {
+      try {
+        const fname = this._safeName(s.name || ('script_' + s.id), s.id) + (/\.js$/i.test(s.name || '') ? '' : '.js');
+        await this._writeFile(scriptsDir, fname, s.code || '');
+      } catch (e) { console.warn('script write', e); }
+    }
+    const sdefs = (data && data.sdefs) || S.sdefs || [];
+    for (const d of sdefs) {
+      try {
+        const fname = this._safeName(d.name || ('sdef_' + d.id), d.id) + (/\.js$/i.test(d.name || '') ? '' : '.js');
+        await this._writeFile(sdefsDir, fname, d.code || '');
+      } catch (e) { console.warn('sdef write', e); }
+    }
+
+    // project.json بدون base64 (خفيف) — الوسائط كملفات
+    const lean = {
+      format: 'hawa-folder-v1',
+      version: 1,
+      name: (data && data.name) || 'project',
+      objs,
+      scripts: JSON.parse(JSON.stringify(scripts)),
+      sdefs: JSON.parse(JSON.stringify(sdefs)),
+      mediaIndex,
+      nid: (data && data.nid) || S.nid,
+      sid: (data && data.sid) || S.sid,
+      did: (data && data.did) || S.did,
+      mid: (data && data.mid) || S.mid || 1,
+      player: (data && data.player) || null,
+      exportedAt: new Date().toISOString()
+    };
+    // شيل data الضخمة من أي media مضمّن بالخطأ
+    if (lean.scripts) lean.scripts.forEach(s => { /* code موجود */ });
+    await this._writeFile(root, 'hawa-project.json', JSON.stringify(lean, null, 2));
+    await this._writeFile(root, 'README.txt',
+      'Hawa Engine — تخزين كلي\n' +
+      '- hawa-project.json : المشهد والبارامترات والروابط\n' +
+      '- media/ : كل الصور والصوت والفيديو والملفات\n' +
+      '- scripts/ : ملفات البرمجة\n' +
+      '- sdefs/ : تعريفات الكائنات البرمجية\n'
+    );
+    return true;
+  },
+  async readFolder() {
+    if (!this.handle) return null;
+    const root = this.handle;
+    let lean;
+    try {
+      lean = JSON.parse(await this._readFileText(root, 'hawa-project.json'));
+    } catch (e) {
+      console.warn('read project', e);
+      return null;
+    }
+    const media = {};
+    const index = lean.mediaIndex || lean.media || {};
+    // لو media قديم فيه data: داخل JSON
+    for (const id of Object.keys(index)) {
+      const m = index[id];
+      if (!m) continue;
+      if (m.data && String(m.data).startsWith('data:')) {
+        media[id] = { name: m.name, mime: m.mime, data: m.data };
+        continue;
+      }
+      const rel = m.file || ('media/' + id + '_' + this._safeName(m.name, id));
+      const parts = String(rel).split('/');
+      const fname = parts.pop();
+      try {
+        const dir = parts[0] === 'media' ? await root.getDirectoryHandle('media') : root;
+        const bytes = await this._readFileBytes(dir, fname);
+        media[id] = {
+          name: m.name || fname,
+          mime: m.mime || 'application/octet-stream',
+          data: this._bytesToDataUrl(bytes, m.mime || 'application/octet-stream')
+        };
+      } catch (e) { console.warn('read media', id, e); }
+    }
+    // التقط أي ملفات في media/ مش متفهرسة
+    try {
+      const mediaDir = await root.getDirectoryHandle('media');
+      for await (const [name, ent] of mediaDir.entries()) {
+        if (ent.kind !== 'file') continue;
+        const idGuess = name.split('_')[0];
+        if (media[idGuess]) continue;
+        try {
+          const bytes = await this._readFileBytes(mediaDir, name);
+          media[idGuess] = { name, mime: 'application/octet-stream', data: this._bytesToDataUrl(bytes, 'application/octet-stream') };
+        } catch (_) {}
+      }
+    } catch (_) {}
+
+    return {
+      format: 'hawa-project-v3',
+      name: lean.name,
+      objs: lean.objs || [],
+      scripts: lean.scripts || [],
+      sdefs: lean.sdefs || [],
+      media,
+      nid: lean.nid, sid: lean.sid, did: lean.did, mid: lean.mid,
+      player: lean.player || null
+    };
+  },
+  async saveAll() {
+    const data = this.snapshot();
+    // ممنوع تخزين المشروع في المتصفح — المجلد فقط
+    if (!this.handle || this.mode !== 'folder') {
+      console.warn('saveAll: لا يوجد مجلد تخزين');
+      return data;
+    }
+    try { await this.writeFolder(data); } catch (e) { console.warn('folder save', e); throw e; }
+    return data;
+  },
+  async loadPreferred() {
+    if (this.handle) {
+      try {
+        const d = await this.readFolder();
+        if (d) return d;
+      } catch (e) { console.warn(e); }
+    }
+    return null;
+  },
+  async listFolderTree() {
+    if (!this.handle) return '—';
+    const lines = [];
+    const walk = async (dir, prefix, depth) => {
+      if (depth > 3) return;
+      const entries = [];
+      for await (const [name, ent] of dir.entries()) entries.push([name, ent]);
+      entries.sort((a, b) => a[0].localeCompare(b[0]));
+      for (const [name, ent] of entries) {
+        if (ent.kind === 'directory') {
+          lines.push(prefix + '📁 ' + name + '/');
+          try { await walk(ent, prefix + '&nbsp;&nbsp;', depth + 1); } catch (_) {}
+        } else {
+          let size = '';
+          try {
+            const f = await ent.getFile();
+            size = ' (' + Math.max(1, Math.round(f.size / 1024)) + ' KB)';
+          } catch (_) {}
+          lines.push(prefix + '📄 ' + name + size);
+        }
+      }
+    };
+    lines.push('📁 ' + (this.handle.name || 'root') + '/');
+    await walk(this.handle, '&nbsp;&nbsp;', 0);
+    return lines.join('<br>') || 'المجلد فارغ';
+  },
+  async ensureFolderOrPrompt(force) {
+    if (this.handle && !force) return true;
+    if (!this.supportsFolder()) {
+      await uiAlert('المتصفح لا يدعم تخزين المجلدات.\nاستخدم Chrome أو Edge على الكمبيوتر.\nبدون مجلد لن يتم حفظ المشروع.');
+      return false;
+    }
+    await uiAlert('أول استخدام / لا يوجد مكان تخزين.\nاختَر مجلدًا على الجهاز لحفظ المشروع بالكامل (ملفات + وسائط).');
+    return await this.pickAndMigrate();
+  },
+  async pickAndMigrate() {
+    if (!this.supportsFolder()) {
+      await uiAlert('المتصفح لا يدعم اختيار مجلد.\nاستخدم Chrome/Edge على الكمبيوتر.\nعلى الموبايل: تحميل/رفع المشروع ZIP.');
+      return false;
+    }
+    try {
+      const dir = await window.showDirectoryPicker({
+        id: 'hawa-project-store',
+        mode: 'readwrite',
+        startIn: 'documents'
+      });
+      const data = this.snapshot();
+      this.handle = dir;
+      await this._idbSet('dir', dir);
+      this.mode = 'folder';
+      this.label = 'مجلد: ' + (dir.name || 'جهاز');
+      try { localStorage.setItem('hawa2-store-mode', 'folder'); } catch (_) {}
+      await this.writeFolder(data);
+      try { tip('✔ تم حفظ المشروع كاملًا في المجلد (وسائط + سكربتات + مشهد)'); } catch (_) {}
+      return true;
+    } catch (e) {
+      if (e && e.name === 'AbortError') return false;
+      console.error(e);
+      await uiAlert('تعذر اختيار/كتابة المجلد:\n' + (e.message || e));
+      return false;
+    }
+  },
+  async useLocalOnly() {
+    // ملغى — لا تخزين متصفح
+    return await this.pickAndMigrate();
+  }
+};
+
+
+
+function save() {
+  // تخزين المجلد فقط — لا localStorage للمشروع
+  if (!StoreFS.handle) return;
+  try { StoreFS.saveAll(); } catch (e) { console.warn(e); }
+}
+
 let svT; let rfT; function chg() { clearTimeout(rfT); rfT = setTimeout(() => { refNames = null; }, 500); S.dirty = 1; clearTimeout(svT); svT = setTimeout(save, 400); refreshLive(); }
 function ensureLive() {
   for (const [pid, id] of [['progP', 'pLive'], ['sobjP', 'sLive']]) {
@@ -1535,30 +2302,286 @@ function norm(o) {
     base: !!o.base || big, scripts: Array.isArray(o.scripts) ? o.scripts : [], p: {...(d.p || {}), ...(o.p || {})}};
 }
 function loadData(d, append) {
-  if (S.mode === 'play') playStop();
+  if (!d) return;
+  if (d && d.media && typeof d.media === 'object') {
+    S.media = append ? Object.assign({}, S.media || {}, d.media) : Object.assign({}, d.media);
+  } else if (!append) {
+    S.media = {};
+  }
+  if (d && d.mid) S.mid = Math.max(S.mid || 1, +d.mid || 1);
+
+  if (S.mode === 'play') try { playStop(); } catch (_) {}
   if (Array.isArray(d)) { d = {objs: d}; append = true; }
   if (!append) {
-    clearAll(); S.nid = 1;
-    S.scripts = (d.scripts || []).map(s => ({id: +s.id, name: s.name, code: s.code, enabled: s.enabled != null ? !!s.enabled : !!s.global}));
-    S.sid = Math.max(1, ...S.scripts.map(s => s.id + 1));
-    S.sdefs = (d.sdefs || []).map(x => ({id: +x.id, name: x.name, code: x.code}));
-    S.did = Math.max(1, ...S.sdefs.map(x => x.id + 1));
+    clearAll();
+    S.scripts = (d.scripts || []).map(s => ({id: +s.id, name: s.name, code: s.code || '', enabled: s.enabled != null ? !!s.enabled : !!s.global}));
+    S.sdefs = (d.sdefs || []).map(x => ({id: +x.id, name: x.name, code: x.code || ''}));
+    const maxSid = S.scripts.reduce((m, s) => Math.max(m, +s.id || 0), 0);
+    const maxDid = S.sdefs.reduce((m, s) => Math.max(m, +s.id || 0), 0);
+    S.sid = Math.max(1, (d.sid || 0), maxSid + 1);
+    S.did = Math.max(1, (d.did || 0), maxDid + 1);
+    S.nid = 1;
   }
-  for (const r of d.objs || []) { const o = norm(r); if (o) { o.scripts = (r.scripts || []).filter(i => S.scripts.some(s => s.id === i)); o.def = r.def; reg(o); } }
+  for (const r of d.objs || []) {
+    const o = norm(r);
+    if (!o) continue;
+    // الحفاظ على id الأصلي عند استبدال المشروع كامل
+    if (!append && r.id != null) {
+      o.id = +r.id;
+      if (o.id >= S.nid) S.nid = o.id + 1;
+    }
+    o.scripts = (r.scripts || []).filter(i => S.scripts.some(s => +s.id === +i));
+    o.def = r.def;
+    if (r.p && typeof r.p === 'object') o.p = JSON.parse(JSON.stringify(r.p));
+    reg(o);
+  }
+  if (!append) {
+    if (d.nid) S.nid = Math.max(S.nid, +d.nid);
+    if (d.player && typeof d.player === 'object' && typeof PCFG !== 'undefined') {
+      try { Object.assign(PCFG, d.player); } catch (_) {}
+    }
+  }
+  try { SCH.clear(); } catch (_) {}
+  if (!append && d.builderCam) {
+    try { applyBuilderCam(d.builderCam); } catch (_) {}
+  }
   hier(); pList(); sList(); inspect(); chg();
+  try { save(); } catch (_) {}
 }
-const _bSave = $('#bSave'); if (_bSave) _bSave.onclick = () => { dl('hawa-project.json', JSON.stringify({objs: S.objs, scripts: S.scripts, sdefs: S.sdefs}, null, 1), 'application/json'); tip('تم تنزيل المشروع ✔'); };
-const _bLoad = $('#bLoad'); if (_bLoad) _bLoad.onclick = () => { const fl = $('#fl'); if (fl) { fl.dataset.m = 'json'; fl.click(); } };
+function packProjectSnapshot(name) {
+  return {
+    format: 'hawa-project-v3',
+    version: 3,
+    name: name || 'مشروع',
+    objs: JSON.parse(JSON.stringify(S.objs)),
+    scripts: JSON.parse(JSON.stringify(S.scripts)),
+    sdefs: JSON.parse(JSON.stringify(S.sdefs)),
+    media: JSON.parse(JSON.stringify(S.media || {})),
+    nid: S.nid, sid: S.sid, did: S.did, mid: S.mid || 1,
+    player: (typeof PCFG !== 'undefined') ? JSON.parse(JSON.stringify(PCFG)) : null,
+    builderCam: getBuilderCam(),
+    exportedAt: new Date().toISOString()
+  };
+}
+async function downloadProjectZip() {
+  if (typeof JSZip === 'undefined') { await uiAlert('JSZip غير محمّل'); return; }
+  const name = await uiPrompt('اسم المشروع؟', 'مشروعي');
+  if (!name || !name.trim()) return;
+  const data = packProjectSnapshot(name.trim());
+  const zip = new JSZip();
+  zip.file('project.json', JSON.stringify(data, null, 2));
+  zip.file('README.txt', 'Hawa Engine Project\n' + data.name + '\nارفع هذا الـ ZIP من زر «رفع المشروع» لمتابعة البناء.\n');
+  // وسائط منفصلة أيضاً لسهولة الفحص
+  const media = data.media || {};
+  for (const id of Object.keys(media)) {
+    const m = media[id];
+    if (!m || !m.data) continue;
+    try {
+      const dataUrl = String(m.data);
+      const comma = dataUrl.indexOf(',');
+      const b64 = comma > 0 ? dataUrl.slice(comma + 1) : dataUrl;
+      const bin = atob(b64);
+      const arr = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+      const safe = String(m.name || id).replace(/[^\w\u0600-\u06FF.\-]+/g, '_');
+      zip.file('media/' + id + '_' + safe, arr);
+    } catch (_) {}
+  }
+  const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = (name.trim().replace(/[^\w\u0600-\u06FF\-]+/g, '_') || 'hawa-project') + '.zip';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  try { tip('✔ تم تحميل المشروع'); } catch (_) {}
+}
+async function uploadProjectZip(file) {
+  if (!file) return;
+  if (typeof JSZip === 'undefined') { await uiAlert('JSZip غير محمّل'); return; }
+  try {
+    const zip = await JSZip.loadAsync(file);
+    let jsonText = null;
+    if (zip.file('project.json')) jsonText = await zip.file('project.json').async('string');
+    else {
+      // دعم ملف json مباشر داخل الأرشيف
+      const names = Object.keys(zip.files).filter(n => /\.json$/i.test(n) && !zip.files[n].dir);
+      if (names.length) jsonText = await zip.file(names[0]).async('string');
+    }
+    if (!jsonText) { await uiAlert('الملف لا يحتوي project.json'); return; }
+    const data = JSON.parse(jsonText);
+    if (!data || (!data.objs && !data.scripts && !data.sdefs)) {
+      await uiAlert('ملف مشروع غير صالح');
+      return;
+    }
+    // دمج وسائط من مجلد media/ لو ناقصة في JSON
+    if (!data.media) data.media = {};
+    const mediaFiles = Object.keys(zip.files).filter(n => n.startsWith('media/') && !zip.files[n].dir);
+    for (const path of mediaFiles) {
+      const base = path.split('/').pop() || '';
+      const id = base.split('_')[0];
+      if (data.media[id] && data.media[id].data) continue;
+      try {
+        const buf = await zip.file(path).async('uint8array');
+        let bin = '';
+        for (let i = 0; i < buf.length; i++) bin += String.fromCharCode(buf[i]);
+        const b64 = btoa(bin);
+        const mime = (data.media[id] && data.media[id].mime) || 'application/octet-stream';
+        data.media[id] = {
+          name: (data.media[id] && data.media[id].name) || base.replace(/^[^_]+_/, ''),
+          mime,
+          data: 'data:' + mime + ';base64,' + b64
+        };
+      } catch (_) {}
+    }
+    loadData(data, false);
+    try { tip('✔ تم رفع المشروع — تقدر تكمّل'); } catch (_) {}
+  } catch (e) {
+    console.error(e);
+    await uiAlert('فشل قراءة المشروع:\n' + (e.message || e));
+  }
+}
+async function wipeProjectTotal() {
+  for (let i = 1; i <= 3; i++) {
+    const ok = await uiConfirm('تأكيد ' + i + ' من 3\n\nهذا سيحذف كل شيء في المشروع الحالي (كائنات، برمجة، كائنات برمجية، وسائط، تخزين محلي).\nهل أنت متأكد؟');
+    if (!ok) { try { tip('تم إلغاء الحذف'); } catch (_) {} return; }
+  }
+  try { if (S.mode === 'play') playStop(); } catch (_) {}
+  clearAll();
+  S.scripts = [];
+  S.sdefs = [];
+  S.media = {};
+  S.nid = 1; S.sid = 1; S.did = 1; S.mid = 1;
+  S.sel = null; S.paramOpen = false;
+  try { SCH.clear(); } catch (_) {}
+  try { localStorage.removeItem('hawa2'); } catch (_) {} // قديم إن وُجد
+  try { closeParamPanel(); } catch (_) {}
+  hier(); pList(); sList(); inspect();
+  try { demo(); } catch (_) { /* لو مفيش demo */ }
+  chg();
+  try { save(); } catch (_) {}
+  try { tip('✔ المشروع اتصفر'); } catch (_) {}
+  await uiAlert('تم حذف المشروع بالكامل.\nالآن اختر مجلد التخزين للمشروع الجديد.');
+  // مشروع جديد → لازم يختار مكان التخزين
+  try {
+    const ok = await StoreFS.pickAndMigrate();
+    if (!ok) {
+      await uiAlert('لازم تختار مجلد تخزين عشان المشروع الجديد.\nافتح «عرض التخزين» واضغط تحديد مكان التخزين.');
+      try { showStorageInfo(); } catch (_) {}
+    } else {
+      try { await StoreFS.saveAll(); } catch (_) {}
+    }
+  } catch (e) {
+    console.warn(e);
+    try { showStorageInfo(); } catch (_) {}
+  }
+}
+function showStorageInfo() {
+  const modal = document.getElementById('storageModal');
+  const body = document.getElementById('storageBody');
+  if (!modal || !body) return;
+  let raw = '';
+  try { raw = localStorage.getItem('hawa2') || ''; } catch (_) {}
+  let bytes = 0;
+  try { bytes = new Blob([raw]).size; } catch (_) { bytes = (raw && raw.length) || 0; }
+  const kb = (bytes / 1024).toFixed(1);
+  const objs = S.objs.length;
+  const scripts = S.scripts.length;
+  const sdefs = S.sdefs.length;
+  const mediaN = Object.keys(S.media || {}).length;
+  const folderOk = StoreFS.supportsFolder();
+  const hasFolder = !!(StoreFS.mode === 'folder' && StoreFS.handle);
+  const folderName = hasFolder ? (StoreFS.handle.name || 'مجلد') : '— لم يُحدَّد —';
+  const modeTxt = hasFolder ? 'مجلد كامل على الجهاز' : 'لم يتم اختيار مجلد بعد';
+  body.innerHTML = `
+    <div class="st-row"><span>وضع التخزين</span><b id="stMode">${modeTxt}</b></div>
+    <div class="st-row"><span>المجلد الحالي</span><b id="stLabel">${folderName}</b></div>
+    <div class="st-row"><span>المحتوى</span><b><code>hawa-project.json</code> + <code>media/</code> + <code>scripts/</code> + <code>sdefs/</code></b></div>
+    <div class="st-row"><span>حالة المجلد</span><b>${hasFolder ? 'متصل' : 'غير محدد'}</b></div>
+    <div class="st-row"><span>كائنات / برمجة / برمجي / وسائط</span><b>${objs} / ${scripts} / ${sdefs} / ${mediaN}</b></div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px">
+      <button type="button" id="stPick" class="go" style="flex:1;min-height:40px">${hasFolder ? 'تغيير مكان التخزين' : 'تحديد مكان التخزين'}</button>
+      <button type="button" id="stReveal" style="flex:1;min-height:40px" ${hasFolder ? '' : 'disabled'}>عرض مجلد التخزين</button>
+    </div>
+    <div id="stListing" class="mut small" style="margin-top:10px;max-height:180px;overflow:auto;line-height:1.65"></div>
+    <p class="mut small" style="margin-top:8px;line-height:1.75">
+      <b>لا يوجد تخزين في المتصفح.</b> كل شيء يُحفظ في مجلد الجهاز فقط (ملفات + وسائط).
+      «عرض مجلد التخزين» يعرض محتويات المجلد الحالي من الجهاز.
+      ${folderOk ? '' : '<br><b>ملاحظة:</b> اختيار المجلد يحتاج متصفح يدعم File System Access (Chrome/Edge).'}
+    </p>`;
+  modal.hidden = false;
+  const pick = document.getElementById('stPick');
+  const reveal = document.getElementById('stReveal');
+  if (pick) pick.onclick = async () => {
+    pick.disabled = true;
+    const ok = await StoreFS.pickAndMigrate();
+    pick.disabled = false;
+    if (ok) {
+      try { tip('✔ تم تثبيت/تغيير مكان التخزين'); } catch (_) {}
+      showStorageInfo();
+    }
+  };
+  if (reveal) reveal.onclick = async () => {
+    const box = document.getElementById('stListing');
+    if (!StoreFS.handle) {
+      if (box) box.textContent = 'لا يوجد مجلد محدد.';
+      return;
+    }
+    if (box) box.textContent = 'جاري قراءة المجلد…';
+    try {
+      const listing = await StoreFS.listFolderTree();
+      if (box) box.innerHTML = '<b>محتوى «' + (StoreFS.handle.name || '') + '»:</b><br>' + listing;
+      // محاولة فتح اختيار المجلد نفسه مرة أخرى (يعيد المستخدم لنفس السياق على بعض الأنظمة)
+      try {
+        if (StoreFS.handle && typeof StoreFS.handle.requestPermission === 'function') {
+          await StoreFS.handle.requestPermission({ mode: 'readwrite' });
+        }
+      } catch (_) {}
+      try { tip('📂 ' + (StoreFS.handle.name || 'المجلد')); } catch (_) {}
+    } catch (e) {
+      if (box) box.textContent = 'تعذر قراءة المجلد: ' + (e.message || e);
+    }
+  };
+}
+
+const _bSave = $('#bSave');
+if (_bSave) _bSave.onclick = () => { save(); try { tip('✔ اتسجل في المتصفح'); } catch (_) {} };
+const _bProjDown = document.getElementById('bProjDown');
+if (_bProjDown) _bProjDown.onclick = () => { downloadProjectZip().catch(e => { uiAlert(e.message || e); }); };
+const _bProjUp = document.getElementById('bProjUp');
+const _flProj = document.getElementById('flProj');
+if (_bProjUp && _flProj) {
+  _bProjUp.onclick = () => { _flProj.value = ''; _flProj.click(); };
+  _flProj.onchange = async e => {
+    const f = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (f) await uploadProjectZip(f);
+  };
+}
+const _bWipe = document.getElementById('bWipe');
+if (_bWipe) _bWipe.onclick = () => wipeProjectTotal();
+const _bStorage = document.getElementById('bStorage');
+if (_bStorage) _bStorage.onclick = () => showStorageInfo();
+const _storageClose = document.getElementById('storageClose');
+if (_storageClose) _storageClose.onclick = () => { const m = document.getElementById('storageModal'); if (m) m.hidden = true; };
+const _storageModal = document.getElementById('storageModal');
+if (_storageModal) _storageModal.addEventListener('click', e => { if (e.target === _storageModal) _storageModal.hidden = true; });
+
 $('#fl').onchange = async e => {
   const m = e.target.dataset.m;
   for (const f of e.target.files) {
-    const t = await f.text();
-    if (m === 'js') { S.scripts.push({id: S.sid++, name: f.name, code: t, enabled: true}); pList(); }
-    else if (m === 'sobj') { const d = {id: S.did++, name: f.name.replace(/\.[^.]+$/, ''), code: t}; S.sdefs.push(d); sList(); }
-    else try { loadData(JSON.parse(t)); } catch (x) { alert('ملف غير صالح'); }
+    const name = (f.name || '').toLowerCase();
+    if (name.endsWith('.zip')) { await uploadProjectZip(f); continue; }
+    const text = await f.text();
+    if (m === 'js') { S.scripts.push({id: S.sid++, name: f.name, code: text, enabled: true}); pList(); }
+    else if (m === 'sobj') { const d = {id: S.did++, name: f.name.replace(/\.[^.]+$/, ''), code: text}; S.sdefs.push(d); sList(); }
+    else {
+      try { loadData(JSON.parse(text), false); }
+      catch (x) { await uiAlert('ملف غير صالح'); }
+    }
   }
   e.target.value = ''; chg();
 };
+
 function dl(n, t, m) { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([t], {type: (m || 'text/plain') + ';charset=utf-8'})); a.download = n; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); }
 
 /* ---------- واجهة لمس للسكربتات (موبايل / مركبات) ---------- */
@@ -1675,6 +2698,20 @@ function autoText(extraCtx) {
   const mobile = !!(typeof MOB !== 'undefined' && MOB.on);
   let t = `HAWA_AUTO\nsec=${names[sec] || sec}\nmobile=${mobile ? '1' : '0'}\ndevice=${mobile ? 'mobile' : 'desktop'}\n${playerNote()}\n`;
   t += API + '\n\n';
+
+  // قاعدة إبداع الشكل — قبل أي سياق مرجعي (تكسر القوالب المتكررة)
+  if (sec === 'prog' || sec === 'sobj' || sec === 'objects') {
+    t += `=== NO_FIXED_SHAPE_TEMPLATES (إلزامي — أعلى أولوية بعد طلب المستخدم) ===
+1) ممنوع تكرار نفس الشكل/الأبعاد/الألوان بين طلبات مختلفة (سفينة، مركبة، وحش، سلاح…).
+2) كل كائن يُبنى من الصفر حسب وصف المستخدم — فكّر في تصميم فريد: نسب، أجزاء، خامات، ألوان، تفاصيل.
+3) أمثلة الكود في السياق = مرجع API فقط (Game.onUpdate، defineParams، customDrive…) — ليست قوالب شكل للنسخ.
+4) ممنوع نسخ مجسمات أمثلة (توك توك/صندوق/أسطوانة بنفس الترتيب) إلا لو المستخدم طلب نفس الشكل صراحة.
+5) التنوع مطلوب: لو الطلب عام («وحوش شرير») اختر تفسيرًا بصريًا مميزًا وغير مكرر.
+6) التزم بطلب المستخدم حرفيًا في الوظيفة والميكانيكس؛ الشكل البصري حر وإبداعي ضمن الطلب.
+7) لا تذكر «قالب» ولا تعتمد على شكل افتراضي محفوظ في رأسك من رسائل سابقة.
+
+`;
+  }
 
   // توجيهات الملف المرجعي حسب القسم
   if (extraCtx) {
@@ -3424,7 +4461,7 @@ function hadd(b) {
 function bigGame(rt, o, root) {
   const G2 = {
     THREE: T, scene,
-    get params() { return o.p; },
+    get params() { return resolvedParams(o.p); },
     defineParams(list) { for (const e of list || []) if (e && e.key && o.p[e.key] === undefined) o.p[e.key] = e.value; },
     onUpdate(fn) { if (typeof fn === 'function') rt.ups.push(fn); },
     isKeyDown: c => keyDown(c),
@@ -4247,6 +5284,7 @@ const NetMP = {
 function playStart() {
   try { MOB.closeSheets(); MOB.setPlay(true); } catch (_) {}
   for (const id of [...PREV.keys()]) removePreview(id);
+  try { S._buildCam = getBuilderCam(); } catch (_) { S._buildCam = null; }
   sel(null); S.mode = 'play'; syncMarks(); S.err = []; S.fly = false; updModes();
   $('#app').hidden = true; $('#play').hidden = false; attach(pvp);
   // أونلاين / وضع اللعب فقط: اخفِ «خروج للبناء» و«إعادة» — دول للاختبار من المحرّر بس
@@ -4381,7 +5419,7 @@ function playStart() {
   rt.game = game;
   for (const o of S.objs) {
     const m = MESH.get(o.id); if (o.type === 'respawn' || o.hidden) continue;
-    rt.byName.set(o.name, {name: o.name, props: o.p, mesh: m, object: o, position: m.position, rotation: m.rotation, scale: m.scale,
+    rt.byName.set(o.name, {name: o.name, props: resolvedParams(o.p), mesh: m, object: o, position: m.position, rotation: m.rotation, scale: m.scale,
       hide() { m.visible = false; }, show() { m.visible = true; }, hideBody() { if (m.userData.body) m.userData.body.visible = false; }, dist() { return m.position.distanceTo(rt.p); }});
   }
   const comp = (s, self) => {
@@ -4431,6 +5469,7 @@ function playStop() {
   } catch (_) {}
   rt.inst.forEach(i => { scene.remove(i); i.dispose(); }); scene.remove(rt.rig.root);
   RT = null; S.mode = 'build';
+  try { if (S._buildCam) applyBuilderCam(S._buildCam); } catch (_) {}
   for (const o of S.objs) { const m = MESH.get(o.id); m.matrixAutoUpdate = false; tf(o); look(o); }
   for (const o of S.objs) refreshPreview(o);
   grid.visible = true; $('#play').hidden = true; $('#app').hidden = false; attach(vp);
@@ -4601,15 +5640,15 @@ const MOB = {
     if (dBtn) dBtn.onclick = () => this.toggleSheet('dock');
     if (sBtn) sBtn.onclick = () => this.toggleSheet('side');
     if (tBtn) tBtn.onclick = () => { try { if (S.mode !== 'play') playStart(); } catch (_) {} };
+    const mSt = document.getElementById('mStorageBtn');
+    if (mSt) mSt.onclick = () => { try { showStorageInfo(); } catch (_) {} };
     this._bindJoy();
     this._bindPlayLook();
     this._bindBuildGestures();
     const mb = document.getElementById('mBar');
     if (mb) mb.hidden = !this.on;
-    const bh = document.getElementById('mBuildHint');
-    if (bh) bh.hidden = !this.on;
-    const mt = document.getElementById('mTouch');
-    if (mt) mt.hidden = true;
+    try { this.syncPads(); } catch (_) {}
+    try { this.syncPads(); } catch (_) {}
     // bPar على الموبايل يفتح الـ dock
     const bPar = document.getElementById('bPar');
     if (bPar) {
@@ -4642,14 +5681,29 @@ const MOB = {
     if (!on) {
       this.joy.x = this.joy.y = 0; this.joy.active = false;
       this.run = this.jump = false;
-      K.KeyW = K.KeyA = K.KeyS = K.KeyD = K.Space = K.ShiftLeft = 0;
+      try {
+        setVirtualKey('KeyW', 0); setVirtualKey('KeyA', 0); setVirtualKey('KeyS', 0); setVirtualKey('KeyD', 0);
+        setVirtualKey('Space', 0); setVirtualKey('ShiftLeft', 0);
+      } catch (_) {}
     }
+    this.syncPads();
+  },
+  syncPads() {
+    if (!this.on) {
+      const mt = document.getElementById('mTouch'); if (mt) mt.hidden = true;
+      const mb = document.getElementById('mBar'); if (mb) mb.hidden = true;
+      const bh = document.getElementById('mBuildHint'); if (bh) bh.hidden = true;
+      return;
+    }
+    const play = S.mode === 'play';
+    const scriptJoy = document.getElementById('hawa-mobile-joystick');
     const mt = document.getElementById('mTouch');
-    if (mt) mt.hidden = !(this.on && on);
+    // جوystick ثابت في البناء واللعب — يختفي لو سكربت جوystick ظاهر في اللعب
+    if (mt) mt.hidden = !!(play && scriptJoy);
     const mb = document.getElementById('mBar');
-    if (mb) mb.hidden = !this.on || !!on;
+    if (mb) mb.hidden = !!play;
     const bh = document.getElementById('mBuildHint');
-    if (bh) bh.hidden = !this.on || !!on;
+    if (bh) bh.hidden = !!play;
   },
   _bindJoy() {
     const zone = document.getElementById('mJoy');
@@ -4742,14 +5796,37 @@ const MOB = {
         const a = e.touches[0], b = e.touches[1];
         const dist = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
         this.pinch = {dist, d0: OB.dist};
+        this.buildTouch = null;
+        this.gizmoTouch = false;
         e.preventDefault();
       } else if (e.touches.length === 1) {
         const t = e.touches[0];
+        // أولوية لمحاور الجizmo
+        this.gizmoTouch = false;
+        if (S.sel != null && gizmo.visible) {
+          try {
+            const list = HIT.filter(h => h.mode === S.gz).map(h => h.m);
+            const hh = ray({clientX: t.clientX, clientY: t.clientY}).intersectObjects(list, false)[0];
+            if (hh) {
+              const rec = HIT.find(h => h.m === hh.object);
+              if (rec) {
+                startDrag(rec, {clientX: t.clientX, clientY: t.clientY, button: 0});
+                this.gizmoTouch = true;
+                this.buildTouch = null;
+                e.preventDefault();
+                return;
+              }
+            }
+          } catch (_) {}
+        }
         this.buildTouch = {x: t.clientX, y: t.clientY, t: performance.now(), moved: 0, id: t.identifier};
       }
     }, {passive: false});
     cv.addEventListener('touchmove', e => {
       if (!this.on || S.mode !== 'build') return;
+      // أثناء سحب محور الجizmo اترك pointer events تشتغل — متدورش الكاميرا
+      if (typeof drag !== 'undefined' && drag) { e.preventDefault(); return; }
+      if (this.gizmoTouch) { e.preventDefault(); return; }
       if (e.touches.length === 2 && this.pinch) {
         const a = e.touches[0], b = e.touches[1];
         const dist = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
@@ -4761,7 +5838,6 @@ const MOB = {
         const t = e.touches[0];
         const dx = t.clientX - this.buildTouch.x, dy = t.clientY - this.buildTouch.y;
         this.buildTouch.moved += Math.abs(dx) + Math.abs(dy);
-        // إصبع واحد = تدوير كاميرا البناء
         OB.yaw -= dx * 0.005;
         OB.pitch = clamp(OB.pitch + dy * 0.005, -1.5, 1.5);
         this.buildTouch.x = t.clientX; this.buildTouch.y = t.clientY;
@@ -4772,6 +5848,7 @@ const MOB = {
     cv.addEventListener('touchend', e => {
       if (!this.on || S.mode !== 'build') return;
       if (this.pinch && e.touches.length < 2) this.pinch = null;
+      if (this.gizmoTouch) { this.gizmoTouch = false; }
       if (this.buildTouch && e.changedTouches.length) {
         const t = e.changedTouches[0];
         const bt = this.buildTouch;
@@ -4787,8 +5864,96 @@ const MOB = {
 };
 
 
+/* ================= الانيميشن الافتتاحي السينمائي =================
+   الكاميرا تنزل من السماء لآخر مكان كنت بتبني فيه، والواجهة تظهر بانيميشن،
+   وبعدها وضع البناء يشتغل. زر «تخطي» (أو Space / Enter / Esc) يلغيه. */
+Object.assign(INTRO, {
+  dur: 5200,
+  to: null, raf: 0, t0: 0, fov0: 60,
+  _key(e) {
+    if (!INTRO.active) return;
+    if (e.ctrlKey || e.metaKey || e.altKey || /^F\d+$/.test(e.code)) return;   // اختصارات المتصفح تعدّي
+    if (e.code === 'Escape' || e.code === 'Enter' || e.code === 'Space' || e.code === 'NumpadEnter') INTRO.finish(true);
+    e.preventDefault(); e.stopImmediatePropagation();
+  },
+  _setCam(e) {
+    const to = this.to, k = 1 - e;
+    OB.t.set(to.tx, to.ty + k * 14, to.tz);
+    OB.dist = to.dist + k * 150;
+    OB.pitch = to.pitch + (1.42 - to.pitch) * k;
+    OB.yaw = to.yaw + k * 2.1;
+    camUpdate();
+    const fv = this.fov0 + k * 16;
+    if (Math.abs(cam.fov - fv) > .01) { cam.fov = fv; cam.updateProjectionMatrix(); }
+  },
+  start() {
+    if (this.started) return;
+    this.started = true;
+    const el = document.getElementById('intro');
+    if (!el || window.HAWA_PLAY_ONLY || !this.active) { this.active = false; this._cleanup(); return; }
+    this.el = el;
+    // الهدف: آخر مكان محفوظ، وإلا مكان المشروع المحمّل
+    const g = LAST_CAM || getBuilderCam();
+    this.to = {
+      tx: +g.tx || 0, ty: Math.max(0, +g.ty || 0), tz: +g.tz || 0,
+      yaw: +g.yaw, pitch: clamp(+g.pitch, -1.5, 1.5), dist: clamp(+g.dist || 22, 1.5, 500)
+    };
+    if (!Number.isFinite(this.to.yaw)) this.to.yaw = OB.yaw;
+    if (!Number.isFinite(this.to.pitch)) this.to.pitch = OB.pitch;
+    this.fov0 = cam.fov || 60;
+    document.addEventListener('keydown', this._key, true);
+    const sk = document.getElementById('introSkip');
+    if (sk) sk.onclick = e => { e.stopPropagation(); this.finish(true); };
+    this._setCam(0); resize();
+    this.t0 = performance.now();
+    requestAnimationFrame(() => el.classList.add('run'));
+    const loop = now => {
+      if (!this.active) return;
+      const u = clamp((now - this.t0) / this.dur, 0, 1);
+      this._setCam(1 - Math.pow(1 - u, 3));
+      if (u >= 1) { this.finish(false); return; }
+      this.raf = requestAnimationFrame(loop);
+    };
+    this.raf = requestAnimationFrame(loop);
+    this._wd = setTimeout(() => this.finish(true), this.dur + 5000);   // أمان
+  },
+  finish(skipped) {
+    if (!this.active) return;
+    this.active = false;
+    cancelAnimationFrame(this.raf); clearTimeout(this._wd);
+    document.removeEventListener('keydown', this._key, true);
+    if (this.to) {
+      OB.t.set(this.to.tx, this.to.ty, this.to.tz);
+      OB.dist = this.to.dist; OB.pitch = this.to.pitch; OB.yaw = this.to.yaw;
+      if (cam.fov !== this.fov0) { cam.fov = this.fov0; cam.updateProjectionMatrix(); }
+    }
+    const el = this.el, b = document.body;
+    if (el) el.classList.add('flash');
+    setTimeout(() => {                     // الوميض يغطّي تبديل الواجهة
+      b.classList.remove('intro-on');
+      b.classList.add('intro-reveal');
+      try { resize(); camUpdate(); persistCam(true); } catch (_) {}
+      if (el) el.classList.add('out');
+    }, skipped ? 120 : 220);
+    setTimeout(() => { b.classList.remove('intro-reveal'); if (el) el.remove(); try { resize(); } catch (_) {} }, skipped ? 1900 : 2300);
+  },
+  _cleanup() {
+    document.body.classList.remove('intro-on');
+    const el = document.getElementById('intro'); if (el) el.remove();
+  }
+});
+(function () {
+  // ترتيب ظهور أزرار الشريط العلوي واحد واحد
+  try { [...document.querySelectorAll('#bar > *')].forEach((e, i) => e.style.setProperty('--i', i)); } catch (_) {}
+  addEventListener('error', () => { if (INTRO.active && !INTRO.started) setTimeout(() => INTRO.finish(true), 1500); });
+})();
+
 function boot() {
   try { MOB.bind(); } catch (e) { console.warn(e); }
+  // تهيئة التخزين المختار (مجلد/محلي) قبل تحميل المشروع
+  // التحميل الفعلي بعد init غير متزامن — يُستكمل أسفل
+
+  try { bindParamPanel(); } catch (e) {}
 
   loadPlayerCfg();
   $$('[data-ic]').forEach(e => e.innerHTML = ic(e.dataset.ic));
@@ -4801,7 +5966,8 @@ function boot() {
       const ss = sessionStorage.getItem('hawa_game');
       if (ss) d = JSON.parse(ss);
     } catch (e) {}
-    if (!d) try { d = JSON.parse(localStorage.getItem('hawa2')); } catch (e) {}
+    // لا تحميل من localStorage — المصدر مجلد الجهاز فقط
+    if (!d) d = null;
   }
   if (d && d.objs) {
     clearAll();
@@ -4830,8 +5996,34 @@ function boot() {
     const bar = document.getElementById('bar');
     const app = document.getElementById('app');
     if (bar) bar.style.display = 'none';
-    setTimeout(() => { try { playStart(); } catch (e) { console.error(e); alert('فشل بدء اللعب: ' + (e.message || e)); } }, 80);
+    setTimeout(async () => { try { playStart(); } catch (e) { console.error(e); await uiAlert('فشل بدء اللعب: ' + (e.message || e)); } }, 80);
   }
 }
-boot();
+(async function bootAsync() {
+  let ready = false;
+  try { ready = await StoreFS.init(); } catch (e) { console.warn(e); }
+  if (!ready) {
+    try { ready = await StoreFS.ensureFolderOrPrompt(true); } catch (e) { console.warn(e); }
+  }
+  if (!StoreFS.handle) {
+    // منع التشغيل بدون مجلد
+    try {
+      await uiAlert('يجب اختيار مجلد تخزين قبل استخدام المحرك.');
+      await StoreFS.ensureFolderOrPrompt(true);
+    } catch (_) {}
+  }
+  boot();
+  try {
+    if (StoreFS.handle) {
+      const d2 = await StoreFS.loadPreferred();
+      if (d2) {
+        try { loadData(d2, false); } catch (e) { console.warn(e); }
+      }
+    }
+  } catch (e) { console.warn(e); }
+  try { INTRO.start(); } catch (e) { console.warn(e); try { INTRO.finish(true); } catch (_) {} }
+  if (!StoreFS.handle) {
+    try { showStorageInfo(); } catch (_) {}
+  }
+})();
 })();
