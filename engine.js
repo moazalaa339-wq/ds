@@ -77,7 +77,13 @@ function onUpdate(self, game, dt) {
 `;
 const API = `onStart(self,game) onUpdate(self,game,dt) onTouch(self,game,dt)
 self: name,props,mesh,position,rotation,scale,hide,show,hideBody,dist
-game: THREE,scene,camera,time,score,addScore,say,respawn,key,find,player,coords,setHud,setPlayerLimb`;
+game: THREE,scene,camera,time,score,addScore,say,respawn,key,setKey,forcePlayerInput,find,player,coords,setHud,setPlayerLimb,touch
+مدخل موحّد (كيبورد + موبايل نفس المصدر):
+  game.key('KeyW'|'KeyA'|'KeyS'|'KeyD'|'Space'|'KeyE'|'KeyF'|...)
+  game.setKey(code,true|false) — كأنك بتضغط/بتسيب زر كيبورد (يشتغل لأي سكربت/مركبة/تفاعل)
+  game.forcePlayerInput(0,{up,down,left,right,jump,run,interact,action,KeyE,...})
+game.touch: show(list) hide() isDown(id) wasPressed(id) isMobile()`;
+
 
 function parseParams(code) {
   const o = {}, re = /^\s*\/\/\s*@param\s+(\w+)\s*=\s*(.+?)\s*$/gm; let m;
@@ -109,6 +115,41 @@ const defOf = id => S.sdefs.find(x => x.id === id);
 const S = {objs:[], scripts:[], sdefs:[], sel:null, mode:'build', tool:'select', gz:'move', item:'cube', section:'objects',
   snap:.5, nid:1, sid:1, did:1, dirty:1, err:[], hr:null, fly:false};
 const OBJ = new Map(), MESH = new Map(), K = {};
+/* مفاتيح افتراضية (موبايل/سكربت) — تتعامل ككيبورد حقيقي لأي نظام يقرأ keyDown */
+const VK = Object.create(null);
+function keyDown(code) {
+  const c = String(code || '');
+  return !!(K[c] || VK[c]);
+}
+function setVirtualKey(code, down) {
+  const c = String(code || '');
+  if (!c) return;
+  if (down) VK[c] = 1; else delete VK[c];
+  // مرآة على K عشان أي كود قديم يقرأ K مباشرة
+  K[c] = down ? 1 : 0;
+}
+function clearVirtualKeys() {
+  for (const c of Object.keys(VK)) { delete VK[c]; if (K[c]) K[c] = 0; }
+}
+function applyInputMap(inp) {
+  if (!inp || typeof inp !== 'object') return;
+  const pairs = [
+    ['up', 'KeyW'], ['forward', 'KeyW'], ['KeyW', 'KeyW'],
+    ['down', 'KeyS'], ['back', 'KeyS'], ['KeyS', 'KeyS'],
+    ['left', 'KeyA'], ['KeyA', 'KeyA'],
+    ['right', 'KeyD'], ['KeyD', 'KeyD'],
+    ['jump', 'Space'], ['Space', 'Space'],
+    ['run', 'ShiftLeft'], ['ShiftLeft', 'ShiftLeft'],
+    ['interact', 'KeyE'], ['KeyE', 'KeyE'],
+    ['action', 'KeyF'], ['KeyF', 'KeyF'],
+    ['KeyQ', 'KeyQ'], ['KeyR', 'KeyR'], ['KeyC', 'KeyC'], ['KeyX', 'KeyX'],
+    ['Digit1', 'Digit1'], ['Digit2', 'Digit2'], ['Digit3', 'Digit3']
+  ];
+  for (const [src, dst] of pairs) {
+    if (inp[src] != null) setVirtualKey(dst, !!inp[src]);
+  }
+}
+
 let RT = null, rmb = false, edI = null, edK = 'script', SELH = null;
 
 /* ---------- المشهد ---------- */
@@ -674,9 +715,9 @@ function fly(dt) {
   const f = new T.Vector3().subVectors(OB.t, cam.position); f.y = 0;
   if (f.lengthSq() < 1e-6) f.set(0, 0, -1); f.normalize();
   const r = new T.Vector3().crossVectors(f, new T.Vector3(0, 1, 0)).normalize(), m = new T.Vector3();
-  if (K.KeyW || K.ArrowUp) m.add(f); if (K.KeyS || K.ArrowDown) m.sub(f);
-  if (K.KeyD || K.ArrowRight) m.add(r); if (K.KeyA || K.ArrowLeft) m.sub(r);
-  if (K.Space) m.y += 1; if (K.ShiftLeft || K.ShiftRight) m.y -= 1;
+  if (keyDown('KeyW') || keyDown('ArrowUp')) m.add(f); if (keyDown('KeyS') || keyDown('ArrowDown')) m.sub(f);
+  if (keyDown('KeyD') || keyDown('ArrowRight')) m.add(r); if (keyDown('KeyA') || keyDown('ArrowLeft')) m.sub(r);
+  if (keyDown('Space')) m.y += 1; if (keyDown('ShiftLeft') || keyDown('ShiftRight')) m.y -= 1;
   if (m.lengthSq() > 0) { m.normalize(); OB.t.addScaledVector(m, (K.ControlLeft || K.ControlRight ? 4 : 14) * dt); OB.t.y = Math.max(0, OB.t.y); camUpdate(); }
 }
 function pan(dx, dy) {
@@ -1642,19 +1683,38 @@ function autoText(extraCtx) {
 
   // طبقة موبايل إضافية فوق السياق — للبرمجة والكائنات البرمجية فقط
   if (mobile && (sec === 'prog' || sec === 'sobj')) {
-    t += `=== طبقة موبايل (فوق السياق — إلزامي على هذا الجهاز) ===
-الجهاز موبايل/لمس. طبّق السياق المرجعي أعلاه + القيود دي:
-1) ممنوع التحكم الأساسي بالكبورد؛ أي تفاعل يظهر كأزرار لمس وقت الحاجة عبر game.touch ثم hide.
-2) game.touch.show/hide/isDown/wasPressed/isMobile — pos: br|bl|bc|tr|tl|mr|ml
-3) مركبة سكربت: customDrive فقط، ممنوع واجهة ركوب المحرك الرخيصة؛ أزرار ركوب/بنزين/فرامل/توجيه/نزول من اللمس.
-4) dist أكبر (2.5–4)، أزرار كبيرة، cleanup يخفي اللمس.
-5) مفيش hover ولا كليك يمين كشرط وحيد للتفاعل.
+    t += `=== طبقة موبايل — مدخل افتراضي موحّد (إلزامي) ===
+الجهاز: موبايل. المحرك بيعامل اللمس ككيبورد حقيقي لنفس المصدر (game.key / K).
+
+المبدأ:
+- أي نظام (لاعب، عربية، باب، سلاح، قائمة، تفاعل F/E) يقرأ game.key('KeyX') أو يستقبل forcePlayerInput — يشتغل من الموبايل بنفس الأكواد.
+- ممنوع تعتمد على كيبورد حقيقي فقط. ابنِ أزرار/جويستيك لمس يكتبوا على المفاتيح الافتراضية.
+
+API المفاتيح الافتراضية (عام — مش للاعب بس):
+  game.setKey('KeyW', true|false)
+  game.setKey('KeyA'|'KeyS'|'KeyD'|'Space'|'ShiftLeft'|'KeyE'|'KeyF'|'KeyQ'|'KeyR'|..., true|false)
+  game.forcePlayerInput(0, {up,down,left,right,jump,run,interact,action, KeyE, KeyF, ...})
+  game.key('KeyE') — يقرأ الكيبورد الحقيقي + الافتراضي من اللمس
+
+أنماط واجهة:
+1) game.touch.show([{id:'gas',label:'بنزين',pos:'br'}]) ثم كل فريم:
+   game.setKey('KeyW', game.touch.isDown('gas'))
+2) أو جوystick مخصص (DOM) يحدّث كل فريم:
+   game.forcePlayerInput(0,{up:w,down:s,left:a,right:d,jump:space})
+3) تفاعل عام (باب/ركوب/التقاط): زر لمس → game.setKey('KeyE',true) لحظة wasPressed ثم false
+
+قواعد:
+- اكتب setKey/forcePlayerInput كل onUpdate طالما الزر مضغوط (hold)، وfalse عند الإفلات.
+- cleanup: game.touch.hide() + setKey الكل false أو اترك playStop يمسّح.
+- dist للتقارب 2.5–4. ممنوع hover/كليك يمين كشرط وحيد.
+- مركبة سكربت: customDrive؛ تحكم باللمس عبر نفس المفاتيح أو setKey مخصص لمنطقك.
+- أي كود قديم يستخدم game.key('Space') يشتغل تلقائياً لو زر الموبايل يعمل setKey('Space',true).
 
 `;
   } else if (!mobile && (sec === 'prog' || sec === 'sobj')) {
     t += `=== طبقة ديسكتوب ===
-الجهاز ديسكتوب: كيبورد/ماوس مسموحان حسب السياق المرجعي.
-game.touch اختياري لو حابب دعم لمس إضافي.
+كيبورد/ماوس حسب السياق. game.setKey/forcePlayerInput متاحين لو حابب نفس منطق الموبايل.
+game.key يقرأ الكيبورد الحقيقي. على الموبايل نفس الاستدعاءات تقرأ اللمس الافتراضي.
 
 `;
   }
@@ -3367,7 +3427,7 @@ function bigGame(rt, o, root) {
     get params() { return o.p; },
     defineParams(list) { for (const e of list || []) if (e && e.key && o.p[e.key] === undefined) o.p[e.key] = e.value; },
     onUpdate(fn) { if (typeof fn === 'function') rt.ups.push(fn); },
-    isKeyDown: c => !!K[c],
+    isKeyDown: c => keyDown(c),
     getMyName: () => (NetMP.on ? ('p' + NetMP.slot + '_' + (NetMP.name || 'player')) : 'local'),
     getPlayerId: () => (NetMP.on ? NetMP.slot : 0),
     getLocalPlayer: () => rt.pl,
@@ -3400,839 +3460,14 @@ function bigGame(rt, o, root) {
     clearCamera: () => { rt.cam = null; },
     subtitle: t => { if (t) say(String(t), 4000); else rt.msgT = 0; },
     touch: TouchUI.api(),
-    setHud(html) {
-      let el = document.getElementById('hawaScriptHud');
-      if (!el) {
-        el = document.createElement('div');
-        el.id = 'hawaScriptHud';
-        el.setAttribute('data-script-ui', '1');
-        el.style.cssText = 'position:fixed;left:12px;bottom:12px;z-index:50;pointer-events:none;max-width:min(420px,90vw);font:13px/1.4 system-ui,sans-serif;color:#e8f0ff;';
-        document.body.appendChild(el);
-      }
-      el.innerHTML = html == null ? '' : String(html);
-      el.style.display = html ? 'block' : 'none';
+    forcePlayerInput(slot, inp) {
+      applyInputMap(inp);
     },
-    voice: {
-      set: o => VoiceChat.set(o),
-      get: () => VoiceChat.get(),
-      toggle: () => VoiceChat.toggle(),
-      on: () => VoiceChat.start(),
-      off: () => VoiceChat.off(),
-      isOn: () => VoiceChat.isOn(),
-      level: () => VoiceChat.level01()
-    },
-    clearHud() { const el = document.getElementById('hawaScriptHud'); if (el) { el.innerHTML = ''; el.style.display = 'none'; } },
-    getCoords: () => RT ? ({ x: +RT.p.x.toFixed(3), y: +RT.p.y.toFixed(3), z: +RT.p.z.toFixed(3) }) : ({x:0,y:0,z:0}),
-    registerInteractAction: (r, cfg) => { if (cfg) rt.inter.push({root: r, cfg}); },
-    syncObject: (obj) => {
-      try {
-        const m = obj || root;
-        if (!m || !m.position) return;
-        const id = m.userData && m.userData.id != null ? m.userData.id : (o && o.id);
-        if (id == null) return;
-        m.userData.netSync = true;
-        if (m.userData.bikeState || m.userData.netExtra) {
-          /* يتحط في الرسالة من NetMP */
-        }
-        NetMP.queueObj(id, m);
-      } catch (e) {}
-    },
-    getShared: (k, d) => {
-      if (rt.shared.has(k)) return rt.shared.get(k);
-      if (NetMP.sharedHas && NetMP.sharedHas(k)) return NetMP.sharedGet(k, d);
-      return d;
-    },
-    setShared: (k, v) => {
-      rt.shared.set(k, v);
-      try { NetMP.setSharedNet(k, v); } catch (e) {}
-    },
-    netEvent: (toSlotOrName, type, payload) => {
-      try { NetMP.sendEvent(toSlotOrName, type, payload || {}); } catch (e) {}
-    },
-    onNetEvent: (fn) => { if (typeof fn === 'function') NetMP.onEvent(fn); },
-    getRemotePlayers: () => (NetMP.on && NetMP.remotes ? Array.from(NetMP.remotes.values()) : []),
-    isNetworked: () => !!NetMP.on,
-    hitWorld: (ox, oy, oz, dx, dy, dz, maxD) => {
-      const len = Math.hypot(dx, dy, dz) || 1;
-      const h = castRay(new T.Ray(new T.Vector3(ox, oy, oz), new T.Vector3(dx / len, dy / len, dz / len)));
-      return (h && h.t >= 0 && h.t <= maxD) ? h.t : null;
-    }
-  };
-  return G2;
-}
-function runBig(rt, o, root, code) {
-  const base = root.children.slice();
-  if (root.userData && root.userData.body) root.userData.body.visible = false;
-  const body = root.userData.body;
-  rt.bigs.push({o, m: root, base, body});
-  try { new Function('Game', 'root', code)(bigGame(rt, o, root), root); }
-  catch (e) { fail(o.name || 'script', e); }
-}
-function runScene(rt, s) {
-  const root = new T.Group(); scene.add(root); rt.sceneRoots.push(root);
-  try { new Function('Game', 'root', s.code)(bigGame(rt, {name: s.name, p: {}}, root), root); }
-  catch (e) { fail(s.name, e); }
-}
-function cleanBig(rt) {
-  for (const b of rt.bigs) {
-    try { if (b.m.userData.__tukCleanup) b.m.userData.__tukCleanup(); } catch (e) {}
-    for (const c of b.m.children.slice()) if (!b.base.includes(c)) b.m.remove(c);
-    if (b.body) b.body.visible = true;
-  }
-  for (const r of rt.sceneRoots) scene.remove(r);
-}
-
-/* ---------- معاينة الكائنات البرمجية في وضع البناء ----------
-   السكربت الكبير بيبني الموديل بتاعه أول ما يتحمّل. هنشغّله مرة في وضع البناء عشان يظهر
-   الشكل الحقيقي بدل الصندوق. التحديث (onUpdate) بيتشغل بس وقت الاختبار. */
-const PREV = new Map();
-let prevT = null;
-function previewRt() { return {ups: [], inter: [], shared: new Map(), locks: new Set(), bigs: [], sceneRoots: [], rig: null, pl: null,
-  p: new T.Vector3(), v: new T.Vector3(), ang: 0, locked: false, hold: false, animLock: false, cam: null, rs: [], hudScore: 0}; }
-function removePreview(id) {
-  const pv = PREV.get(id); if (!pv) return;
-  PREV.delete(id);
-  try { if (pv.m.userData.__tukCleanup) pv.m.userData.__tukCleanup(); } catch (e) {}
-  for (const c of pv.m.children.slice()) if (!pv.base.includes(c)) pv.m.remove(c);
-  if (pv.body) pv.body.visible = true;
-  S.dirty = 1;
-}
-function refreshPreview(o) {
-  removePreview(o.id);
-  if (S.mode !== 'build' || o.type !== 'sobj' || o.hidden) return;
-  const d = defOf(o.def); if (!d || !isBig(d.code)) return;
-  const m = MESH.get(o.id); if (!m) return;
-  const base = m.children.slice(), body = m.userData.body;
-  if (body) body.visible = false;
-  PREV.set(o.id, {m, base, body});
-  try { new Function('Game', 'root', d.code)(bigGame(previewRt(), o, m), m); }
-  catch (e) { tip('⚠ ' + o.name + ': ' + (e && e.message || e)); }
-  S.dirty = 1;
-}
-function refreshPreviewsOf(defId) { invalidateGhostCache(defId); for (const o of S.objs) if (o.type === 'sobj' && o.def === defId) refreshPreview(o); GH.userData.contentKey = ''; }
-
-/* ---------- ملاصقة الأرض للكائنات البرمجية الكبيرة (عجلات على السطح) ---------- */
-/* ---------- ملاصقة الأرض للكائنات البرمجية الكبيرة (عربيات/مركبات) ----------
-   v2.3: إصلاح الميلان والطلوع الغريب على الحيطة.
-   السبب القديم: أي سطح أعلى من العربية بـ 1.2م (قمة حيطة مثلاً) كان بيتحسب "أرض" تحت العجلة،
-   فالعربية كانت بتتميل وتطلع عليه. دلوقتي:
-   1) الحيطان بتتعامل كعوائق (دفع للخارج) مش أرض — الأرض هي بس اللي في حدود ارتفاع الدرجة (STEP_UP).
-   2) الميل والارتفاع بيتنعموا بنابض بدل القفز المباشر، والميل محدود بزاوية منطقية.
-   3) لو الفرق بين العجلات أكبر من منحدر حقيقي (يعني حافة/حيطة) مفيش ميل أصلاً. */
-const STEP_UP = .5, MAX_TILT = .5;
-function surfaceY(rt, x, z, fromY, self, rise = 1.2) {
-  let best = 0; const w = new T.Vector3(), q = new T.Vector3();
-  const a = rt.hash.get(Math.floor(x / CELL) * 100003 + Math.floor(z / CELL));
-  if (a) for (const b of a) {
-    if (b.ramp) {
-      q.set(x, fromY, z).applyMatrix4(b.inv);
-      if (Math.abs(q.x) <= .5 && Math.abs(q.z) <= .5) { w.set(q.x, q.z, q.z).applyMatrix4(b.m); if (w.y <= fromY + rise && w.y > best) best = w.y; }
-    } else if (x >= b.x0 && x <= b.x1 && z >= b.z0 && z <= b.z1 && b.y1 <= fromY + rise && b.y1 > best) best = b.y1;
-  }
-  for (const b of rt.dyn) if (b.mesh !== self && x >= b.x0 && x <= b.x1 && z >= b.z0 && z <= b.z1 && b.y1 <= fromY + rise && b.y1 > best) best = b.y1;
-  return best;
-}
-function pushOut(rt, b, hx, hz) {
-  const m = b.m, yaw = m.rotation.y, c = Math.cos(yaw), s = Math.sin(yaw), cy = b.gy != null ? b.gy : m.position.y;
-  const top = cy + Math.max(1.4, (b.o.scl[1] || 1.5)), low = cy + STEP_UP, rad = Math.max(.3, hx), n = Math.max(2, Math.min(5, Math.round(hz * 2 / rad)));
-  const L = [], seen = new Set();
-  const px = m.position.x, pz = m.position.z, reach = hz + rad + 1;
-  for (let x = Math.floor((px - reach) / CELL); x <= Math.floor((px + reach) / CELL); x++) for (let z = Math.floor((pz - reach) / CELL); z <= Math.floor((pz + reach) / CELL); z++) {
-    const a = rt.hash.get(x * 100003 + z); if (a) for (const o of a) if (!seen.has(o)) { seen.add(o); if (!o.ramp && o.y1 > low && o.y0 < top) L.push(o); }
-  }
-  for (const o of rt.dyn) if (o.mesh !== m && !o.big && o.y1 > low && o.y0 < top) L.push(o);
-  b.hitN = 0; if (!L.length) return;
-  for (let it = 0; it < 3; it++) {
-    let moved = false;
-    for (let i = 0; i < n; i++) {
-      const lz = n === 1 ? 0 : -hz + (2 * hz) * i / (n - 1);
-      const cx = m.position.x + lz * s, cz = m.position.z + lz * c;
-      for (const o of L) {
-        const qx = clamp(cx, o.x0, o.x1), qz = clamp(cz, o.z0, o.z1); let dx = cx - qx, dz = cz - qz, d = Math.hypot(dx, dz);
-        if (d >= rad) continue;
-        if (d < 1e-4) {   // المركز جوه الصندوق: اطلع من أقرب وش
-          const l = cx - o.x0, r = o.x1 - cx, f = cz - o.z0, bk = o.z1 - cz, mn = Math.min(l, r, f, bk);
-          dx = mn === l ? -1 : mn === r ? 1 : 0; dz = mn === f ? -1 : mn === bk ? 1 : 0; if (!dx && !dz) dz = 1; d = -mn;
-        } else { dx /= d; dz /= d; }
-        const pen = rad - d; m.position.x += dx * pen; m.position.z += dz * pen; b.hitN = Math.max(b.hitN, pen); b.hx = dx; b.hz = dz; moved = true;
-      }
-    }
-    if (!moved) break;
-  }
-  if (b.hitN > .002) { const u = m.userData; u.engineHit = {nx: b.hx, nz: b.hz, pen: b.hitN, t: rt.t}; if (typeof u.onEngineHit === 'function') try { u.onEngineHit(u.engineHit); } catch (e) {} }
-}
-function groundFollow(rt, b, dt) {
-  const o = b.o, m = b.m; if (!o.base) return;
-  const yaw = m.rotation.y, hx = Math.max(.25, o.scl[0] / 2 * .85), hz = Math.max(.35, o.scl[2] / 2 * .85);
-  if (b.gy == null) { b.gy = m.position.y; b.vy = 0; b.gp = 0; b.gr = 0; }
-  pushOut(rt, b, hx, hz);
-  const c = Math.cos(yaw), s = Math.sin(yaw), cy = b.gy;
-  const pt = (lx, lz) => surfaceY(rt, m.position.x + lx * c + lz * s, m.position.z - lx * s + lz * c, cy, m, STEP_UP);
-  const FL = pt(-hx, -hz), FR = pt(hx, -hz), BL = pt(-hx, hz), BR = pt(hx, hz), mid = pt(0, 0);
-  const front = (FL + FR) / 2, back = (BL + BR) / 2, left = (FL + BL) / 2, right = (FR + BR) / 2;
-  let pT = Math.atan2(front - back, 2 * hz), rT = Math.atan2(right - left, 2 * hx), tgtY = (FL + FR + BL + BR) / 4;
-  if (Math.abs(pT) > MAX_TILT || Math.abs(rT) > MAX_TILT) { pT = 0; rT = 0; tgtY = Math.max(FL, FR, BL, BR, mid); }
-  pT = clamp(pT, -MAX_TILT, MAX_TILT); rT = clamp(rT, -MAX_TILT, MAX_TILT);
-  const k = Math.min(1, dt * 12);
-  b.gp += (pT - b.gp) * k; b.gr += (rT - b.gr) * k;
-  if (tgtY >= b.gy) { b.gy += (tgtY - b.gy) * Math.min(1, dt * 22); b.vy = 0; }
-  else { b.vy = Math.max(-30, b.vy - 28 * dt); b.gy = Math.max(tgtY, b.gy + b.vy * dt); if (b.gy === tgtY) b.vy = 0; }
-  m.position.y = b.gy;
-  m.rotation.set(b.gp, yaw, b.gr, 'YXZ');
-}
-
-
-/* ---------- شبكة الأونلاين (مزامنة كاملة: لاعبين + أنيميشن + كائنات) ---------- */
-const NetMP = {
-  on: false, role: 'off', code: null, slot: 1, isHost: false, name: 'لاعب',
-  peer: null, conns: new Map(), remotes: new Map(), objs: new Map(), // id -> {tx,ty,tz,...}
-  acc: 0, ready: false, seq: 0,
-  sendRate: 1 / 12, // 12Hz — أخف على المتصفح عشان يمنع التجميد بعد دقائق
-  initFromSession() {
-    let meta = null;
-    try { meta = JSON.parse(sessionStorage.getItem('hawa_play_meta') || 'null'); } catch (e) {}
-    if (!window.HAWA_PLAY_ONLY || !meta || meta.mode !== 'online' || !meta.code) { this.on = false; return; }
-    this.transport = meta.transport || 'peerjs';
-    this.on = true; this.role = meta.isHost ? 'host' : 'guest';
-    this.isHost = !!meta.isHost; this.code = String(meta.code).trim().toUpperCase();
-    this.slot = +meta.slot || 1; this.name = meta.playerName || 'لاعب';
-    this.voice = meta.voice != null ? !!meta.voice : true;
-    this.conns = new Map(); this.remotes = new Map(); this.objs = new Map();
-    this.ready = false; this.acc = 0; this.seq = 0;
-    this._dcMap = new Map(); // LAN datachannels
-    if (this.transport === 'lan') this._startLan();
-    else {
-      if (typeof Peer === 'undefined') { console.warn('PeerJS missing'); this.on = false; return; }
-      this._startPeer();
-    }
-  },
-  async _startLan() {
-    const self = this;
-    const peerId = (this.isHost ? 'h-' : 'g-') + Math.random().toString(36).slice(2, 10);
-    this._lanPeerId = peerId;
-    this._lanPollAfter = 0;
-    this._lanStopped = false;
-    const code = this.code;
-    try {
-      if (this.isHost) {
-        await fetch('/api/lan/rehost', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ code, name: 'play', hostName: this.name, peerId })
-        });
-      } else {
-        await fetch('/api/lan/join', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ code, name: this.name, peerId })
-        });
-      }
-    } catch (e) { console.warn('LAN rejoin', e); }
-    this.ready = true;
-    say('📡 LAN · سلوت ' + this.slot, 2000);
-    const makePC = () => new RTCPeerConnection({ iceServers: [] });
-    async function ensureOffer(remoteId) {
-      if (self._dcMap.has(remoteId)) return;
-      const pc = makePC();
-      const dc = pc.createDataChannel('hawa', { ordered: true });
-      self._dcMap.set(remoteId, { pc, dc });
-      pc.onicecandidate = e => {
-        if (!e.candidate) return;
-        fetch('/api/lan/signal', { method:'POST', headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ code, from: peerId, to: remoteId, type: 'ice', candidate: e.candidate }) }).catch(()=>{});
-      };
-      dc.onmessage = ev => { try { self._onMsg(remoteId, JSON.parse(ev.data)); } catch(_){} };
-      dc.onclose = () => self._dcMap.delete(remoteId);
-      try {
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-        await fetch('/api/lan/signal', { method:'POST', headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ code, from: peerId, to: remoteId, type: 'offer', sdp: pc.localDescription }) });
-      } catch (e) { console.warn(e); }
-    }
-    async function poll() {
-      if (self._lanStopped || !self.on) return;
-      try {
-        const r = await fetch('/api/lan/signal/' + code + '?peer=' + encodeURIComponent(peerId) + '&after=' + self._lanPollAfter);
-        const j = await r.json();
-        if (j.serverTime) self._lanPollAfter = j.serverTime;
-        if (self.isHost && j.players) {
-          for (const p of j.players) if (p.id !== peerId) ensureOffer(p.id);
-        }
-        for (const s of (j.signals || [])) {
-          if (s.from === peerId) continue;
-          if (s.type === 'offer' && s.sdp) {
-            let entry = self._dcMap.get(s.from);
-            if (!entry) {
-              const pc = makePC();
-              entry = { pc, dc: null };
-              self._dcMap.set(s.from, entry);
-              pc.ondatachannel = ev => {
-                entry.dc = ev.channel;
-                entry.dc.onmessage = e2 => { try { self._onMsg(s.from, JSON.parse(e2.data)); } catch(_){} };
-              };
-              pc.onicecandidate = e => {
-                if (!e.candidate) return;
-                fetch('/api/lan/signal', { method:'POST', headers:{'Content-Type':'application/json'},
-                  body: JSON.stringify({ code, from: peerId, to: s.from, type: 'ice', candidate: e.candidate }) }).catch(()=>{});
-              };
-            }
-            try {
-              await entry.pc.setRemoteDescription(s.sdp);
-              const ans = await entry.pc.createAnswer();
-              await entry.pc.setLocalDescription(ans);
-              await fetch('/api/lan/signal', { method:'POST', headers:{'Content-Type':'application/json'},
-                body: JSON.stringify({ code, from: peerId, to: s.from, type: 'answer', sdp: entry.pc.localDescription }) });
-            } catch (e) {}
-          } else if (s.type === 'answer' && s.sdp) {
-            const entry = self._dcMap.get(s.from);
-            if (entry) try { await entry.pc.setRemoteDescription(s.sdp); } catch (_) {}
-          } else if (s.type === 'ice' && s.candidate) {
-            const entry = self._dcMap.get(s.from);
-            if (entry) try { await entry.pc.addIceCandidate(s.candidate); } catch (_) {}
-          }
-        }
-      } catch (e) {}
-      if (!self._lanStopped) setTimeout(poll, 700);
-    }
-    poll();
-  },
-  _startPeer() {
-    const self = this;
-    try {
-      this.peer = this.isHost ? new Peer(this.code, { debug: 0 }) : new Peer({ debug: 0 });
-    } catch (e) { console.error(e); say('⚠ فشل الشبكة: ' + (e.message || e), 4000); return; }
-    this.peer.on('open', id => {
-      self.ready = true;
-      if (self._pendingEvt && self._pendingEvt.length) {
-        for (const m of self._pendingEvt) self.broadcast(m);
-        self._pendingEvt = [];
-      }
-      if (!self.isHost) {
-        const c = self.peer.connect(self.code, { reliable: true });
-        self._bindConn(c);
-        c.on('open', () => { c.send({ t: 'hello', slot: self.slot, name: self.name }); });
-      } else say('🌐 المضيف جاهز · سلوت ' + self.slot, 2000);
-    });
-    this.peer.on('connection', c => {
-      self._bindConn(c);
-      c.on('open', () => { try { VoiceChat.onPeerConnected(c.peer); } catch(_){} });
-    });
-    this.peer.on('call', call => { try { VoiceChat._answerCall(call); } catch(_){} });
-    this.peer.on('error', err => console.warn('Peer error', err));
-  },
-  _bindConn(c) {
-    const self = this;
-    c.on('open', () => { self.conns.set(c.peer, c); try { VoiceChat.onPeerConnected(c.peer); } catch(_){} });
-    c.on('data', msg => self._onMsg(c.peer, msg));
-    c.on('close', () => {
-      self.conns.delete(c.peer);
-      for (const [k, r] of self.remotes) {
-        if (r.peerId === c.peer) { self._removeRemote(k); break; }
-      }
-    });
-  },
-  _onMsg(from, msg) {
-    if (!msg || !msg.t) return;
-    if (msg.t === 'hello' && this.isHost) {
-      const c = this.conns.get(from);
-      if (c) try { c.send({ t: 'hi', slot: this.slot, name: this.name }); } catch (e) {}
-      return;
-    }
-    if (msg.t === 'state') {
-      this._applyState(from, msg);
-      if (this.isHost) this._relay(from, msg);
-    }
-    if (msg.t === 'world' && Array.isArray(msg.objs)) {
-      this._applyWorld(msg.objs);
-      if (this.isHost) this._relay(from, msg);
-    }
-    if (msg.t === 'shared') {
-      this._netShared.set(msg.k, msg.v);
-      if (RT) RT.shared.set(msg.k, msg.v);
-      if (this.isHost) this._relay(from, msg);
-    }
-    if (msg.t === 'evt') {
-      this._handleEvt(msg);
-      if (this.isHost) this._relay(from, msg);
-    }
-  },
-  _relay(exceptPeer, msg) {
-    for (const [id, c] of this.conns) {
-      if (id === exceptPeer) continue;
-      try { if (c.open) c.send(msg); } catch (e) {}
-    }
-  },
-  _ensureRemote(slot, name, peerId, app) {
-    slot = +slot;
-    if (slot === this.slot) return null;
-    let r = this.remotes.get(slot);
-    if (r) { if (name) r.name = name; r.peerId = peerId || r.peerId; return r; }
-    const rig = makeRigWith(app);
-    scene.add(rig.root);
-    r = {
-      slot, name: name || ('لاعب ' + slot), peerId, rig,
-      tp: new T.Vector3(), ta: 0, hasT: false,
-      anim: { moving: false, run: false, air: false, ph: 0, sf: 0, hv: 0, vy: 0, turn: 0, fz: 0, fx: 0 },
-      cape: null, // [{a,z}, ...]
-      veh: null, // {id, x,y,z, yaw, lean, extras}
-      ride: false
-    };
-    this.remotes.set(slot, r);
-    return r;
-  },
-  _removeRemote(slot) {
-    const r = this.remotes.get(slot);
-    if (!r) return;
-    try { scene.remove(r.rig.root); } catch (e) {}
-    this.remotes.delete(slot);
-  },
-  _applyState(from, msg) {
-    const r = this._ensureRemote(msg.slot, msg.name, from, msg.app);
-    if (!r || !RT) return;
-    if (msg.app) {
-      const key = JSON.stringify(msg.app);
-      if (r.appKey !== key) {
-        r.appKey = key;
-        try { scene.remove(r.rig.root); } catch (e) {}
-        r.rig = makeRigWith(msg.app); scene.add(r.rig.root);
-        if (r.cl) applyMats(r.rig.root, r.cl);
-      }
-    }
-    if (msg.cl) { r.cl = msg.cl; applyMats(r.rig.root, msg.cl); }   // ألوان اللاعب الفعلية (حتى لو سكربت غيّرها)
-    if (msg.p && msg.p.length >= 3) {
-      r.tp.set(msg.p[0], msg.p[1], msg.p[2]);
-      r.ta = msg.ang != null ? msg.ang : (msg.yaw || 0);
-      r.hasT = true;
-    }
-    r.anim = {
-      moving: !!msg.moving, run: !!msg.run, air: !!msg.air,
-      ph: msg.walk || 0, sf: msg.sf || 0, hv: msg.hv || 0,
-      vy: msg.vy || 0, turn: msg.turn || 0, fz: msg.fz || 0, fx: msg.fx || 0, face: msg.face || null
-    };
-    if (msg.cape && msg.cape.length) r.cape = msg.cape;
-    r.sit = msg.sit || null;   // قعدة مظبوطة (حجم + أرجل)
-    if (msg.veh != null && msg.vp) {
-      r.ride = true;
-      r.veh = {
-        id: msg.veh,
-        x: msg.vp[0], y: msg.vp[1], z: msg.vp[2],
-        yaw: msg.vyaw || 0,
-        lean: msg.lean || 0,
-        rx: msg.vrx || 0, rz: msg.vrz || 0,
-        extras: msg.vextra || null
-      };
-      const m = MESH.get(msg.veh);
-      if (m) {
-        if (!m.userData.netSmooth) {
-          m.userData.netSmooth = {
-            tp: new T.Vector3(msg.vp[0], msg.vp[1], msg.vp[2]),
-            tyaw: msg.vyaw || 0, tlean: msg.lean || 0, trx: msg.vrx || 0, trz: msg.vrz || 0
-          };
-        } else {
-          const s = m.userData.netSmooth;
-          s.tp.set(msg.vp[0], msg.vp[1], msg.vp[2]);
-          s.tyaw = msg.vyaw || 0; s.tlean = msg.lean || 0; s.trx = msg.vrx || 0; s.trz = msg.vrz || 0;
-        }
-        m.userData.netDriver = msg.slot;
-        m.matrixAutoUpdate = true;
-      }
-      r.rig.root.visible = true;
-    } else {
-      r.ride = false; r.veh = null;
-      r.rig.root.visible = true;
-    }
-  },
-  _applyWorld(list) {
-    for (const o of list) {
-      if (!o || o.id == null) continue;
-      const m0 = MESH.get(o.id);
-      if (m0 && m0.userData && m0.userData.netDriver === this.slot) continue;
-      if (!this.objs.has(o.id)) {
-        this.objs.set(o.id, { tp: new T.Vector3(), tyaw: 0, trx: 0, trz: 0, has: false });
-      }
-      const s = this.objs.get(o.id);
-      s.tp.set(o.x, o.y, o.z);
-      s.tyaw = o.yaw || 0; s.trx = o.rx || 0; s.trz = o.rz || 0; s.has = true;
-      const m = MESH.get(o.id);
-      if (m) {
-        m.matrixAutoUpdate = true;
-        if (o.extra) m.userData.netExtra = o.extra;
-        if (o.driver != null) m.userData.netDriver = o.driver;
-        if (o.cl && !this.isHost) applyMats(m, o.cl);
-      }
-    }
-  },
-  update(dt) {
-    if (!this.on || !RT) return;
-    const k = Math.min(1, dt * 14); // تنعيم قوي ضد التقطيع
-    for (const r of this.remotes.values()) {
-      if (r.hasT) {
-        r.rig.root.position.lerp(r.tp, k);
-        let da = r.ta - r.rig.root.rotation.y;
-        while (da > Math.PI) da -= Math.PI * 2;
-        while (da < -Math.PI) da += Math.PI * 2;
-        r.rig.root.rotation.y += da * k;
-      }
-      const a = r.anim || {};
-      try {
-        if (r.sit) {
-          rigNeutral(r.rig);
-          r.rig.root.scale.setScalar(r.sit.sc || RIDE_SC);
-          for (const l of (r.sit.lk || [])) { const j = jointOf(r.rig, l[0]); if (j) j.rotation.set(l[1], 0, l[2]); }
-        } else if (r.ride) {
-          rigNeutral(r.rig);
-          r.rig.root.scale.setScalar(RIDE_SC);
-          if (r.veh) {
-            const m = MESH.get(r.veh.id);
-            if (m) {
-              r.rig.root.position.set(m.position.x, m.position.y + 0.55, m.position.z);
-              r.rig.root.rotation.y = m.rotation.y;
-            }
-          }
-        } else {
-          r.rig.root.scale.setScalar(PSC);
-          animRig(r.rig, dt, {
-            moving: a.moving, run: a.run, air: a.air, ph: a.ph || 0,
-            sf: a.sf || 0, hv: a.hv || 0, vy: a.vy || 0, turn: a.turn || 0,
-            az: a.fz || 0, fz: a.fz || 0, fx: a.fx || 0, camRel: 0, camPitch: 0
-          }, new Set());
-        }
-      } catch (e) {}
-      if ((!r.ride || r.sit) && a.face && r.rig.head) {
-        const f = a.face, kk = Math.min(1, dt * 12);
-        const vo = (f.vo || 0);
-        const sh = (VOICE_CFG.headShakeEnabled !== false && VOICE_CFG.enabled !== false) ? vo * (+VOICE_CFG.headShake || 0.045) : 0;
-        const t = performance.now() * 0.045;
-        r.rig.head.rotation.y = _lerp(r.rig.head.rotation.y, (f.hy || 0) + Math.sin(t * 1.7) * sh, kk);
-        r.rig.head.rotation.x = _lerp(r.rig.head.rotation.x, (f.hx || 0) + Math.sin(t * 2.3) * sh * 0.7, kk);
-        for (const e of r.rig.eyes) { e.rotation.y = _lerp(e.rotation.y, f.ey || 0, kk); e.rotation.x = _lerp(e.rotation.x, f.ex || 0, kk); }
-        applyFace(r.rig, f, dt);
-      }
-      if (r.cape && r.rig.cape && r.rig.cape.length) {
-        const n = Math.min(r.cape.length, r.rig.cape.length);
-        for (let i = 0; i < n; i++) {
-          const c = r.cape[i];
-          if (!c) continue;
-          r.rig.cape[i].rotation.x = c.a != null ? c.a : r.rig.cape[i].rotation.x;
-          r.rig.cape[i].rotation.z = c.z != null ? c.z : r.rig.cape[i].rotation.z;
-          if (c.y != null) r.rig.cape[i].rotation.y = c.y;
-        }
-      }
-    }
-    for (const [id, m] of MESH) {
-      const s = m.userData && m.userData.netSmooth;
-      if (!s) continue;
-      if (m.userData.netDriver === this.slot) continue;
-      m.position.lerp(s.tp, k);
-      let dy = s.tyaw - m.rotation.y;
-      while (dy > Math.PI) dy -= Math.PI * 2;
-      while (dy < -Math.PI) dy += Math.PI * 2;
-      m.rotation.y += dy * k;
-      if (s.trx != null) m.rotation.x += (s.trx - m.rotation.x) * k;
-      if (s.trz != null) m.rotation.z += (s.trz - m.rotation.z) * k;
-      if (s.tlean) m.rotation.z += (s.tlean - (m.userData._lean || 0)) * k, m.userData._lean = (m.userData._lean || 0) + (s.tlean - (m.userData._lean || 0)) * k;
-    }
-    for (const [id, s] of this.objs) {
-      if (!s.has) continue;
-      const m = MESH.get(id);
-      if (!m) continue;
-      if (m.userData && m.userData.netDriver === this.slot) continue;
-      m.position.lerp(s.tp, k);
-      let dy = s.tyaw - m.rotation.y;
-      while (dy > Math.PI) dy -= Math.PI * 2;
-      while (dy < -Math.PI) dy += Math.PI * 2;
-      m.rotation.y += dy * k;
-      m.rotation.x += (s.trx - m.rotation.x) * k;
-      m.rotation.z += (s.trz - m.rotation.z) * k;
-    }
-  },
-  _collectVehicle() {
-    const rt = RT;
-    if (!(rt.hold || rt.animLock)) {
-      for (const [id, m] of MESH) {
-        if (m.userData && m.userData.netDriver === this.slot) m.userData.netDriver = null;
-      }
-      return null;
-    }
-    let best = rt.vehicleMesh || null;
-    if (!best && rt.shared && rt.shared.get) best = rt.shared.get('vehicleMesh') || null;
-    if (!best) {
-      let bd = 5;
-      for (const [id, m] of MESH) {
-        const o = OBJ.get(id); if (!o || o.hidden) continue;
-        if (!(o.type === 'sobj' || o.base || o.type === 'plat')) continue;
-        const d = m.position.distanceTo(rt.p);
-        if (d < bd) { bd = d; best = m; }
-      }
-    }
-    if (!best) return null;
-    best.userData.netDriver = this.slot;
-    const extra = best.userData.netExtra || best.userData.bikeState || null;
-    return {
-      veh: best.userData.id,
-      vp: [best.position.x, best.position.y, best.position.z],
-      vyaw: best.rotation.y,
-      vrx: best.rotation.x,
-      vrz: best.rotation.z,
-      lean: best.rotation.z,
-      vextra: extra
-    };
-  },
-  _rigCl() {
-    const rig = RT && RT.rig; if (!rig) return null;
-    const now = performance.now(); if (now - (this._clChk || 0) < 250) return null; this._clChk = now;
-    const a = snapMats(rig.root), h = a.join(',');
-    if (h !== this._clH || now - (this._clT || 0) > 2500) { this._clH = h; this._clT = now; return a; }
-    return null;
-  },
-  _objCl(id, m) {
-    const S = this._objClS || (this._objClS = new Map()); let st = S.get(id); const now = performance.now();
-    if (!st) S.set(id, st = {h: '', t: 0, c: 0});
-    if (now - st.c < 250) return null; st.c = now;
-    const a = snapMats(m), h = a.join(',');
-    if (h !== st.h || now - st.t > 3000) { st.h = h; st.t = now; return a; }
-    return null;
-  },
-  _collectWorld() {
-    const out = [];
-    for (const [id, m] of MESH) {
-      const o = OBJ.get(id);
-      if (!o || o.hidden) continue;
-      if (!(o.type === 'sobj' || o.base || o.type === 'plat' || (m.userData && m.userData.netSync))) continue;
-      if (m.userData && m.userData.netDriver != null && m.userData.netDriver !== this.slot) continue;
-      const ent = {
-        id, x: m.position.x, y: m.position.y, z: m.position.z,
-        yaw: m.rotation.y, rx: m.rotation.x, rz: m.rotation.z
-      };
-      if (this.isHost) { const cl = this._objCl(id, m); if (cl) ent.cl = cl; }   // الهوست هو المرجع لألوان الكائنات
-      out.push(ent);
-    }
-    return out;
-  },
-  _capeState() {
-    const rig = RT && RT.rig;
-    if (!rig || !rig.cape) return null;
-    const L = [];
-    for (let i = 0; i < rig.cape.length; i++) {
-      const c = rig.cape[i];
-      L.push({ a: c.rotation.x, z: c.rotation.z, y: c.rotation.y });
-    }
-    return L;
-  },
-  tick(dt) {
-    if (!this.on || !this.ready || !RT) return;
-    this.update(dt); // تنعيم كل فريم
-    this.acc += dt;
-    if (this.acc < this.sendRate) return;
-    this.acc = 0;
-    const rt = RT;
-    const hv = Math.hypot(rt.v.x, rt.v.z);
-    const veh = this._collectVehicle();
-    const msg = {
-      t: 'state',
-      seq: ++this.seq,
-      slot: this.slot,
-      name: this.name,
-      p: [rt.p.x, rt.p.y, rt.p.z],
-      yaw: rt.yaw,
-      ang: rt.ang,
-      moving: hv > .3 && !(rt.hold || rt.animLock),
-      run: !!(K.ShiftLeft || K.ShiftRight) && hv > .3,
-      air: !rt.gr,
-      walk: rt.walk || 0,
-      hv, sf: Math.min(1, hv / 5.5),
-      vy: rt.v.y,
-      turn: rt.turnS || 0,
-      fz: rt.fa || 0,
-      fx: rt.la || 0,
-      cape: this._capeState(),
-      app: this._appearance(),
-      cl: this._rigCl(),
-      veh: null, vp: null, vyaw: null, vrx: null, vrz: null, lean: null, vextra: null, face: this._faceSnap()
-    };
-    if (veh) Object.assign(msg, veh);
-    if (rt.sit) msg.sit = {sc: rt.rideSc || RIDE_SC, lk: rt.sitLimbs || []};
-    this.broadcast(msg);
-    let world = this._collectWorld();
-    if (this._objQueue && this._objQueue.size) {
-      for (const o of this._objQueue.values()) world.push(o);
-      this._objQueue.clear();
-    }
-    if (world.length) {
-      const seen = new Set();
-      world = world.filter(o => { if (seen.has(o.id)) return false; seen.add(o.id); return true; });
-      this.broadcast({ t: 'world', objs: world, slot: this.slot });
-    }
-  },
-  _appearance() {
-    const o = {}; for (const x of Object.keys(PLAYER_DEF)) o[x] = PCFG[x] != null ? PCFG[x] : PLAYER_DEF[x];
-    return o;
-  },
-  _faceSnap() {
-    const r = RT && RT.rig; if (!r || !r.eyes || !r.st) return null;
-    const f = r.fs || {}, q = v => Math.round((+v || 0) * 100) / 100, e = r.eyes[0];
-    const bl = r.st.blinkT > 0 ? Math.sin((1 - r.st.blinkT / .15) * Math.PI) : 0;
-    return {bl: q(bl), ey: q(e.rotation.y), ex: q(e.rotation.x), hy: q(r.head.rotation.y), hx: q(r.head.rotation.x), mo: q(f.mo), sm: q(f.sm), su: q(f.su), br: q(f.br), vo: q(f.vo != null ? f.vo : VoiceChat.level01())};
-  },
-  broadcast(msg) {
-    if (!msg) return;
-    if (this.transport === 'lan' && this._dcMap) {
-      for (const [id, e] of this._dcMap) {
-        try {
-          if (e.dc && e.dc.readyState === 'open') {
-            if (e.dc.bufferedAmount > 512 * 1024) continue;
-            e.dc.send(JSON.stringify(msg));
-          }
-        } catch (_) {}
-      }
-      return;
-    }
-    for (const [pid, c] of this.conns) {
-      try {
-        if (!c || !c.open) { this.conns.delete(pid); continue; }
-        if (c.dataChannel && c.dataChannel.bufferedAmount > 512 * 1024) continue;
-        c.send(msg);
-      } catch (e) {}
-    }
-  },
-  _objQueue: new Map(),
-  _netShared: new Map(),
-  _eventHandlers: [],
-  queueObj(id, m) {
-    if (!this.on) return;
-    this._objQueue.set(id, {
-      id,
-      x: m.position.x, y: m.position.y, z: m.position.z,
-      yaw: m.rotation.y, rx: m.rotation.x, rz: m.rotation.z,
-      extra: m.userData.netExtra || m.userData.bikeState || null,
-      driver: m.userData.netDriver != null ? m.userData.netDriver : null
-    });
-  },
-  sharedHas(k) { return this._netShared.has(k) || (RT && RT.shared && RT.shared.has(k)); },
-  sharedGet(k, d) {
-    if (this._netShared.has(k)) return this._netShared.get(k);
-    if (RT && RT.shared && RT.shared.has(k)) return RT.shared.get(k);
-    return d;
-  },
-  setSharedNet(k, v) {
-    this._netShared.set(k, v);
-    if (RT) RT.shared.set(k, v);
-    if (!this.on || !this.ready) return;
-    this.broadcast({ t: 'shared', k: String(k), v: v, from: this.slot });
-  },
-  sendEvent(to, type, payload) {
-    if (!this.on) return;
-    const msg = { t: 'evt', to: to, type: type, payload: payload || {}, from: this.slot, fromName: this.name };
-    if (!this.ready) {
-      this._pendingEvt = this._pendingEvt || [];
-      this._pendingEvt.push(msg);
-      return;
-    }
-    this.broadcast(msg);
-  },
-  onEvent(fn) { this._eventHandlers.push(fn); },
-  _handleEvt(msg) {
-    const to = msg.to;
-    const mySlot = +this.slot;
-    const myName = 'p' + mySlot + '_' + (this.name || 'player');
-    let forMe = false;
-    if (to === '*' || to === 'all' || to == null) forMe = true;
-    else if (+to === mySlot) forMe = true;
-    else if (String(to) === myName || String(to) === String(this.name)) forMe = true;
-    else if (msg.payload && (+msg.payload.to === mySlot || msg.payload.to === myName)) forMe = true;
-    if (!forMe) return;
-    for (const fn of this._eventHandlers) {
-      try { fn(msg.type, msg.payload || {}, msg.from, msg.fromName); } catch (e) { console.warn(e); }
-    }
-  },
-  stop() {
-    this._lanStopped = true;
-    try { if (this.peer) this.peer.destroy(); } catch (e) {}
-    if (this._dcMap) {
-      for (const e of this._dcMap.values()) {
-        try { if (e.dc) e.dc.close(); e.pc.close(); } catch (_) {}
-      }
-      this._dcMap.clear();
-    }
-    for (const slot of [...this.remotes.keys()]) this._removeRemote(slot);
-    this.conns.clear(); this.objs.clear();
-    this._objQueue = new Map(); this._netShared = new Map(); this._eventHandlers = [];
-    this.peer = null; this.on = false; this.ready = false;
-  }
-};
-
-
-/* ---------- بدء/إيقاف الاختبار ---------- */
-function playStart() {
-  try { MOB.closeSheets(); MOB.setPlay(true); } catch (_) {}
-
-  for (const id of [...PREV.keys()]) removePreview(id);
-  sel(null); S.mode = 'play'; syncMarks(); S.err = []; S.fly = false; updModes();
-  $('#app').hidden = true; $('#play').hidden = false; attach(pvp);
-  (function(){
-    const meta = onlinePlayMeta();
-    const online = !!meta;
-    const voiceOn = online && (meta.voice == null || !!meta.voice);
-    const purePlay = !!window.HAWA_PLAY_ONLY;
-    const top = document.getElementById('pTop');
-    if (top) top.style.display = (online || purePlay) ? 'none' : '';
-    const help = document.getElementById('pHelp');
-    if (help) {
-      help.innerHTML = '<kbd>W A S D</kbd>حركة<kbd>Space</kbd>قفز<kbd>Shift</kbd>جري<kbd>الماوس</kbd>كاميرا<kbd>F</kbd>تفاعل' + (online ? '' : '<kbd>R</kbd>إعادة') + (voiceOn ? '<kbd>B</kbd>مايك' : '');
-    }
-    try {
-      if (voiceOn) { VoiceChat.ensureBtn(); VoiceChat.show(true); }
-      else { try { VoiceChat.off(); } catch (_) {} VoiceChat.show(false); }
-    } catch (e) { console.warn(e); }
-  })();
-  $('#pMsg').hidden = true; $('#pPrompt').hidden = true;
-  grid.visible = false; gizmo.visible = false; GH.visible = false; selHelper();
-  const rt = RT = {t: 0, score: 0, msg: '', msgT: 0, inst: [], dyn: [], trig: [], coins: [], plats: [], hooks: [], rs: [], hash: new Map(),
-    stamp: 0, p: new T.Vector3(), v: new T.Vector3(), gnd: null, gr: false, yaw: Math.PI, pitch: .35, dist: 5.5, ang: 0, walk: 0, cd: 0, cur: null,
-    byName: new Map(), hud: '', rig: null, pl: null, ups: [], bigs: [], sceneRoots: [], inter: [], shared: new Map(), locks: new Set(),
-    hold: false, locked: false, animLock: false, cam: null, camS: null, fPrev: false, prompt: ''};
-  const groups = {};
-  for (const o of S.objs) {
-    const m = MESH.get(o.id), sc = o.scripts.length > 0 || o.type === 'sobj';
-    if (o.hidden) { m.visible = false; continue; }
-    if (o.type === 'respawn' || o.type === 'online_spawn') { m.visible = false; if (o.type === 'respawn') rt.rs.push(o); continue; }
-    if (o.type === 'light') continue;
-    m.matrixAutoUpdate = true;
-    if (o.type === 'coin') { m.visible = false; continue; }
-    if (o.type === 'pad' || o.type === 'kill') { const b = aabb(m); b.o = o; b.kind = o.type; rt.trig.push(b); continue; }
-    if (o.type === 'plat' || sc) {
-      if (o.type === 'plat') rt.plats.push({o, m});
-      if (o.solid && o.type !== 'ramp') { const big = o.type === 'sobj' && o.base; const b = big ? aabbBox(m) : aabb(m); b.mesh = m; b.dyn = 1; b.big = big; rt.dyn.push(b); }
-      continue;
-    }
-    m.matrixAutoUpdate = false; (groups[o.type] = groups[o.type] || []).push({o, m}); m.visible = false;
-    if (o.solid) { const b = aabb(m); if (o.type === 'ramp') { b.ramp = 1; b.m = m.matrix.clone(); b.inv = m.matrix.clone().invert(); } hadd(b); }
-  }
-  const col = new T.Color();
-  for (const t in groups) {
-    const L = groups[t], im = new T.InstancedMesh(G[DEF[t].g], INST, L.length);
-    L.forEach((x, i) => { im.setMatrixAt(i, x.m.matrix); im.setColorAt(i, col.set(x.o.color)); });
-    im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true;
-    scene.add(im); rt.inst.push(im);
-  }
-  rt.rig = makeRig(); scene.add(rt.rig.root);
-  rt.pl = {position: rt.p, velocity: rt.v, get grounded() { return rt.gr; }, mesh: rt.rig.root};
-  rt.cur = rt.rs[0] || null; respawnP();
-  try {
-    NetMP.initFromSession();
-    if (NetMP.on) {
-      const sp = S.objs.filter(o => o.type === 'online_spawn');
-      const mine = sp.find(o => +((o.p && o.p.slot) || 0) === NetMP.slot) || sp[NetMP.slot - 1];
-      if (mine) {
-        rt.p.set(mine.pos[0], mine.pos[1] + .02, mine.pos[2]);
-        rt.v.set(0, 0, 0);
-      }
-      say('🌐 أونلاين · سلوت ' + NetMP.slot + ' · ' + (NetMP.isHost ? 'مضيف' : 'ضيف'), 2500);
-    }
-  } catch (e) { console.error(e); }
-  const game = {
-    THREE: T, scene, camera: cam, renderer: R,
-    get time() { return rt.t; }, get score() { return rt.score; }, addScore: n => rt.score += n, say, respawn: respawnP,
-    key: c => !!K[c], random: Math.random, find: n => rt.byName.get(n) || null,
+    setKey(code, down) { setVirtualKey(code, !!down); },
+    key: c => keyDown(c),
+    isKeyDown: c => keyDown(c),
+    setPlayerYaw(slot, yaw) { if (RT) { RT.yaw = +yaw || 0; RT.ang = +yaw || 0; } },
+    random: Math.random, find: n => rt.byName.get(n) || null,
     get coords() { return { x: +rt.p.x.toFixed(3), y: +rt.p.y.toFixed(3), z: +rt.p.z.toFixed(3) }; },
     getCoord(axis) { const c = {x: rt.p.x, y: rt.p.y, z: rt.p.z}; return axis ? c[axis] : c; },
     player: {
@@ -4286,9 +3521,19 @@ function playStart() {
   }
   const comp = (s, self) => {
     try {
-      const h = new Function('self', 'game', s.code + '\n;return{onStart:typeof onStart=="function"?onStart:null,onUpdate:typeof onUpdate=="function"?onUpdate:null,onTouch:typeof onTouch=="function"?onTouch:null};')(self, game);
-      h.self = self; h.name = s.name; rt.hooks.push(h);
-    } catch (e) { fail(s.name, e); }
+      const wrap = s.code + `\n;
+return {
+  onStart: (typeof onStart==="function"?onStart:null) || (self && typeof self.onStart==="function"?self.onStart:null),
+  onUpdate: (typeof onUpdate==="function"?onUpdate:null) || (self && typeof self.onUpdate==="function"?self.onUpdate:null),
+  onTouch: (typeof onTouch==="function"?onTouch:null) || (self && typeof self.onTouch==="function"?self.onTouch:null)
+};`;
+      const h = new Function('self', 'game', wrap)(self, game);
+      if (!h.onStart && self && self.onStart) h.onStart = self.onStart.bind(self);
+      if (!h.onUpdate && self && self.onUpdate) h.onUpdate = self.onUpdate.bind(self);
+      if (!h.onTouch && self && self.onTouch) h.onTouch = self.onTouch.bind(self);
+      h.self = self; h.name = s.name || (self && self.name) || 'script';
+      rt.hooks.push(h);
+    } catch (e) { fail(s.name || 'script', e); }
   };
   for (const s of S.scripts) if (s.enabled) { if (isBig(s.code)) runScene(rt, s); else comp(s, {name: 'scene', props: {}}); }
   for (const o of S.objs) {
@@ -4307,6 +3552,7 @@ function playStart() {
 function playStop() {
   try { MOB.setPlay(false); } catch (_) {}
   try { TouchUI.hide(); } catch (_) {}
+  try { clearVirtualKeys(); } catch (_) {}
 
   const rt = RT; if (!rt) return;
   if (document.pointerLockElement) document.exitPointerLock();
@@ -4343,15 +3589,15 @@ function play(dt) {
   if (rt.gnd && rt.gnd.dyn) { p.x += rt.gnd.dx; p.y += rt.gnd.dy; p.z += rt.gnd.dz; }
   if (!rt.hold) {
     const inp = !rt.locked;
-    const ix = inp ? (K.KeyD || K.ArrowRight ? 1 : 0) - (K.KeyA || K.ArrowLeft ? 1 : 0) : 0;
-    const iz = inp ? (K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0) : 0;
+    const ix = inp ? (keyDown('KeyD') || keyDown('ArrowRight') ? 1 : 0) - (keyDown('KeyA') || keyDown('ArrowLeft') ? 1 : 0) : 0;
+    const iz = inp ? (keyDown('KeyW') || keyDown('ArrowUp') ? 1 : 0) - (keyDown('KeyS') || keyDown('ArrowDown') ? 1 : 0) : 0;
     const sy = Math.sin(rt.yaw), cy = Math.cos(rt.yaw);
-    let dx = -sy * iz + cy * ix, dz = -cy * iz - sy * ix; const len = Math.hypot(dx, dz), sp = K.ShiftLeft ? 9 : 5.5;
+    let dx = -sy * iz + cy * ix, dz = -cy * iz - sy * ix; const len = Math.hypot(dx, dz), sp = (keyDown('ShiftLeft') || keyDown('ShiftRight')) ? 9 : 5.5;
     if (len > 0) { dx /= len; dz /= len; let d = Math.atan2(dx, dz) - rt.ang; d = Math.atan2(Math.sin(d), Math.cos(d)); rt.ang += d * Math.min(1, dt * 14); }
     const kk = Math.min(1, dt * (rt.gr ? 18 : 6));
     v.x += (dx * sp - v.x) * kk; v.z += (dz * sp - v.z) * kk;
     rt.coy = rt.gr ? .1 : (rt.coy || 0) - dt;
-    const sp1 = !!K.Space; if (sp1 && !rt.spPrev) rt.jbuf = .13; rt.spPrev = sp1; rt.jbuf = (rt.jbuf || 0) - dt;
+    const sp1 = keyDown('Space'); if (sp1 && !rt.spPrev) rt.jbuf = .13; rt.spPrev = sp1; rt.jbuf = (rt.jbuf || 0) - dt;
     if (rt.jbuf > 0 && rt.coy > 0 && inp) { v.y = 10; rt.gr = false; rt.coy = 0; rt.jbuf = 0; rt.jumping = true; }
     if (!sp1 && rt.jumping && v.y > 4) v.y *= Math.pow(.0005, dt);
     if (v.y <= 0) rt.jumping = false;
@@ -4432,7 +3678,7 @@ function frame(now) {
   const dt = Math.min(.05, (now - last) / 1000); last = now;
   if (S.mode === 'play') play(dt);
   else {
-    if (K.KeyW || K.KeyA || K.KeyS || K.KeyD || K.ArrowUp || K.ArrowDown || K.ArrowLeft || K.ArrowRight || (K.Space || K.ShiftLeft || K.ShiftRight)) fly(dt);
+    if (keyDown('KeyW') || keyDown('KeyA') || keyDown('KeyS') || keyDown('KeyD') || keyDown('ArrowUp') || keyDown('ArrowDown') || keyDown('ArrowLeft') || keyDown('ArrowRight') || keyDown('Space') || keyDown('ShiftLeft') || keyDown('ShiftRight')) fly(dt);
     ghostUpdate();
     if (SELH) SELH.update();
     if ((++mkc & 7) === 0) syncMarks();
@@ -4558,16 +3804,16 @@ const MOB = {
       setKnob(dx, dy);
       // غذي مفاتيح الحركة
       const dead = 0.22;
-      K.KeyW = this.joy.y < -dead ? 1 : 0;
-      K.KeyS = this.joy.y > dead ? 1 : 0;
-      K.KeyA = this.joy.x < -dead ? 1 : 0;
-      K.KeyD = this.joy.x > dead ? 1 : 0;
+      setVirtualKey('KeyW', this.joy.y < -dead);
+      setVirtualKey('KeyS', this.joy.y > dead);
+      setVirtualKey('KeyA', this.joy.x < -dead);
+      setVirtualKey('KeyD', this.joy.x > dead);
     };
     const end = () => {
       this.joy.active = false; this.joy.pid = null;
       this.joy.x = this.joy.y = 0;
       setKnob(0, 0);
-      K.KeyW = K.KeyA = K.KeyS = K.KeyD = 0;
+      setVirtualKey('KeyW',0);setVirtualKey('KeyA',0);setVirtualKey('KeyS',0);setVirtualKey('KeyD',0);
     };
     zone.addEventListener('pointerdown', e => {
       e.preventDefault(); e.stopPropagation();
@@ -4586,8 +3832,8 @@ const MOB = {
     const run = document.getElementById('mRun');
     const hold = (el, key, flag) => {
       if (!el) return;
-      const on = e => { e.preventDefault(); e.stopPropagation(); K[key] = 1; this[flag] = true; el.classList.add('on'); };
-      const off = e => { e.preventDefault(); K[key] = 0; this[flag] = false; el.classList.remove('on'); };
+      const on = e => { e.preventDefault(); e.stopPropagation(); setVirtualKey(key, 1); this[flag] = true; el.classList.add('on'); };
+      const off = e => { e.preventDefault(); setVirtualKey(key, 0); this[flag] = false; el.classList.remove('on'); };
       el.addEventListener('pointerdown', on);
       el.addEventListener('pointerup', off);
       el.addEventListener('pointerleave', off);
