@@ -4849,10 +4849,10 @@ const VOICE_DEF = {
   enabled: true,
   sensitivity: 0.008,      
   maxMouth: 1.35,          
-  headShake: 0.14,         
+  headShake: 0.32,         
   headShakeEnabled: true,
-  nodSpeed: 5.5,           
-  nodAmount: 0.18,         
+  nodSpeed: 7.2,           
+  nodAmount: 0.38,         
   smoothing: 0.42,         
   highpass: 85,
   lowpass: 7500,
@@ -6402,29 +6402,37 @@ function animRig(rig, dt, s, locks) {
   if (s.local) {
     VoiceChat.tick();
     const sh = VoiceChat.headShakeAmount();
-    // إيماءة «نعم»: حركة على محور X فقط (pitch) — بدون دوران جانبي/التواء
+    // إيماءة كلام واضحة: رأس لأعلى/أسفل + اهتزاز خفيف جانبي مع الصوت
     const baseHx = hp, baseHy = tgt, baseHz = -turnRoll * .5;
     const baseNx = -lean * .15, baseNy = tgt * .25;
-    if (!rig._voiceNod) rig._voiceNod = { x: 0 };
-    const nodAmt = (+VOICE_CFG.nodAmount || 0.18);
-    const nodSpd = (+VOICE_CFG.nodSpeed || 5.5);
+    if (!rig._voiceNod) rig._voiceNod = { x: 0, z: 0 };
+    const nodAmt = (+VOICE_CFG.nodAmount || 0.38);
+    const nodSpd = (+VOICE_CFG.nodSpeed || 7.2);
     if (sh > 0.0008) {
       const tt = performance.now() * 0.001;
-      // موجة ناعمة لأعلى/أسفل كأن الشخص بيوافق وهو بيتكلم
-      const nod = Math.sin(tt * nodSpd) * 0.55 + Math.sin(tt * nodSpd * 1.7 + 0.4) * 0.25;
-      const targetNod = nod * nodAmt * Math.min(1, sh * 8);
-      rig._voiceNod.x = _lerp(rig._voiceNod.x, targetNod, Math.min(1, dt * 10));
+      const intensity = Math.min(1.35, sh * 10);
+      // موجة أقوى لأعلى/أسفل أثناء الكلام
+      const nod = Math.sin(tt * nodSpd) * 0.7 + Math.sin(tt * nodSpd * 1.85 + 0.35) * 0.35
+                + Math.sin(tt * nodSpd * 0.55 + 1.1) * 0.18;
+      const targetNod = nod * nodAmt * intensity;
+      // اهتزاز جانبي خفيف يتناسب مع مستوى الصوت
+      const side = Math.sin(tt * nodSpd * 2.4 + 0.6) * 0.22 + Math.sin(tt * nodSpd * 4.1) * 0.1;
+      const targetSide = side * nodAmt * 0.55 * intensity;
+      rig._voiceNod.x = _lerp(rig._voiceNod.x, targetNod, Math.min(1, dt * 14));
+      rig._voiceNod.z = _lerp(rig._voiceNod.z, targetSide, Math.min(1, dt * 14));
     } else {
-      // السكوت: رجوع تدريجي للوضع الأصلي
-      rig._voiceNod.x = _lerp(rig._voiceNod.x, 0, Math.min(1, dt * 8));
+      rig._voiceNod.x = _lerp(rig._voiceNod.x, 0, Math.min(1, dt * 9));
+      rig._voiceNod.z = _lerp(rig._voiceNod.z, 0, Math.min(1, dt * 9));
       if (Math.abs(rig._voiceNod.x) < 0.001) rig._voiceNod.x = 0;
+      if (Math.abs(rig._voiceNod.z) < 0.001) rig._voiceNod.z = 0;
     }
     rig.head.rotation.x = baseHx + rig._voiceNod.x;
     rig.head.rotation.y = baseHy;
-    rig.head.rotation.z = baseHz;
+    rig.head.rotation.z = baseHz + (rig._voiceNod.z || 0);
     if (rig.neck) {
-      rig.neck.rotation.x = baseNx + rig._voiceNod.x * 0.35;
+      rig.neck.rotation.x = baseNx + rig._voiceNod.x * 0.42;
       rig.neck.rotation.y = baseNy;
+      rig.neck.rotation.z = (rig._voiceNod.z || 0) * 0.45;
     }
   }
   if (!s.local) {
@@ -7599,26 +7607,34 @@ const NetMP = {
       if (!r.ride && a.face && r.rig.head) {
         const f = a.face, kk = Math.min(1, dt * 14);
         const vo = (f.vo || 0);
-        const sh = (VOICE_CFG.headShakeEnabled !== false && VOICE_CFG.enabled !== false) ? vo * (+VOICE_CFG.headShake || 0.085) : 0;
-        if (!r._voiceNod) r._voiceNod = { x: 0 };
-        const nodAmt = (+VOICE_CFG.nodAmount || 0.18);
-        const nodSpd = (+VOICE_CFG.nodSpeed || 5.5);
+        const sh = (VOICE_CFG.headShakeEnabled !== false && VOICE_CFG.enabled !== false) ? vo * (+VOICE_CFG.headShake || 0.32) : 0;
+        if (!r._voiceNod) r._voiceNod = { x: 0, z: 0 };
+        const nodAmt = (+VOICE_CFG.nodAmount || 0.38);
+        const nodSpd = (+VOICE_CFG.nodSpeed || 7.2);
         const baseHx = (f.hx || 0), baseHy = (f.hy || 0);
         if (sh > 0.0008) {
           const tt = performance.now() * 0.001;
-          const nod = Math.sin(tt * nodSpd) * 0.55 + Math.sin(tt * nodSpd * 1.7 + 0.4) * 0.25;
-          const targetNod = nod * nodAmt * Math.min(1, sh * 8);
-          r._voiceNod.x = _lerp(r._voiceNod.x, targetNod, Math.min(1, dt * 10));
+          const intensity = Math.min(1.35, sh * 10);
+          const nod = Math.sin(tt * nodSpd) * 0.7 + Math.sin(tt * nodSpd * 1.85 + 0.35) * 0.35
+                    + Math.sin(tt * nodSpd * 0.55 + 1.1) * 0.18;
+          const targetNod = nod * nodAmt * intensity;
+          const side = Math.sin(tt * nodSpd * 2.4 + 0.6) * 0.22 + Math.sin(tt * nodSpd * 4.1) * 0.1;
+          const targetSide = side * nodAmt * 0.55 * intensity;
+          r._voiceNod.x = _lerp(r._voiceNod.x, targetNod, Math.min(1, dt * 14));
+          r._voiceNod.z = _lerp(r._voiceNod.z, targetSide, Math.min(1, dt * 14));
         } else {
-          r._voiceNod.x = _lerp(r._voiceNod.x, 0, Math.min(1, dt * 8));
+          r._voiceNod.x = _lerp(r._voiceNod.x, 0, Math.min(1, dt * 9));
+          r._voiceNod.z = _lerp(r._voiceNod.z, 0, Math.min(1, dt * 9));
           if (Math.abs(r._voiceNod.x) < 0.001) r._voiceNod.x = 0;
+          if (Math.abs(r._voiceNod.z) < 0.001) r._voiceNod.z = 0;
         }
         r.rig.head.rotation.y = _lerp(r.rig.head.rotation.y, baseHy, kk);
         r.rig.head.rotation.x = _lerp(r.rig.head.rotation.x, baseHx + r._voiceNod.x, kk);
-        r.rig.head.rotation.z = _lerp(r.rig.head.rotation.z, 0, kk);
+        r.rig.head.rotation.z = _lerp(r.rig.head.rotation.z, r._voiceNod.z || 0, kk);
         if (r.rig.neck) {
-          r.rig.neck.rotation.x = _lerp(r.rig.neck.rotation.x, r._voiceNod.x * 0.35, kk);
+          r.rig.neck.rotation.x = _lerp(r.rig.neck.rotation.x, r._voiceNod.x * 0.42, kk);
           r.rig.neck.rotation.y = _lerp(r.rig.neck.rotation.y, baseHy * 0.25, kk);
+          r.rig.neck.rotation.z = _lerp(r.rig.neck.rotation.z, (r._voiceNod.z || 0) * 0.45, kk);
         }
         for (const e of (r.rig.eyes || [])) { e.rotation.y = _lerp(e.rotation.y, f.ey || 0, kk); e.rotation.x = _lerp(e.rotation.x, f.ex || 0, kk); }
         applyFace(r.rig, f, dt);
