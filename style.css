@@ -615,6 +615,11 @@ body.is-mobile #mBar button i{font-style:normal;font-size:9.5px;color:#b6adc4}
 body.is-mobile #mBar button:active{transform:scale(.95);background:var(--card2)}
 body.is-mobile #mBar button.go{min-width:68px;background:linear-gradient(180deg,#16a34a,#15803d);border-color:#22c55e}
 body.is-mobile #mBar button.go i{color:#eafff0}
+body.is-mobile #mBar button.m-storage-act{
+  min-width:72px;background:linear-gradient(180deg,#b45309,#92400e);border-color:#f59e0b;color:#fff7ed;
+  animation:mStoragePulse 1.6s ease-in-out infinite}
+body.is-mobile #mBar button.m-storage-act i{color:#ffedd5}
+@keyframes mStoragePulse{0%,100%{box-shadow:0 0 0 0 rgba(245,158,11,.35)}50%{box-shadow:0 0 0 6px rgba(245,158,11,0)}}
 .m-grow{flex:1}
 
 /* --- الشريط السفلي (الأدوات) --- */

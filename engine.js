@@ -1428,7 +1428,7 @@ function toggleLock() {
 }
 document.addEventListener('pointerlockchange', () => { updModes(); });
 function updModes() {
-  $('#bFly').classList.toggle('on', S.fly);
+  try { const _bf = $('#bFly'); if (_bf) _bf.classList.toggle('on', S.fly); } catch (_) {}
   const locked = document.pointerLockElement === cv;
   $('#modeChip').textContent = (S.fly ? '🕊 طيران' : '🏗 بناء') + (locked ? ' · الماوس مخفي (Ctrl للإلغاء · Enter للتنفيذ على المركز)' : '');
   const ch = $('#crosshair'); if (ch) ch.hidden = !(locked && S.mode === 'build');
@@ -1663,7 +1663,7 @@ $('#q').oninput = cats;
 $('#tools').onclick = e => { const b = e.target.closest('[data-tool]'); if (b) setTool(b.dataset.tool); };
 $('#secs').onclick = e => { const b = e.target.closest('[data-sec]'); if (b) setSec(b.dataset.sec); };
 if ($('#mSecs')) $('#mSecs').onclick = e => { const b = e.target.closest('[data-sec]'); if (b) setSec(b.dataset.sec); };
-$('#bFly').onclick = toggleFly;
+try { const _bfly = document.getElementById('bFly'); if (_bfly) _bfly.onclick = toggleFly; } catch (_) {}
 $('#bPar').onclick = () => { document.body.classList.toggle('noside'); $('#bPar').classList.toggle('on', !document.body.classList.contains('noside')); setTimeout(resize, 30); };
 const _bSpawns = document.getElementById('bSpawns');
 if (_bSpawns) _bSpawns.onclick = () => openSpawnsPanel();
@@ -2795,7 +2795,7 @@ function inspect() {
     const op = S.scripts.filter(s => !o.scripts.includes(s.id)).map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('');
     h += `<div class="cp"><h4>السكربتات المرتبطة</h4>${sc}<select id="addsc" style="width:100%"><option value="">＋ ربط سكربت...</option>${op}</select></div>`;
   }
-  h += `<div class="acts"><button data-a="up">${ic('up')}<i>طلوع</i></button><button data-a="down">${ic('down')}<i>نزول</i></button><button data-a="fly">${ic('fly')}<i>طيران</i></button>`
+  h += `<div class="acts"><button data-a="up">${ic('up')}<i>طلوع</i></button><button data-a="down">${ic('down')}<i>نزول</i></button>`
     + `<button data-a="vis">${ic(o.hidden ? 'eyeoff' : 'eye')}<i>${o.hidden ? 'إظهار' : 'إخفاء'}</i></button><button data-a="dup">${ic('copy')}<i>نسخ</i></button><button data-a="del" class="red">${ic('trash')}<i>حذف</i></button></div>`;
   el.innerHTML = h; updVis();
 }
@@ -3825,37 +3825,72 @@ const StoreFS = {
     } catch (e) { console.warn('legacy read', e); return null; }
     finally { this.handle = keep; }
   },
+  /** أول لمسة بعد الريفرش = إعادة إذن المجلد تلقائي (موبايل + كمبيوتر) من غير زر تفعيل */
+  _bindSilentFolderRestore() {
+    if (this._silentBound || !this.handle) return;
+    this._silentBound = true;
+    const once = async () => {
+      try { document.removeEventListener('pointerdown', once, true); } catch (_) {}
+      try { document.removeEventListener('click', once, true); } catch (_) {}
+      if (!this.handle || this.mode === 'folder' || this.mode === 'server') return;
+      try {
+        const p = await this.handle.requestPermission({ mode: 'readwrite' });
+        if (p === 'granted') {
+          this.needsGesture = false;
+          this.mode = 'folder';
+          this.label = 'مجلد: ' + (this.handle.name || 'جهاز');
+          try { localStorage.setItem('hawa2-store-mode', 'folder'); } catch (_) {}
+          try { await this.saveAll(); } catch (_) {}
+          try { tip('✔ تم ربط مجلد التخزين: ' + (this.handle.name || '')); } catch (_) {}
+          try { updStorageActBtn(); } catch (_) {}
+        }
+      } catch (e) { console.warn('silent folder restore', e); }
+    };
+    try {
+      document.addEventListener('pointerdown', once, true);
+      document.addEventListener('click', once, true);
+    } catch (_) {}
+  },
   async init() {
     this.handle = null;
     this.mode = 'none';
     this.label = 'لم يُحدَّد';
     this.needsGesture = false;
+    this._silentBound = false;
     try {
       const sv = await this.initServer();
       if (sv) return sv;
     } catch (e) { console.warn('StoreFS server', e); }
+
+    // مجلد الجهاز (موبايل Chrome + كمبيوتر): اختيار مرة → والحفظ عليه
     if (!this.supportsFolder()) {
-      this.label = 'المتصفح لا يدعم مجلدات';
+      this.mode = 'local';
+      this.label = 'متصفح (localStorage)';
       return false;
     }
     try {
       const h = await this._idbGet('dir');
       if (h) {
-        this.handle = h;
-        this.mode = 'folder';
-        this.label = 'مجلد: ' + (h.name || 'جهاز');
-        try { localStorage.setItem('hawa2-store-mode', 'folder'); } catch (_) {}
         let perm = 'prompt';
         try { perm = await h.queryPermission({ mode: 'readwrite' }); } catch (_) {}
+        this.handle = h;
         if (perm === 'granted') {
+          this.mode = 'folder';
+          this.label = 'مجلد: ' + (h.name || 'جهاز');
           this.needsGesture = false;
+          try { localStorage.setItem('hawa2-store-mode', 'folder'); } catch (_) {}
           return true;
         }
-        
-        this.needsGesture = true;
-        return 'pending';
+        // الإذن نائم بعد الريفرش — نرجّعه تلقائي عند أول لمسة (من غير زر تفعيل)
+        this.mode = 'local';
+        this.label = 'مجلد محفوظ: ' + (h.name || 'جهاز') + ' (هيتفعل مع أول لمسة)';
+        this.needsGesture = false;
+        this._bindSilentFolderRestore();
+        return false;
       }
     } catch (e) { console.warn('StoreFS init', e); }
+    this.mode = 'local';
+    this.label = 'متصفح (localStorage)';
     return false;
   },
   async activatePermission() {
@@ -3866,6 +3901,7 @@ const StoreFS = {
         this.needsGesture = false;
         this.mode = 'folder';
         this.label = 'مجلد: ' + (this.handle.name || 'جهاز');
+        try { localStorage.setItem('hawa2-store-mode', 'folder'); } catch (_) {}
         return true;
       }
     } catch (e) { console.warn('activatePermission', e); }
@@ -4153,7 +4189,7 @@ const StoreFS = {
   },
   async pickAndMigrate() {
     if (!this.supportsFolder()) {
-      await uiAlert('المتصفح لا يدعم اختيار مجلد.\nاستخدم Chrome/Edge على الكمبيوتر.\nعلى الموبايل: تحميل/رفع المشروع ZIP.');
+      await uiAlert('المتصفح لا يدعم اختيار مجلد.\nجرّب Chrome على أندرويد أو الكمبيوتر.\nالحفظ داخل المتصفح شغال كبديل دائم.');
       return false;
     }
     try {
@@ -4645,6 +4681,24 @@ async function openStorageFolderOnDevice() {
   return false;
 }
 
+/** يظهر زر «تفعيل التخزين» في شريط الموبايل فقط لما المجلد محفوظ والإذن مش مفعّل */
+function updStorageActBtn() {
+  try {
+    const btn = document.getElementById('mStorageAct');
+    if (!btn) return;
+    const mob = (typeof MOB !== 'undefined' && MOB.on) || (typeof isMobileLike === 'function' && isMobileLike());
+    if (!mob) { btn.hidden = true; return; }
+    // يظهر لو: في مجلد محفوظ بس مش متفعل، أو مفيش مجلد أصلاً والمتصفح يدعم الاختيار
+    const folderActive = StoreFS.mode === 'folder' || StoreFS.mode === 'server';
+    const hasHandleSleeping = !!(StoreFS.handle && !folderActive);
+    const canPick = !StoreFS.handle && typeof StoreFS.supportsFolder === 'function' && StoreFS.supportsFolder();
+    btn.hidden = !(hasHandleSleeping || canPick);
+    if (!btn.hidden) {
+      const label = btn.querySelector('i');
+      if (label) label.textContent = hasHandleSleeping ? 'تفعيل التخزين' : 'اختيار التخزين';
+    }
+  } catch (_) {}
+}
 function showStorageInfo() {
   const modal = document.getElementById('storageModal');
   const body = document.getElementById('storageBody');
@@ -4661,19 +4715,29 @@ function showStorageInfo() {
   const folderOk = StoreFS.supportsFolder();
   const hasFolder = StoreFS.isFolderLike();
   const isSrv = StoreFS.mode === 'server';
-  const folderName = isSrv ? (StoreFS.serverDir || 'HawaEngineData/project') : (hasFolder ? (StoreFS.handle.name || 'مجلد') : '— لم يحدد —');
-  const modeTxt = isSrv ? 'تلقائي (مكان ثابت على الجهاز — من غير اختيار مجلد)' : (hasFolder ? 'مجلد كامل على الجهاز' : 'لم يتم اختيار مجلد بعد');
+  const isMob = (typeof isMobileLike === 'function') ? isMobileLike()
+    : /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
+  const folderName = isSrv ? (StoreFS.serverDir || 'HawaEngineData/project')
+    : (hasFolder ? (StoreFS.handle && StoreFS.handle.name) || 'مجلد'
+      : (isMob || StoreFS.mode === 'local' ? 'متصفح (دائم)' : '— لم يحدد —'));
+  const canPick = folderOk;
+  const modeTxt = isSrv
+    ? 'تلقائي على الجهاز (من غير برميشن)'
+    : (hasFolder ? 'مجلد على الجهاز — مربوط'
+      : (StoreFS.handle ? 'مجلد محفوظ — بيتفعل مع أول لمسة' : 'متصفح (أو اختر مجلد مرة واحدة)'));
+  const statusOk = isSrv || hasFolder || StoreFS.mode === 'local';
   body.innerHTML = `
     <div class="st-row"><span>وضع التخزين</span><b id="stMode">${modeTxt}</b></div>
-    <div class="st-row"><span>المجلد الحالي</span><b id="stLabel">${folderName}</b></div>
-    <div class="st-row"><span>المحتوى</span><b><code>hawa-project.json</code> + <code>media/</code> + <code>scripts/</code> + <code>sdefs/</code></b></div>
-    <div class="st-row"><span>حالة المجلد</span><b>${hasFolder ? 'متصل' : 'غير محدد'}</b></div>
+    <div class="st-row"><span>المكان</span><b id="stLabel">${folderName}</b></div>
+    <div class="st-row"><span>الحالة</span><b style="color:#7ff0dc">${statusOk ? '✔ شغال' : '—'}</b></div>
     <div class="st-row"><span>كائنات / برمجة / برمجي / وسائط</span><b>${objs} / ${scripts} / ${sdefs} / ${mediaN}</b></div>
+    <div class="mut small" style="margin-top:8px;line-height:1.5">${canPick
+      ? 'اختار مجلد مرة واحدة (موبايل أو كمبيوتر). بعد كده أول لمسة بعد الريفرش بترجّع الربط تلقائي من غير زر تفعيل.'
+      : 'المتصفح ده مش بيدعم اختيار مجلد — الحفظ داخل المتصفح دائم.'}</div>
     <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px">
-      ${StoreFS.needsGesture ? '<button type="button" id="stActivate" class="go" style="flex:1;min-height:40px">تفعيل المجلد المحفوظ</button>' : ''}
       ${StoreFS.legacy ? '<button type="button" id="stLegacy" class="go" style="flex:1;min-height:40px">استيراد من المجلد القديم</button>' : ''}
-      <button type="button" id="stPick" class="go" style="flex:1;min-height:40px">${hasFolder && !StoreFS.needsGesture ? 'تغيير / نقل مكان التخزين' : 'تحديد مكان التخزين من الجهاز'}</button>
-      <button type="button" id="stReveal" class="go" style="flex:1;min-height:40px">📂 فتح مجلد التخزين على الجهاز</button>
+      ${canPick ? `<button type="button" id="stPick" class="go" style="flex:1;min-height:40px">${hasFolder || StoreFS.handle ? 'تغيير مجلد التخزين' : 'تحديد مجلد التخزين مرة واحدة'}</button>` : ''}
+      ${!isMob && (hasFolder || isSrv) ? '<button type="button" id="stReveal" class="go" style="flex:1;min-height:40px">📂 فتح مجلد التخزين على الجهاز</button>' : ''}
     </div>
     <div id="stListing" class="mut small" style="margin-top:10px;max-height:180px;overflow:auto;line-height:1.65"></div>
     `;
@@ -10095,6 +10159,40 @@ const MOB = {
     if (tBtn) tBtn.onclick = () => { try { if (S.mode !== 'play') playStartFX(); } catch (_) {} };
     const mSt = document.getElementById('mStorageBtn');
     if (mSt) mSt.onclick = () => { try { showStorageInfo(); } catch (_) {} };
+    const mAct = document.getElementById('mStorageAct');
+    if (mAct) {
+      mAct.onclick = async () => {
+        try {
+          mAct.disabled = true;
+          if (!StoreFS.handle) {
+            const okPick = await StoreFS.pickAndMigrate();
+            mAct.disabled = false;
+            if (okPick) {
+              try { tip('✔ تم ربط مجلد التخزين'); } catch (_) {}
+              try { updStorageActBtn(); } catch (_) {}
+            }
+            return;
+          }
+          const ok = await StoreFS.activatePermission();
+          mAct.disabled = false;
+          if (ok) {
+            try {
+              const d2 = await StoreFS.loadPreferred();
+              if (d2) loadData(d2, false);
+            } catch (_) {}
+            try { await StoreFS.saveAll(); } catch (_) {}
+            try { tip('✔ تم تفعيل التخزين على «' + (StoreFS.handle.name || 'المجلد') + '»'); } catch (_) {}
+            try { updStorageActBtn(); } catch (_) {}
+          } else {
+            try { tip('⚠ لم يتم منح الإذن — حاول مرة أخرى'); } catch (_) {}
+          }
+        } catch (e) {
+          try { mAct.disabled = false; } catch (_) {}
+          console.warn(e);
+        }
+      };
+    }
+    try { updStorageActBtn(); } catch (_) {}
     this._bindJoy();
     this._bindPlayLook();
     this._bindBuildGestures();
@@ -10598,6 +10696,12 @@ function boot() {
     boot();
     return;
   }
+  // طلب تخزين دائم من المتصفح (مرة واحدة صامتة) — يقلل مسح البيانات وثبات الحفظ
+  try {
+    if (navigator.storage && navigator.storage.persist) {
+      navigator.storage.persist().catch(() => {});
+    }
+  } catch (_) {}
   try { st = await StoreFS.init(); } catch (e) { console.warn(e); }
   boot();
   // تحميل مشروع محفوظ من localStorage (احتياطي قوي خصوصاً على الموبايل)
@@ -10628,28 +10732,20 @@ function boot() {
         try { await StoreFS.saveAll(); StoreFS.legacy = null; tip('✔ اتنقل مشروعك للتخزين التلقائي'); } catch (e) { console.warn(e); }
       } else await loadLocalProjectFallback();
     } catch (e) { console.warn(e); await loadLocalProjectFallback(); }
-  } else if (st === 'pending') {
-    // إذن المجلد بعد الريفرش محتاج ضغطة مستخدم — منشتغلش على localStorage فوراً
-    // ومنطلبش تفعيل إجباري (ده كان بيتعب على الموبايل كل مرة)
-    try {
-      StoreFS.needsGesture = true;
-      // على الموبايل: اعتمد localStorage كتخزين أساسي عشان متتعبش من البرمشن
-      const mob = (typeof isMobileLike === 'function') ? isMobileLike()
-        : /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
-      if (mob) {
-        StoreFS.mode = 'local';
-        StoreFS.label = 'متصفح (localStorage) · المجلد محفوظ للتفعيل اليدوي';
-      }
-      await loadLocalProjectFallback();
-    } catch (e) { console.warn(e); }
   } else {
+    // local / مفيش مجلد / موبايل — حمّل من المتصفح فوراً بدون أي برميشن
     try {
-      StoreFS.mode = StoreFS.mode === 'none' ? 'local' : StoreFS.mode;
-      StoreFS.label = StoreFS.label || 'متصفح (localStorage)';
+      if (StoreFS.mode === 'none' || !StoreFS.mode) {
+        StoreFS.mode = 'local';
+        StoreFS.label = StoreFS.label || 'متصفح (حفظ دائم بدون برميشن)';
+      }
+      StoreFS.needsGesture = false;
       await loadLocalProjectFallback();
     } catch (_) {}
   }
   try { INTRO.start(); } catch (e) { console.warn(e); try { INTRO.finish(true); } catch (_) {} }
+  try { updStorageActBtn(); } catch (_) {}
+  setTimeout(() => { try { updStorageActBtn(); } catch (_) {} }, 800);
 
   // أونلاين/أوفلاين تلقائي من غير سؤال
   if (!window.HAWA_PLAY_ONLY) {
