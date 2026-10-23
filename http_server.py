@@ -206,6 +206,25 @@ def _handle_fs_api(handler, method, path):
             return _json_response(handler, {"ok": False, "error": str(e)}, 500)
         return _json_response(handler, {"ok": True})
 
+    # فتح مجلد التخزين في مستكشف الملفات (ويندوز / ماك / لينكس)
+    if method == "POST" and path == "/api/fs/open":
+        try:
+            import subprocess
+            import sys
+            target = full if os.path.isdir(full) else os.path.dirname(full)
+            if not target or not os.path.isdir(target):
+                target = PROJECT_DIR
+            _ensure_project_dir()
+            if sys.platform.startswith("win"):
+                os.startfile(target)  # type: ignore[attr-defined]
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", target], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            else:
+                subprocess.Popen(["xdg-open", target], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            return _json_response(handler, {"ok": True, "dir": target})
+        except Exception as e:
+            return _json_response(handler, {"ok": False, "error": str(e)}, 500)
+
     return None
 
 

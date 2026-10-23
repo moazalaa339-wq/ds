@@ -4118,20 +4118,36 @@ const StoreFS = {
       return false;
     }
     try {
+      const fromName = this.mode === 'server'
+        ? (this.serverDir || 'التخزين التلقائي')
+        : (this.handle && this.handle.name)
+          ? ('مجلد «' + this.handle.name + '»')
+          : (this.mode === 'local' || this.mode === 'none' ? 'المتصفح (localStorage)' : 'التخزين الحالي');
       const dir = await window.showDirectoryPicker({
         id: 'hawa-project-store',
         mode: 'readwrite',
         startIn: 'documents'
       });
-      const data = this.snapshot();
-      this.handle = dir;
-      await this._idbSet('dir', dir);
-      this.mode = 'folder';
-      this.label = 'مجلد: ' + (dir.name || 'جهاز');
-      try { localStorage.setItem('hawa2-store-mode', 'folder'); } catch (_) {}
-      await this.writeFolder(data);
-      try { tip('✔ تم حفظ المشروع كاملًا في المجلد (وسائط + سكربتات + مشهد)'); } catch (_) {}
-      return true;
+      const toName = dir.name || 'المجلد الجديد';
+      const ui = showTransferProgress(fromName, toName);
+      try {
+        ui.setStep('قراءة المشروع الحالي…');
+        const data = this.snapshot();
+        ui.setStep('تجهيز المجلد «' + toName + '»…');
+        this.handle = dir;
+        await this._idbSet('dir', dir);
+        this.mode = 'folder';
+        this.label = 'مجلد: ' + toName;
+        try { localStorage.setItem('hawa2-store-mode', 'folder'); } catch (_) {}
+        ui.setStep('جاري النقل إلى «' + toName + '»…');
+        await this.writeFolder(data);
+        ui.done(true, 'تم النقل بنجاح إلى «' + toName + '»');
+        try { tip('✔ تم نقل المشروع إلى «' + toName + '»'); } catch (_) {}
+        return true;
+      } catch (err) {
+        ui.done(false, 'فشل النقل: ' + (err && err.message || err));
+        throw err;
+      }
     } catch (e) {
       if (e && e.name === 'AbortError') return false;
       console.error(e);
@@ -4437,6 +4453,111 @@ async function wipeProjectTotal() {
   try { await StoreFS.saveAll(); } catch (_) {}
   try { tip('✔ المشروع اتمسح'); } catch (_) {}
 }
+/** نافذة تقدم النقل بين أماكن التخزين */
+function showTransferProgress(fromName, toName) {
+  let el = document.getElementById('hawaTransferUI');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'hawaTransferUI';
+    el.style.cssText = 'position:fixed;inset:0;z-index:200000;display:flex;align-items:center;justify-content:center;background:rgba(6,5,12,.82);backdrop-filter:blur(6px);font-family:Cairo,Tahoma,sans-serif;color:#f4efe4';
+    document.body.appendChild(el);
+  }
+  el.innerHTML =
+    '<div style="width:min(420px,92vw);padding:28px 24px;border-radius:18px;background:linear-gradient(180deg,#1a1528,#0e0b16);border:1px solid rgba(255,190,61,.35);box-shadow:0 24px 60px rgba(0,0,0,.55);text-align:center">' +
+      '<div style="font-size:28px;margin-bottom:10px">📦</div>' +
+      '<div style="font-size:18px;font-weight:900;margin-bottom:6px">جاري نقل التخزين</div>' +
+      '<div style="font-size:13px;opacity:.85;line-height:1.7;margin-bottom:16px">' +
+        'من: <b style="color:#ffe2a6" id="xferFrom">' + (fromName || '—') + '</b><br>' +
+        'إلى: <b style="color:#7ff0dc" id="xferTo">' + (toName || '—') + '</b>' +
+      '</div>' +
+      '<div style="width:100%;height:6px;border-radius:99px;background:#1e1a2e;overflow:hidden;border:1px solid #2a2438;margin-bottom:12px">' +
+        '<div id="xferBar" style="height:100%;width:12%;background:linear-gradient(90deg,#7ff0dc,#ffe2a6,#c4b5fd);transition:width .2s linear"></div>' +
+      '</div>' +
+      '<div id="xferStep" style="font-size:13px;font-weight:700;opacity:.9">جاري التحضير…</div>' +
+    '</div>';
+  el.style.display = 'flex';
+  let p = 12;
+  const bar = () => document.getElementById('xferBar');
+  const stepEl = () => document.getElementById('xferStep');
+  const tick = setInterval(() => {
+    p = Math.min(90, p + 3 + Math.random() * 5);
+    const b = bar(); if (b) b.style.width = p + '%';
+  }, 180);
+  return {
+    setStep(t) { const s = stepEl(); if (s) s.textContent = t || ''; },
+    done(ok, msg) {
+      clearInterval(tick);
+      const b = bar(); if (b) b.style.width = '100%';
+      const s = stepEl(); if (s) s.textContent = msg || (ok ? 'تم' : 'فشل');
+      setTimeout(() => {
+        try { el.style.display = 'none'; el.remove(); } catch (_) {}
+      }, ok ? 900 : 1800);
+    }
+  };
+}
+
+async function openStorageFolderOnDevice() {
+  // 1) وضع السيرفر: اطلب من السيرفر فتح المجلد في مستكشف الملفات
+  if (StoreFS.mode === 'server') {
+    try {
+      const r = await fetch('/api/fs/open', { method: 'POST', cache: 'no-store' });
+      const j = await r.json().catch(() => ({}));
+      if (j && j.ok) {
+        try { tip('📂 اتفتح مجلد التخزين على الجهاز'); } catch (_) {}
+        return true;
+      }
+      await uiAlert('ما قدرتش أفتح المجلد من السيرفر.\n' + (j && j.error ? j.error : ''));
+      return false;
+    } catch (e) {
+      await uiAlert('السيرفر مش متاح.\nشغّل START_SERVER.bat ثم حاول تاني.');
+      return false;
+    }
+  }
+  // 2) مجلد File System Access: نعيد اختيار/فتح نافذة المجلد (المتصفح يفتح منتقي الجهاز)
+  if (StoreFS.supportsFolder()) {
+    try {
+      // لو عندنا handle محفوظ نطلب الإذن ونفتح المنتقي على نفس المكان تقريباً
+      if (StoreFS.handle && typeof StoreFS.handle.requestPermission === 'function') {
+        try { await StoreFS.handle.requestPermission({ mode: 'readwrite' }); } catch (_) {}
+      }
+      const dir = await window.showDirectoryPicker({
+        id: 'hawa-project-store',
+        mode: 'readwrite',
+        startIn: StoreFS.handle || 'documents'
+      });
+      // لو اختار نفس المجلد أو جديد — ثبّته واعرض محتواه
+      const same = StoreFS.handle && StoreFS.handle.name === dir.name;
+      if (!same) {
+        const fromName = StoreFS.handle ? ('مجلد «' + (StoreFS.handle.name || '') + '»') : 'التخزين الحالي';
+        const ui = showTransferProgress(fromName, dir.name || 'المجلد');
+        try {
+          ui.setStep('جاري الربط بالمجلد…');
+          const data = StoreFS.snapshot();
+          StoreFS.handle = dir;
+          await StoreFS._idbSet('dir', dir);
+          StoreFS.mode = 'folder';
+          StoreFS.label = 'مجلد: ' + (dir.name || 'جهاز');
+          ui.setStep('جاري حفظ المشروع في «' + (dir.name || '') + '»…');
+          await StoreFS.writeFolder(data);
+          ui.done(true, 'تم الربط بـ «' + (dir.name || '') + '»');
+        } catch (err) {
+          ui.done(false, 'فشل: ' + (err && err.message || err));
+        }
+      } else {
+        StoreFS.handle = dir;
+        try { tip('📂 مجلد «' + (dir.name || '') + '»'); } catch (_) {}
+      }
+      return true;
+    } catch (e) {
+      if (e && e.name === 'AbortError') return false;
+      await uiAlert('تعذر فتح مجلد من الجهاز:\n' + (e.message || e));
+      return false;
+    }
+  }
+  await uiAlert('المتصفح ده مش بيدعم فتح مجلدات مباشرة.\nعلى الموبايل استخدم تحميل/رفع ZIP، أو شغّل السيرفر على الكمبيوتر.');
+  return false;
+}
+
 function showStorageInfo() {
   const modal = document.getElementById('storageModal');
   const body = document.getElementById('storageBody');
@@ -4464,8 +4585,8 @@ function showStorageInfo() {
     <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px">
       ${StoreFS.needsGesture ? '<button type="button" id="stActivate" class="go" style="flex:1;min-height:40px">تفعيل المجلد المحفوظ</button>' : ''}
       ${StoreFS.legacy ? '<button type="button" id="stLegacy" class="go" style="flex:1;min-height:40px">استيراد من المجلد القديم</button>' : ''}
-      ${isSrv ? '' : `<button type="button" id="stPick" class="go" style="flex:1;min-height:40px">${hasFolder && !StoreFS.needsGesture ? 'تغيير مكان التخزين' : 'تحديد مكان التخزين'}</button>`}
-      <button type="button" id="stReveal" style="flex:1;min-height:40px" ${hasFolder ? '' : 'disabled'}>عرض مجلد التخزين</button>
+      <button type="button" id="stPick" class="go" style="flex:1;min-height:40px">${hasFolder && !StoreFS.needsGesture ? 'تغيير / نقل مكان التخزين' : 'تحديد مكان التخزين من الجهاز'}</button>
+      <button type="button" id="stReveal" class="go" style="flex:1;min-height:40px">📂 فتح مجلد التخزين على الجهاز</button>
     </div>
     <div id="stListing" class="mut small" style="margin-top:10px;max-height:180px;overflow:auto;line-height:1.65"></div>
     `;
@@ -4489,12 +4610,29 @@ function showStorageInfo() {
   const legBtn = document.getElementById('stLegacy');
   if (legBtn) legBtn.onclick = async () => {
     legBtn.disabled = true;
+    const fromName = 'المجلد القديم';
+    const toName = StoreFS.mode === 'server' ? (StoreFS.serverDir || 'التخزين التلقائي') : 'التخزين الحالي';
+    const ui = showTransferProgress(fromName, toName);
+    ui.setStep('جاري قراءة المجلد القديم…');
     const d = await StoreFS.readFromLegacy();
     legBtn.disabled = false;
     if (d) {
-      try { loadData(d, false); await StoreFS.saveAll(); StoreFS.legacy = null; tip('✔ اتنقل المشروع القديم للتخزين التلقائي'); } catch (e) { console.warn(e); }
+      try {
+        ui.setStep('جاري النقل إلى «' + toName + '»…');
+        loadData(d, false);
+        await StoreFS.saveAll();
+        StoreFS.legacy = null;
+        ui.done(true, 'تم النقل من المجلد القديم');
+        tip('✔ اتنقل المشروع القديم للتخزين التلقائي');
+      } catch (e) {
+        console.warn(e);
+        ui.done(false, 'فشل النقل');
+      }
       showStorageInfo();
-    } else await uiAlert('معرفتش أقرا المجلد القديم (الإذن اترفض أو المشروع فاضي).');
+    } else {
+      ui.done(false, 'معرفتش أقرا المجلد القديم');
+      await uiAlert('معرفتش أقرا المجلد القديم (الإذن اترفض أو المشروع فاضي).');
+    }
   };
   const pick = document.getElementById('stPick');
   const reveal = document.getElementById('stReveal');
@@ -4509,23 +4647,43 @@ function showStorageInfo() {
   };
   if (reveal) reveal.onclick = async () => {
     const box = document.getElementById('stListing');
-    if (!StoreFS.handle) {
-      if (box) box.textContent = 'لا يوجد مجلد محدد.';
-      return;
-    }
-    if (box) box.textContent = 'جاري قراءة المجلد…';
+    reveal.disabled = true;
     try {
-      const listing = await StoreFS.listFolderTree();
-      if (box) box.innerHTML = '<b>محتوى «' + (StoreFS.handle.name || '') + '»:</b><br>' + listing;
-      
-      try {
-        if (StoreFS.handle && typeof StoreFS.handle.requestPermission === 'function') {
-          await StoreFS.handle.requestPermission({ mode: 'readwrite' });
+      // افتح المجلد فعلياً على الجهاز (سيرفر أو منتقي الملفات)
+      await openStorageFolderOnDevice();
+      // واعرض المحتوى جوه النافذة كمان
+      if (box) {
+        if (StoreFS.mode === 'server') {
+          box.textContent = 'جاري قراءة مجلد السيرفر…';
+          try {
+            const r = await fetch('/api/fs/list?path=', { cache: 'no-store' });
+            const j = await r.json();
+            if (j && j.ok && Array.isArray(j.items)) {
+              const lines = j.items.map(it =>
+                (it.kind === 'directory' ? '📁 ' : '📄 ') + it.name +
+                (it.size ? ' (' + Math.max(1, Math.round(it.size / 1024)) + ' KB)' : '')
+              );
+              box.innerHTML = '<b>محتوى التخزين التلقائي:</b><br>' + (lines.join('<br>') || 'فارغ');
+            } else {
+              box.textContent = 'المجلد فاضي أو مش متاح.';
+            }
+          } catch (e) {
+            box.textContent = 'تعذر قراءة المجلد: ' + (e.message || e);
+          }
+        } else if (StoreFS.handle) {
+          box.textContent = 'جاري قراءة المجلد…';
+          try {
+            const listing = await StoreFS.listFolderTree();
+            box.innerHTML = '<b>محتوى «' + (StoreFS.handle.name || '') + '»:</b><br>' + listing;
+          } catch (e) {
+            box.textContent = 'تعذر قراءة المجلد: ' + (e.message || e);
+          }
+        } else {
+          box.textContent = 'مفيش مجلد مربوط بعد — استخدم «تحديد مكان التخزين».';
         }
-      } catch (_) {}
-      try { tip('📂 ' + (StoreFS.handle.name || 'المجلد')); } catch (_) {}
-    } catch (e) {
-      if (box) box.textContent = 'تعذر قراءة المجلد: ' + (e.message || e);
+      }
+    } finally {
+      reveal.disabled = false;
     }
   };
 }
