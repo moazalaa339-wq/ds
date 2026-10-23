@@ -592,6 +592,20 @@ const HawaNet = (() => {
 
     async function buildSlot(slot) {
       const pc = rtcMakePc();
+      // مسار صوتي جاهز من البداية (قبل العرض) عشان المايك يشتغل بدون إعادة تفاوض
+      try { pc.addTransceiver('audio', { direction: 'sendrecv' }); } catch (_) {}
+      try {
+        pc.addEventListener('track', (ev) => {
+          try {
+            if (ev.track && ev.track.kind === 'audio') {
+              const stream = (ev.streams && ev.streams[0]) || new MediaStream([ev.track]);
+              if (typeof window !== 'undefined' && window.__HAWA_ON_REMOTE_AUDIO) {
+                window.__HAWA_ON_REMOTE_AUDIO('slot' + slot, stream);
+              }
+            }
+          } catch (_) {}
+        });
+      } catch (_) {}
       const dc = pc.createDataChannel('hawa', { ordered: true });
       const entry = { slot, pc, dc, remoteApi: null, offerCode: null, status: 'waiting-offer' };
 
@@ -685,6 +699,10 @@ const HawaNet = (() => {
         return o;
       })(),
       status: 'offer-ready',
+      bySlot: bySlot,
+      forEachChannel(fn) {
+        bySlot.forEach((e, s) => { try { fn(e, s); } catch (_) {} });
+      },
       broadcast(m) {
         const payload = (typeof m === 'string') ? m : JSON.stringify(m);
         bySlot.forEach(e => {
@@ -813,6 +831,19 @@ const HawaNet = (() => {
   async function joinHostCodes({ offerCode, offer, playerName, onWelcome, onLobby, onStart, onMessage, onClose, onAnswer, onConnected }) {
     if (typeof RTCPeerConnection === 'undefined') throw new Error('المتصفح لا يدعم WebRTC');
     const pc = rtcMakePc();
+    // العرض من المضيف فيه مسار صوت — نكتفي بالاستماع للـ track
+    try {
+      pc.addEventListener('track', (ev) => {
+        try {
+          if (ev.track && ev.track.kind === 'audio') {
+            const stream = (ev.streams && ev.streams[0]) || new MediaStream([ev.track]);
+            if (typeof window !== 'undefined' && window.__HAWA_ON_REMOTE_AUDIO) {
+              window.__HAWA_ON_REMOTE_AUDIO('host', stream);
+            }
+          }
+        } catch (_) {}
+      });
+    } catch (_) {}
     let dc = null;
     let opened = false;
     const offerText = (offerCode || offer || '').trim();

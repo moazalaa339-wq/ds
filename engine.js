@@ -4805,8 +4805,10 @@ const VOICE_DEF = {
   enabled: true,
   sensitivity: 0.008,      
   maxMouth: 1.35,          
-  headShake: 0.22,         
+  headShake: 0.14,         
   headShakeEnabled: true,
+  nodSpeed: 5.5,           
+  nodAmount: 0.18,         
   smoothing: 0.42,         
   highpass: 85,
   lowpass: 7500,
@@ -4999,6 +5001,77 @@ const VoiceChat = {
     if (NetMP.transport === 'lan' && NetMP._dcMap) {
       for (const [pid, entry] of NetMP._dcMap) this._addLanTrack(pid, entry);
     }
+    // تبادل الأكواد / أي WebRTC مباشر: احقن الصوت على الـ PeerConnections الموجودة
+    try { this._attachCodesAudio(); } catch (e) { console.warn('codes audio', e); }
+  },
+  _attachCodesAudio() {
+    if (!this.stream) return;
+    const track = this.stream.getAudioTracks()[0];
+    if (!track) return;
+    const pcs = [];
+    // من NetMP._codesNet
+    try {
+      const live = NetMP._codesNet || (typeof window !== 'undefined' && window.__HAWA_LIVE_NET__);
+      if (live) {
+        if (typeof live.forEachChannel === 'function') {
+          live.forEachChannel((e) => { if (e && e.pc) pcs.push({ id: 's' + (e.slot || pcs.length), pc: e.pc }); });
+        }
+        if (live._pc) pcs.push({ id: 'guest', pc: live._pc });
+        if (live.bySlot) {
+          live.bySlot.forEach((e, s) => { if (e && e.pc) pcs.push({ id: 'slot' + s, pc: e.pc }); });
+        }
+      }
+    } catch (_) {}
+    // من NetMP نفسه لو فيه خريطة
+    try {
+      if (NetMP._dcMap) {
+        for (const [id, e] of NetMP._dcMap) if (e && e.pc) pcs.push({ id, pc: e.pc });
+      }
+    } catch (_) {}
+    for (const { id, pc } of pcs) {
+      if (!pc || this._lanTracks.has('codes_' + id)) continue;
+      try {
+        // لو في sender صوتي فاضي: replaceTrack، وإلا addTrack
+        const senders = pc.getSenders ? pc.getSenders() : [];
+        let audioSender = senders.find(s => s.track && s.track.kind === 'audio');
+        if (!audioSender) audioSender = senders.find(s => !s.track || (s.track && s.track.kind === 'audio'));
+        // transceiver صوتي بدون track
+        if (!audioSender && pc.getTransceivers) {
+          const tr = pc.getTransceivers().find(t => t.receiver && t.receiver.track && t.receiver.track.kind === 'audio')
+            || pc.getTransceivers().find(t => (t.sender && (!t.sender.track || t.sender.track.kind === 'audio')));
+          if (tr && tr.sender) audioSender = tr.sender;
+        }
+        if (audioSender && typeof audioSender.replaceTrack === 'function') {
+          audioSender.replaceTrack(track).catch(() => {
+            try { pc.addTrack(track, this.stream); } catch (_) {}
+          });
+        } else {
+          try { pc.addTrack(track, this.stream); } catch (_) {}
+        }
+        this._lanTracks.set('codes_' + id, audioSender || track);
+        // استقبال صوت الطرف الآخر
+        if (!pc.__hawaVoiceOnTrack) {
+          pc.__hawaVoiceOnTrack = true;
+          pc.addEventListener('track', (ev) => {
+            try {
+              if (ev.track && ev.track.kind === 'audio') {
+                const stream = (ev.streams && ev.streams[0]) || new MediaStream([ev.track]);
+                this._playRemote(id, stream);
+              }
+            } catch (_) {}
+          });
+        }
+        // لو فيه tracks وصلت قبل تفعيل المستمع
+        try {
+          const recs = pc.getReceivers ? pc.getReceivers() : [];
+          for (const r of recs) {
+            if (r.track && r.track.kind === 'audio' && r.track.readyState === 'live') {
+              this._playRemote(id, new MediaStream([r.track]));
+            }
+          }
+        } catch (_) {}
+      } catch (e) { console.warn('attach codes audio', id, e); }
+    }
   },
   _stopSharing() {
     for (const [, call] of this._mediaCalls) { try { call.close(); } catch (_) {} }
@@ -5022,7 +5095,8 @@ const VoiceChat = {
     if (!call) return;
     const pid = call.peer;
     try {
-      call.answer(); 
+      // الرد بمجرى المايك المحلي لو شغال → صوت ثنائي الاتجاه
+      call.answer(this.stream || undefined);
       const old = this._inCalls.get(pid);
       this._inCalls.set(pid, call);
       if (old && old !== call) { try { old.close(); } catch (_) {} }
@@ -5064,7 +5138,10 @@ const VoiceChat = {
     }
   },
   onPeerConnected(peerId) {
-    if (this.on && this.stream) this._callPeer(peerId);
+    if (this.on && this.stream) {
+      this._callPeer(peerId);
+      try { this._attachCodesAudio(); } catch (_) {}
+    }
   },
   destroy() {
     this.off();
@@ -5073,6 +5150,12 @@ const VoiceChat = {
     for (const pid of [...this._remoteAudios.keys()]) this._stopRemote(pid);
   }
 };
+try {
+  window.__HAWA_ON_REMOTE_AUDIO = function (id, stream) {
+    try { VoiceChat._playRemote(id || 'remote', stream); } catch (_) {}
+  };
+} catch (_) {}
+
 
 function localFace(rig) {
   const bl = rig.st.blinkT > 0 ? Math.sin((1 - rig.st.blinkT / .15) * Math.PI) : 0;
@@ -5098,12 +5181,7 @@ function applyFace(rig, f, dt) {
   if (rig.jaw) {
     try { rig.jaw.rotation.x = mo * 0.55; } catch (_) {}
   }
-  try {
-    if (rig.head && mo > 0.02) {
-      rig.head.rotation.x += mo * 0.12;
-      if (rig.neck) rig.neck.rotation.x += mo * 0.08;
-    }
-  } catch (_) {}
+  /* حركة الرأس من إيماءة الصوت فقط — مش من فتحة الفم */
   for (const b of (rig.brows || [])) b.position.y = .165 + s.br * .014 + s.su * .01;
   for (const e of (rig.eyes || [])) e.scale.y = 1 + s.su * .22;
   if (f.bl != null) for (const l of (rig.lids || [])) l.scale.y = .0001 + f.bl * .95;
@@ -6217,23 +6295,36 @@ function animRig(rig, dt, s, locks) {
   if (s.local) {
     VoiceChat.tick();
     const sh = VoiceChat.headShakeAmount();
-    if (sh > 0.0005) {
-      
+    // إيماءة «نعم»: حركة على محور X فقط (pitch) — بدون دوران جانبي/التواء
+    const baseHx = hp, baseHy = tgt, baseHz = -turnRoll * .5;
+    const baseNx = -lean * .15, baseNy = tgt * .25;
+    if (!rig._voiceNod) rig._voiceNod = { x: 0 };
+    const nodAmt = (+VOICE_CFG.nodAmount || 0.18);
+    const nodSpd = (+VOICE_CFG.nodSpeed || 5.5);
+    if (sh > 0.0008) {
       const tt = performance.now() * 0.001;
-      const n1 = Math.sin(tt * 11.5) * 0.7 + Math.sin(tt * 17.2) * 0.4 + Math.sin(tt * 24.0) * 0.25;
-      const n2 = Math.sin(tt * 9.0 + 1.3) * 0.65 + Math.sin(tt * 19.0) * 0.45 + Math.sin(tt * 28.0) * 0.2;
-      const n3 = Math.sin(tt * 13.0 + 0.7) * 0.75 + Math.sin(tt * 21.0) * 0.5;
-      rig.head.rotation.y += n1 * sh * 1.35;
-      rig.head.rotation.x += n2 * sh * 1.25;
-      rig.head.rotation.z += n3 * sh * 0.7;
-      if (rig.neck) {
-        rig.neck.rotation.y += n1 * sh * 0.45;
-        rig.neck.rotation.x += n2 * sh * 0.4;
-        rig.neck.rotation.z += n3 * sh * 0.25;
-      }
+      // موجة ناعمة لأعلى/أسفل كأن الشخص بيوافق وهو بيتكلم
+      const nod = Math.sin(tt * nodSpd) * 0.55 + Math.sin(tt * nodSpd * 1.7 + 0.4) * 0.25;
+      const targetNod = nod * nodAmt * Math.min(1, sh * 8);
+      rig._voiceNod.x = _lerp(rig._voiceNod.x, targetNod, Math.min(1, dt * 10));
+    } else {
+      // السكوت: رجوع تدريجي للوضع الأصلي
+      rig._voiceNod.x = _lerp(rig._voiceNod.x, 0, Math.min(1, dt * 8));
+      if (Math.abs(rig._voiceNod.x) < 0.001) rig._voiceNod.x = 0;
+    }
+    rig.head.rotation.x = baseHx + rig._voiceNod.x;
+    rig.head.rotation.y = baseHy;
+    rig.head.rotation.z = baseHz;
+    if (rig.neck) {
+      rig.neck.rotation.x = baseNx + rig._voiceNod.x * 0.35;
+      rig.neck.rotation.y = baseNy;
     }
   }
-  rig.neck.rotation.x = _lerp(rig.neck.rotation.x, -lean * .15, k); rig.neck.rotation.y = _lerp(rig.neck.rotation.y, tgt * .25, kS);
+  if (!s.local) {
+    rig.neck.rotation.x = _lerp(rig.neck.rotation.x, -lean * .15, k);
+    rig.neck.rotation.y = _lerp(rig.neck.rotation.y, tgt * .25, kS);
+  }
+  // للوكل: الرقبة اتظبطت مع إيماءة الصوت فوق
   if (s.local) {
     st.eyeNext = (st.eyeNext != null ? st.eyeNext : 1) - dt;
     if (st.eyeNext <= 0) {
@@ -7402,11 +7493,26 @@ const NetMP = {
         const f = a.face, kk = Math.min(1, dt * 14);
         const vo = (f.vo || 0);
         const sh = (VOICE_CFG.headShakeEnabled !== false && VOICE_CFG.enabled !== false) ? vo * (+VOICE_CFG.headShake || 0.085) : 0;
-        const tt = performance.now() * 0.001;
-        const n1 = Math.sin(tt * 9.2) * 0.55 + Math.sin(tt * 14.7) * 0.28 + Math.sin(tt * 21.3) * 0.17;
-        const n2 = Math.sin(tt * 7.1 + 1.3) * 0.5 + Math.sin(tt * 16.4) * 0.35 + Math.sin(tt * 25.1) * 0.15;
-        r.rig.head.rotation.y = _lerp(r.rig.head.rotation.y, (f.hy || 0) + n1 * sh, kk);
-        r.rig.head.rotation.x = _lerp(r.rig.head.rotation.x, (f.hx || 0) + n2 * sh * 0.85, kk);
+        if (!r._voiceNod) r._voiceNod = { x: 0 };
+        const nodAmt = (+VOICE_CFG.nodAmount || 0.18);
+        const nodSpd = (+VOICE_CFG.nodSpeed || 5.5);
+        const baseHx = (f.hx || 0), baseHy = (f.hy || 0);
+        if (sh > 0.0008) {
+          const tt = performance.now() * 0.001;
+          const nod = Math.sin(tt * nodSpd) * 0.55 + Math.sin(tt * nodSpd * 1.7 + 0.4) * 0.25;
+          const targetNod = nod * nodAmt * Math.min(1, sh * 8);
+          r._voiceNod.x = _lerp(r._voiceNod.x, targetNod, Math.min(1, dt * 10));
+        } else {
+          r._voiceNod.x = _lerp(r._voiceNod.x, 0, Math.min(1, dt * 8));
+          if (Math.abs(r._voiceNod.x) < 0.001) r._voiceNod.x = 0;
+        }
+        r.rig.head.rotation.y = _lerp(r.rig.head.rotation.y, baseHy, kk);
+        r.rig.head.rotation.x = _lerp(r.rig.head.rotation.x, baseHx + r._voiceNod.x, kk);
+        r.rig.head.rotation.z = _lerp(r.rig.head.rotation.z, 0, kk);
+        if (r.rig.neck) {
+          r.rig.neck.rotation.x = _lerp(r.rig.neck.rotation.x, r._voiceNod.x * 0.35, kk);
+          r.rig.neck.rotation.y = _lerp(r.rig.neck.rotation.y, baseHy * 0.25, kk);
+        }
         for (const e of (r.rig.eyes || [])) { e.rotation.y = _lerp(e.rotation.y, f.ey || 0, kk); e.rotation.x = _lerp(e.rotation.x, f.ex || 0, kk); }
         applyFace(r.rig, f, dt);
       }
@@ -7693,20 +7799,46 @@ const NetMP = {
       el = document.createElement('div');
       el.id = 'hawaPing';
       el.setAttribute('aria-hidden', 'true');
-      el.style.cssText = 'position:fixed;left:10px;bottom:10px;z-index:40;pointer-events:none;font:700 11px/1.2 Cairo,Tahoma,sans-serif;color:rgba(244,239,228,.55);background:rgba(10,8,15,.45);border:1px solid rgba(255,214,150,.12);padding:5px 10px;border-radius:8px;letter-spacing:.3px;backdrop-filter:blur(4px)';
+      el.style.cssText = 'position:fixed;left:12px;bottom:12px;z-index:40;pointer-events:none;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 8px;border-radius:10px;background:rgba(10,8,15,.5);border:1px solid rgba(255,214,150,.12);backdrop-filter:blur(5px)';
+      el.innerHTML = '<svg class="hp-wifi" viewBox="0 0 24 24" width="28" height="22" aria-hidden="true">'
+        + '<path data-b="5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" d="M3.2 9.2c5.2-4.4 12.4-4.4 17.6 0"/>'
+        + '<path data-b="4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" d="M5.4 11.6c3.8-3.2 9.4-3.2 13.2 0"/>'
+        + '<path data-b="3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" d="M7.6 14c2.5-2.1 6.3-2.1 8.8 0"/>'
+        + '<path data-b="2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" d="M9.8 16.3c1.3-1.1 3.1-1.1 4.4 0"/>'
+        + '<circle data-b="1" cx="12" cy="19" r="1.35" fill="currentColor"/>'
+        + '</svg><span class="hp-ms" style="font:800 11px/1 Cairo,Tahoma,sans-serif;letter-spacing:.2px"></span>';
       document.body.appendChild(el);
     }
-    el.style.display = 'block';
+    el.style.display = 'flex';
     const ms = this.pingMs;
+    const num = el.querySelector('.hp-ms');
+    // عدد القطع + اللون حسب البينج
+    let bars = 0, color = 'rgba(160,160,170,.35)';
     if (ms == null) {
-      el.textContent = 'بينج · …';
-      el.style.color = 'rgba(244,239,228,.45)';
+      bars = 0;
+      color = 'rgba(180,180,190,.4)';
+      if (num) num.textContent = '…';
     } else {
-      el.textContent = 'بينج · ' + ms + 'ms';
-      if (ms < 80) el.style.color = 'rgba(95,240,164,.75)';
-      else if (ms < 180) el.style.color = 'rgba(255,190,61,.75)';
-      else el.style.color = 'rgba(255,123,154,.8)';
+      if (num) num.textContent = String(Math.round(ms));
+      if (ms <= 70) { bars = 5; color = '#22c55e'; }       // أخضر — 5
+      else if (ms <= 110) { bars = 4; color = '#4ade80'; }  // أخضر فاتح — 4
+      else if (ms <= 180) { bars = 3; color = '#f59e0b'; }  // برتقالي — 3
+      else if (ms <= 280) { bars = 2; color = '#ef4444'; }  // أحمر — 2
+      else { bars = 1; color = '#ef4444'; }                 // أحمر — 1
     }
+    el.style.color = color;
+    if (num) num.style.color = color;
+    el.querySelectorAll('[data-b]').forEach(p => {
+      const n = +p.getAttribute('data-b');
+      const on = n <= bars;
+      if (p.tagName === 'circle') {
+        p.setAttribute('fill', on ? color : 'rgba(255,255,255,.12)');
+        p.setAttribute('opacity', on ? '1' : '0.25');
+      } else {
+        p.setAttribute('stroke', on ? color : 'rgba(255,255,255,.12)');
+        p.setAttribute('opacity', on ? '1' : '0.22');
+      }
+    });
   },
 
   /* —— أوامر تحكم اللاعبين (مفتوح بالكامل للسكربتات) —— */
