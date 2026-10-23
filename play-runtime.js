@@ -715,18 +715,37 @@ const HawaNet = (() => {
         const e = bySlot.get(+slot);
         return e ? e.offerCode : null;
       },
+      /** اسم بديل تستخدمه واجهة اللوبي */
+      getOfferForSlot(slot) {
+        return this.getOffer(slot);
+      },
+      /** كل العروض الحالية لكل سلوت */
+      getAllOffers() {
+        const o = {};
+        bySlot.forEach((e, s) => { if (e && e.offerCode) o[s] = e.offerCode; });
+        return o;
+      },
       async makeOffer() {
-        
         return this.offerCode;
       },
       
       async applyAnswer(answerCode, slot) {
-        let targetSlot = slot != null ? +slot : null;
-        if (!targetSlot) {
-          
+        let targetSlot = slot != null && slot !== '' ? +slot : null;
+        if (!targetSlot || !bySlot.has(targetSlot)) {
+          // لو مفيش سلوت محدد: أول سلوت لسه مش متصل ومش connecting
           for (const s of slots) {
             const e = bySlot.get(s);
             if (e && e.status !== 'connected' && e.status !== 'connecting') {
+              targetSlot = s;
+              break;
+            }
+          }
+        }
+        // لو كله connecting (فشل سابق): جرّب أول غير connected
+        if (!targetSlot) {
+          for (const s of slots) {
+            const e = bySlot.get(s);
+            if (e && e.status !== 'connected') {
               targetSlot = s;
               break;
             }
@@ -736,10 +755,47 @@ const HawaNet = (() => {
         const e = bySlot.get(targetSlot);
         if (!e) throw new Error('سلوت غير موجود: ' + targetSlot);
         if (e.status === 'connected') throw new Error('سلوت ' + targetSlot + ' متصل بالفعل');
+        if (!e.pc) throw new Error('لا يوجد اتصال لهذا السلوت');
+        // لو كان في محاولة connecting فاشلة: نسمح بإعادة setRemoteDescription
+        if (e.status === 'connecting') {
+          try {
+            // بعض المتصفحات ترفض setRemoteDescription مرتين — نعيد إنشاء الـ PC لهذا السلوت
+            await this._rebuildSlotOffer(targetSlot);
+          } catch (err) {
+            console.warn('rebuild slot', targetSlot, err);
+          }
+        }
+        const entry = bySlot.get(targetSlot);
+        if (!entry || !entry.pc) throw new Error('فشل تجهيز سلوت ' + targetSlot);
         const sdp = rtcDecodeSdp(answerCode, 'answer');
-        await e.pc.setRemoteDescription({ type: 'answer', sdp });
-        e.status = 'connecting';
+        try {
+          await entry.pc.setRemoteDescription({ type: 'answer', sdp });
+        } catch (err) {
+          // محاولة أخيرة: أعد بناء العرض لهذا السلوت ووضّح للمضيف
+          try { await this._rebuildSlotOffer(targetSlot); } catch (_) {}
+          throw new Error('كود الرد مش متوافق مع عرض سلوت ' + targetSlot + ' — انسخ عرض السلوت ده بالتحديد للضيف وخذ رد جديد. (' + (err.message || err) + ')');
+        }
+        entry.status = 'connecting';
         return targetSlot;
+      },
+      async applyAnswerForSlot(slot, answerCode) {
+        return this.applyAnswer(answerCode, slot);
+      },
+      async _rebuildSlotOffer(slot) {
+        slot = +slot;
+        const old = bySlot.get(slot);
+        if (old) {
+          try { old.dc && old.dc.close(); } catch (_) {}
+          try { old.pc && old.pc.close(); } catch (_) {}
+          bySlot.delete(slot);
+        }
+        const entry = await buildSlot(slot);
+        // حدّث العرض في الواجهة لو موجودة
+        try {
+          const ta = typeof document !== 'undefined' && document.getElementById('codesOffer' + slot);
+          if (ta && entry.offerCode) ta.value = entry.offerCode;
+        } catch (_) {}
+        return entry;
       }
     };
 
@@ -807,8 +863,10 @@ const HawaNet = (() => {
         try {
           dc.send(JSON.stringify({ t: 'hello', name: playerName || 'لاعب' }));
         } catch (_) {}
-        try { if (typeof onConnected === 'function') onConnected({ slot: 2 }); } catch (_) {}
-        onWelcome && onWelcome({ slot: 2, roomName: 'CODES', players: [], connected: true });
+        try { if (typeof onConnected === 'function') onConnected({ connected: true }); } catch (_) {}
+        // السلوت الحقيقي ييجي من ترحيب المضيف (welcome) — مش ثابت 2
+        // لو المضيف اتأخر: ندخل لوبي مؤقت بسلوت غير معروف
+        onWelcome && onWelcome({ slot: null, roomName: 'CODES', players: [], connected: true, pendingSlot: true });
       };
       dc.onmessage = (e) => {
         let d = e.data;

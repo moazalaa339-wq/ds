@@ -257,7 +257,7 @@ button.on{border-color:rgba(45,226,196,.6);background:linear-gradient(180deg,rgb
       <!-- تبادل الأكواد -->
       <div id="codesBox" style="display:none;flex-direction:column;gap:12px;margin-top:8px;padding:12px;border:1px solid #2a3a5a;border-radius:12px;background:#0b1424">
         <div style="font-weight:800;color:#7ff0dc">تبادل الأكواد (بدون سيرفر)</div>
-        <div class="msg" style="opacity:.85">عدد الردود = عدد نقط الأونلاين − 1. لكل ضيف كود عرض + كود رد + زر تأكيد.</div>
+        <div class="msg" style="opacity:.85">عدد الردود = عدد نقط الأونلاين − 1. <b>كل سلوت له كود عرض مختلف</b> — انسخ عرض السلوت للضيف ده بالذات، والرد يتنحط على نفس السلوت.</div>
         <div id="codesHostPane" style="display:none;flex-direction:column;gap:8px">
           <label>① كود العرض (انسخه وابعتّه للضيف)</label>
           <textarea id="codesOfferOut" rows="4" readonly style="width:100%;direction:ltr;text-align:left;font:12px/1.4 Consolas,monospace;background:#060a12;color:#e2e8f0;border:1px solid #334;border-radius:8px;padding:8px"></textarea>
@@ -876,7 +876,10 @@ function buildCodesAnswersHost() {
   let html = '';
   for (let slot = 2; slot <= maxSlots(); slot++) {
     const filled = roomPlayers.some(p => p.slot === slot);
-    const offer = (net.getOfferForSlot && net.getOfferForSlot(slot)) || net.offerCode || '';
+    const offer = (net.getOfferForSlot && net.getOfferForSlot(slot))
+      || (net.getOffer && net.getOffer(slot))
+      || (net.offerCodes && net.offerCodes[slot])
+      || '';
     html += '<div data-slot="'+slot+'" style="padding:10px;border:1px solid #2a3a5a;border-radius:10px;background:#0a0e18;margin-bottom:6px">';
     if (filled) {
       const pl = roomPlayers.find(p => p.slot === slot);
@@ -913,7 +916,8 @@ function buildCodesAnswersHost() {
       if (!raw.trim()) { $('#codesMsg').className='msg err'; $('#codesMsg').textContent='⚠ الصق كود الرد لسلوت '+slot; return; }
       try {
         if (net.applyAnswerForSlot) await net.applyAnswerForSlot(slot, raw.trim());
-        else if (net.applyAnswer) await net.applyAnswer(raw.trim());
+        else if (net.applyAnswer) await net.applyAnswer(raw.trim(), slot);
+        else throw new Error('applyAnswer غير متاح');
         if (ta) ta.value = '';
         const off = document.getElementById('codesOffer'+slot);
         // نسيب العرض لحد ما القناة تتأكد — بعد onPeerJoin hideCodesForSlot بيمسح الاتنين
@@ -1099,19 +1103,23 @@ if ($('#codesMakeAnswer')) $('#codesMakeAnswer').onclick = async () => {
       offerCode: raw,
       playerName: jn,
       onWelcome(msg) {
-        mySlot = msg.slot || 2;
-        roomPlayers = (msg.players || []).map(p => Object.assign({ ready: !!p.ready }, p));
+        if (msg && msg.slot != null) mySlot = msg.slot;
+        else if (mySlot == null) mySlot = 0;
+        if (msg && Array.isArray(msg.players) && msg.players.length) {
+          roomPlayers = msg.players.map(p => Object.assign({ ready: !!p.ready }, p));
+        }
         showEl('createBox','none'); showEl('joinBox','none');
         // من منظور المنضم: اتشال العرض والرد بعد ما القائد طبّق الرد واتصلت القناة
         clearJoinerCodesUI();
         $('#lobby').classList.add('on');
         const _bs = document.getElementById('btnStart'); if (_bs) _bs.style.display='none';
         renderSlots();
-        $('#lobbyTitle').textContent = 'لوبي · سلوتك ' + mySlot;
+        const slotLabel = mySlot ? ('سلوتك ' + mySlot) : 'بانتظار تعيين السلوت…';
+        $('#lobbyTitle').textContent = 'لوبي · ' + slotLabel;
         const cm = $('#codesMsg');
-        if (cm) { cm.className='msg ok'; cm.textContent = '✔ انضمّيت · اضغط «أنا مستعد»'; }
+        if (cm) { cm.className='msg ok'; cm.textContent = mySlot ? '✔ انضمّيت · اضغط «أنا مستعد»' : '✔ القناة اتصلت — بانتظار تأكيد المضيف'; }
         const lm = $('#lobbyMsg');
-        if (lm) { lm.className='msg ok'; lm.textContent = '✔ تم الانضمام — أكواد العرض والرد اتشالت'; }
+        if (lm) { lm.className='msg ok'; lm.textContent = mySlot ? '✔ تم الانضمام — أكواد العرض والرد اتشالت' : '✔ متصل — أكواد العرض والرد اتشالت'; }
         updReadyBtn();
       },
       onConnected() {
