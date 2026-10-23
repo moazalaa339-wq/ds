@@ -639,8 +639,9 @@ body.is-mobile #dock .dock-head{display:flex;align-items:center;justify-content:
   background:var(--pan);padding:8px 0 4px;font-size:14px}
 body.is-mobile #side .sub{position:sticky;top:0;z-index:3;background:var(--pan);padding:8px 0 4px;align-items:center}
 body.is-mobile .m-secs{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;flex:none}
-body.is-mobile .m-secs button{min-height:46px;display:flex;align-items:center;justify-content:center;gap:5px;border-radius:12px;
-  background:var(--card);border:1px solid var(--line2);color:var(--mu);font:700 12px/1 Cairo,Tahoma,sans-serif}
+body.is-mobile .m-secs button{min-height:48px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;border-radius:12px;
+  background:var(--card);border:1px solid var(--line2);color:var(--mu);font:700 11px/1.25 Cairo,Tahoma,sans-serif;
+  white-space:normal;text-align:center;padding:6px 4px}
 body.is-mobile .m-secs button.on{color:#c8fff4;background:rgba(45,226,196,.16);border-color:var(--acc)}
 body.is-mobile #dock button,body.is-mobile #side button{min-height:40px;font-size:12px}
 body.is-mobile.sheet-more #mOverlay{opacity:1;pointer-events:auto}
@@ -1680,4 +1681,43 @@ button .hawa-ico-frame,button [data-ic],.tabs [data-ic],.m-secs [data-ic],.rail-
 /* منع ومضة البناء في وضع اللعب فقط */
 html.pure-play #app,body.pure-play #app,#app[hidden]{
   display:none!important;visibility:hidden!important;pointer-events:none!important;
+}
+
+/* ---------- موبايل: ملء الشاشة أفقي (ويس) ومقاس مضبوط ---------- */
+html:fullscreen,html:-webkit-full-screen,
+body:fullscreen,body:-webkit-full-screen{
+  width:100%!important;height:100%!important;overflow:hidden!important;
+  background:#06050a;
+}
+body.is-mobile:fullscreen #app,
+body.is-mobile:-webkit-full-screen #app,
+html:fullscreen body.is-mobile #app{
+  width:100vw!important;height:100dvh!important;height:100vh!important;
+  max-width:100vw!important;max-height:100dvh!important;
+  overflow:hidden!important;
+}
+body.is-mobile:fullscreen #vp,
+body.is-mobile:fullscreen #cv,
+body.is-mobile:fullscreen #play,
+body.is-mobile:fullscreen #pvp,
+body.is-mobile:fullscreen #pvp canvas{
+  width:100%!important;height:100%!important;
+  max-width:100vw!important;max-height:100dvh!important;
+}
+/* في الوضع الأفقي على الموبايل: شريط أرفع ومساحة أوسع للعرض */
+@media (orientation:landscape) and (max-height:520px){
+  body.is-mobile{
+    --m-top:40px;--m-rail:52px;
+  }
+  body.is-mobile #app{
+    height:100dvh!important;height:100vh!important;
+    max-height:100dvh!important;
+  }
+  body.is-mobile #mBar button{min-width:44px;height:36px}
+  body.is-mobile #mBar button span{font-size:15px}
+  body.is-mobile #mBar button i{font-size:8px}
+}
+/* منع تمدد أكبر من الشاشة */
+body.is-mobile,body.is-mobile #app,body.is-mobile #vp{
+  max-width:100vw;overflow:hidden;
 }

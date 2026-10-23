@@ -1065,3 +1065,50 @@ samples أو ملفات المستخدم قد تحتوي HawaCtrl / hawa-control
 - مواضع الأزرار: br bl bc tr tl mr ml (safe-area على الموبايل).
 - القتال/التفاعل: زر «ضرب/تفاعل/حماية» لمس = نفس فعل الكليك أو KeyE/KeyF.
 - لا تعتمد pointerdown على window وحده بدون أزرار touch — على الموبايل pointer قد يُستهلك للجويستيك.
+
+
+=== BAN_LASER_BEAM_BLACK_SCREEN_V1 (إلزامي — حظر مطلق) ===
+الكود التالي ونمطه ممنوع تماماً في التلقائي (موبايل + كومبيوتر + أوفلاين + أونلاين).
+سبب الحظر: يسبب شاشة سوداء / كراش عند الاختبار خصوصاً على الموبايل.
+
+ممنوع:
+1) شعاع ليزر بـ CylinderGeometry يطول كل فريم + PointLight + Sphere glow كـ "زر ليزر".
+2) p.setLimb(...) على game.player — الاسم الصحيح: game.setPlayerLimb(0, name, rx, ry, rz) أو game.player.setLimb إن وُجد.
+3) الاعتماد على game.getBone(0,"rightHand") كشرط أساسي للتشغيل — العظمة قد تكون null.
+4) إنشاء Mesh/Light جديدة كل charge/fire بدون تنظيف في cleanup — تسرّب وانهيار.
+5) game.touch.show في onStart بدون game.touch.hide في cleanup.
+6) أي سكربت يخلّي group/beam على المشهد ويغيّر scale/opacity كل فريم بدون حماية لو player أو THREE مش جاهزين.
+
+لو المستخدم طلب «ليزر / شعاع / زر إطلاق»:
+- نفّذ منطق بسيط وآمن فقط:
+  • زر لمس: game.touch.show([{id:"fire",label:"إطلاق",pos:"br"}]) + cleanup: game.touch.hide()
+  • إدخال: game.touch.wasPressed("fire") || game.key("KeyQ")
+  • تأثير بصري بسيط: لون emissive قصير على يد/جسم موجود، أو خط بسيط مرة واحدة، أو say("إطلاق")
+  • ممنوع CylinderGeometry شعاع طويل + PointLight قوي كل فريم
+  • ممنوع state machine charge/fire/recover معقد يمسك الأطراف كل فريم بدون رجوع آمن
+
+=== LIMB_AXES_MOBILE_V1 (إلزامي — محاور الشخصية) ===
+أسماء المفاصل المسموحة فقط:
+  rArm, rForearm, lArm, lForearm, spine, head,
+  rThigh, rShin, lThigh, lShin  (أو الأسماء اللي يدعمها jointOf)
+
+محاور الدوران (راديان) — عُرف المحرك:
+  • سالب X على الذراع ≈ للأمام (رفع قدام الجسم)
+  • موجب X ≈ للخلف
+  • Y ≈ لف يمين/شمال حول المحور الرأسي للمفصل
+  • Z ≈ تبعيد/تقرّب عن الجسم
+  • ممنوع قلب sin/cos بعد setPlayerLimb
+  • ابدأ بقيم صغيرة: |rx,ry,rz| ≤ 1.8
+
+قواعد آمنة للموبايل والكومبيوتر:
+1) حرّك المفصل فقط لو اللاعب موجود: if (!game.player) return;
+2) رجّع الأطراف للصفر عند الانتهاء وفي cleanup.
+3) متخلّطش setLimb مع anim المشي في نفس الفريم بدون animLock — استخدم قيم قصيرة ثم صفر.
+4) على الموبايل: أي فعل (ضرب/إشارة) لازم زر touch + مفتاح كيبورد احتياطي.
+5) متستخدمش getWorldPosition لعظمة كأساس وحيد — لو فشل استخدم موضع اللاعب + إزاحة بسيطة من yaw.
+6) كل كائن THREE تضيفه للمشهد لازم يتشال في cleanup (scene.remove + dispose geometry/material).
+
+مثال آمن (إشارة يد قصيرة) — مش قالب ليزر:
+  // onUpdate عند ضغط الزر:
+  // game.setPlayerLimb(0, "rArm", -1.2, 0, 0);
+  // بعد 0.4ث: game.setPlayerLimb(0, "rArm", 0, 0, 0);

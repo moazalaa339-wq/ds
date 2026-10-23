@@ -106,6 +106,9 @@ game.touch: show(list) hide() isDown(id) wasPressed(id) isMobile()
   game.teleportPlayer / teleportAll / setPlayerAppearance / setPlayerState / givePlayer
   game.setCinematic({mode:"follow"|"orbit",targetSlot,offset,fov}) game.clearCinematic()
   game.isNetworked() game.isHost() game.mySlot() game.onPlayerCmd(fn)
+أطراف آمنة: game.setPlayerLimb(0,'rArm'|'rForearm'|'lArm'|'lForearm'|'spine',rx,ry,rz) — سالب X ≈ للأمام
+حظر: شعاع ليزر CylinderGeometry+PointLight كل فريم / p.setLimb بدل setPlayerLimb / getBone كشرط تشغيل — تسبب شاشة سوداء
+cleanup: امسح أي Mesh/Light من scene + game.touch.hide()
 `;
 
 const HawaUI = {
@@ -716,7 +719,22 @@ function bindSpawnsPanelOnce() {
   const inp = document.getElementById('spMinPlayers');
   const fill = document.getElementById('spFillExact');
   if (en) en.onchange = syncRoom;
-  if (inp) { inp.onchange = syncRoom; inp.oninput = () => { /* live clamp later on change */ }; }
+  if (inp) {
+    inp.onchange = syncRoom;
+    inp.oninput = () => {
+      // حفظ فوري للرقم أثناء الكتابة
+      let v = Math.floor(+inp.value || 2);
+      if (v < 2) v = 2;
+      S.roomMinPlayers = v;
+      try { localStorage.setItem('hawa2-room', JSON.stringify({
+        roomMinEnabled: !!S.roomMinEnabled,
+        roomMinPlayers: Math.max(2, Math.floor(+S.roomMinPlayers || 2)),
+        roomFillExact: !!S.roomFillExact,
+        playNet: S.playNet,
+        allowScriptSpawn: true
+      })); } catch (_) {}
+    };
+  }
   if (fill) fill.onchange = syncRoom;
   
   const hideKeepTool = () => {
@@ -1652,7 +1670,12 @@ if (_bSpawns) _bSpawns.onclick = () => openSpawnsPanel();
 
 const _bRs = document.getElementById('bRs'); if (_bRs) _bRs.onclick = () => openSpawnsPanel();
 const _bOnRs = document.getElementById('bOnRs'); if (_bOnRs) _bOnRs.onclick = () => openSpawnsPanel();
-$('#bSnap').onclick = () => { const L = [0, .25, .5, 1]; S.snap = L[(L.indexOf(S.snap) + 1) % 4]; $('#bSnap .snap-l').textContent = S.snap ? String(S.snap) : 'حر'; };
+$('#bSnap').onclick = () => {
+  const L = [0, .25, .5, 1];
+  S.snap = L[(L.indexOf(S.snap) + 1) % 4];
+  try { $('#bSnap .snap-l').textContent = S.snap ? String(S.snap) : 'حر'; } catch (_) {}
+  try { chg(); } catch (_) {}
+};
 
 const HAWA_ASSET_NAMES = ['game.html', 'play-runtime.js', 'three.min.js', 'peerjs.min.js', 'jszip.min.js'];
 const HAWA_ASSETS = {}; 
@@ -3757,7 +3780,11 @@ const StoreFS = {
   supportsFolder() {
     return typeof window.showDirectoryPicker === 'function';
   },
-  isFolderLike() { return !!this.handle && (this.mode === 'folder' || this.mode === 'server'); },
+  isFolderLike() {
+    // لو الإذن لسه محتاج ضغطة مستخدم — متعتمدش على المجلد في الحفظ التلقائي
+    if (this.needsGesture && this.mode === 'folder') return false;
+    return !!this.handle && (this.mode === 'folder' || this.mode === 'server');
+  },
   
   async initServer() {
     if (location.protocol === 'file:') return false;
@@ -3950,6 +3977,13 @@ const StoreFS = {
     }
 
     
+    const persist = (typeof projectPersistFields === 'function') ? projectPersistFields() : {};
+    // لو data جاية من snapshot حديثة — فضّل قيمها
+    if (data) {
+      for (const k of ['playNet','roomMinEnabled','roomFillExact','roomMinPlayers','roomMinPlayersSetting','snap','player','builderCam']) {
+        if (data[k] != null) persist[k] = data[k];
+      }
+    }
     const lean = {
       format: 'hawa-folder-v1',
       version: 1,
@@ -3964,14 +3998,10 @@ const StoreFS = {
       mid: (data && data.mid) || S.mid || 1,
       mediaOrder: (data && Array.isArray(data.mediaOrder)) ? data.mediaOrder.slice()
         : (Array.isArray(S.mediaOrder) ? S.mediaOrder.slice() : Object.keys((data && data.media) || S.media || {})),
-      playNet: (data && (data.playNet === 'online' || data.playNet === 'offline')) ? data.playNet
-        : (S.playNet === 'online' || S.playNet === 'offline' ? S.playNet : null),
+      ...persist,
       allowScriptSpawn: true,
-      roomMinEnabled: !!(data && data.roomMinEnabled != null ? data.roomMinEnabled : S.roomMinEnabled),
-      roomFillExact: !!(data && data.roomFillExact != null ? data.roomFillExact : S.roomFillExact),
-      roomMinPlayers: (data && data.roomMinPlayers != null) ? +data.roomMinPlayers : S.roomMinPlayers,
-      player: (data && data.player) || null,
-      exportedAt: new Date().toISOString()
+      exportedAt: new Date().toISOString(),
+      savedAt: Date.now()
     };
     
     if (lean.scripts) lean.scripts.forEach(s => {  });
@@ -4044,7 +4074,16 @@ const StoreFS = {
       mediaOrder: Array.isArray(lean.mediaOrder) ? lean.mediaOrder.slice() : Object.keys(media),
       nid: lean.nid, sid: lean.sid, did: lean.did, mid: lean.mid,
       playNet: lean.playNet === 'online' || lean.playNet === 'offline' ? lean.playNet : null,
-      player: lean.player || null
+      player: lean.player || null,
+      roomMinEnabled: lean.roomMinEnabled != null ? !!lean.roomMinEnabled : undefined,
+      roomFillExact: lean.roomFillExact != null ? !!lean.roomFillExact : undefined,
+      roomMinPlayers: lean.roomMinPlayers != null ? +lean.roomMinPlayers : undefined,
+      roomMinPlayersSetting: lean.roomMinPlayersSetting != null ? +lean.roomMinPlayersSetting
+        : (lean.roomMinPlayers != null ? +lean.roomMinPlayers : undefined),
+      snap: (lean.snap === 0 || lean.snap === .25 || lean.snap === .5 || lean.snap === 1) ? lean.snap : undefined,
+      allowScriptSpawn: true,
+      builderCam: lean.builderCam || null,
+      savedAt: lean.savedAt || null
     };
   },
   async saveAll() {
@@ -4162,23 +4201,48 @@ const StoreFS = {
 };
 
 function save() {
-  // نسخة محلية دائماً (إعدادات الرووم + كل المشروع) عشان متضيعش
+  // نسخة محلية دائماً + مجلد/سيرفر — أي تعديل في البناء
   try {
     const snap = packProjectSnapshot((S && S._projName) || 'مشروع');
     localStorage.setItem('hawa2-project', JSON.stringify(snap));
-    localStorage.setItem('hawa2-room', JSON.stringify({
-      roomMinEnabled: !!S.roomMinEnabled,
-      roomMinPlayers: Math.max(2, Math.floor(+S.roomMinPlayers || 2)),
-      roomFillExact: !!S.roomFillExact,
-      playNet: S.playNet,
-      allowScriptSpawn: true
-    }));
+    localStorage.setItem('hawa2-room', JSON.stringify(projectPersistFields()));
   } catch (e) { console.warn('local save', e); }
-  if (!StoreFS.isFolderLike()) return;
-  StoreFS.saveAll().catch(e => console.warn(e));
+  try {
+    if (StoreFS && StoreFS.isFolderLike()) StoreFS.saveAll().catch(e => console.warn(e));
+  } catch (e) { console.warn('folder save', e); }
 }
 
-let svT; let rfT; function chg() { refNames = null; try { hier(); } catch (_) {} clearTimeout(rfT); rfT = setTimeout(() => { refNames = null; try { hier(); } catch (_) {} }, 500); S.dirty = 1; clearTimeout(svT); svT = setTimeout(save, 400); refreshLive(); }
+let svT; let rfT;
+function chg() {
+  refNames = null;
+  try { hier(); } catch (_) {}
+  clearTimeout(rfT);
+  rfT = setTimeout(() => { refNames = null; try { hier(); } catch (_) {} }, 500);
+  S.dirty = 1;
+  clearTimeout(svT);
+  // حفظ سريع بعد أي تغيير في الشريط أو المشهد
+  svT = setTimeout(save, 280);
+  try { refreshLive(); } catch (_) {}
+}
+// حفظ إجباري عند إغلاق/تحديث الصفحة + نبض دوري لو في تعديلات
+(function bindPersistGuards() {
+  const flush = () => { try { clearTimeout(svT); save(); } catch (_) {} };
+  try {
+    addEventListener('pagehide', flush);
+    addEventListener('beforeunload', flush);
+    addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') flush();
+    });
+  } catch (_) {}
+  setInterval(() => {
+    try {
+      if (S && S.dirty && S.mode === 'build') {
+        S.dirty = 0;
+        save();
+      }
+    } catch (_) {}
+  }, 4000);
+})();
 function ensureLive() {
   for (const [pid, id] of [['progP', 'pLive'], ['sobjP', 'sLive']]) {
     const root = document.getElementById(pid);
@@ -4269,26 +4333,16 @@ function loadData(d, append) {
       try { Object.assign(PCFG, d.player); } catch (_) {}
     }
     
-    if (d.playNet === 'online' || d.playNet === 'offline') {
-      S.playNet = d.playNet;
-      if (S.playNet === 'offline') removeAllOnlineSpawns();
-    } else {
-      S.playNet = null;
+    // استعادة كل إعدادات المشروع (رووم / شبكة / شبكة / لاعب / …)
+    applyProjectPersistFields(d);
+    if (S.playNet === 'offline') {
+      try { removeAllOnlineSpawns(); } catch (_) {}
     }
-    S.allowScriptSpawn = true;
-    S.roomMinEnabled = !!(d.roomMinEnabled);
-    S.roomFillExact = !!(d.roomFillExact);
-    let _rmp = d.roomMinPlayersSetting != null ? d.roomMinPlayersSetting : d.roomMinPlayers;
-    S.roomMinPlayers = Math.max(2, Math.floor(+(_rmp) || 2));
-    // لو الملف القديم مفيهوش إعدادات رووم — حاول من النسخة المحلية
+    // لو الملف القديم ناقص إعدادات — كمّل من النسخة المحلية
     if (d.roomMinEnabled == null && d.roomFillExact == null) {
       try {
         const loc = JSON.parse(localStorage.getItem('hawa2-room') || 'null');
-        if (loc) {
-          if (loc.roomMinEnabled != null) S.roomMinEnabled = !!loc.roomMinEnabled;
-          if (loc.roomFillExact != null) S.roomFillExact = !!loc.roomFillExact;
-          if (loc.roomMinPlayers != null) S.roomMinPlayers = Math.max(2, Math.floor(+loc.roomMinPlayers || 2));
-        }
+        if (loc) applyProjectPersistFields(loc);
       } catch (_) {}
     }
     try {
@@ -4296,6 +4350,7 @@ function loadData(d, append) {
       if (ai) ai.checked = !!S.allowScriptSpawn;
     } catch (_) {}
     try { syncPlayNetUI(); } catch (_) {}
+    try { refreshSpawnsPanel(); } catch (_) {}
   }
   try { SCH.clear(); } catch (_) {}
   if (!append && d.builderCam) {
@@ -4308,25 +4363,57 @@ function loadData(d, append) {
     setTimeout(() => { try { ensurePlayNetChosen(false); } catch (_) {} }, 400);
   }
 }
+/** كل حالة المشروع القابلة للحفظ — أي تعديل في البناء لازم يعدّي من هنا */
+function projectPersistFields() {
+  const roomMin = Math.max(2, Math.floor(+S.roomMinPlayers || 2));
+  return {
+    playNet: S.playNet === 'online' || S.playNet === 'offline' ? S.playNet : null,
+    allowScriptSpawn: true,
+    roomMinEnabled: !!S.roomMinEnabled,
+    roomMinPlayers: roomMin,
+    roomMinPlayersSetting: roomMin,
+    roomFillExact: !!S.roomFillExact,
+    snap: (S.snap === 0 || S.snap === .25 || S.snap === .5 || S.snap === 1) ? S.snap : .5,
+    player: (typeof PCFG !== 'undefined') ? JSON.parse(JSON.stringify(PCFG)) : null,
+    builderCam: (typeof getBuilderCam === 'function') ? getBuilderCam() : null
+  };
+}
+function applyProjectPersistFields(d) {
+  if (!d || typeof d !== 'object') return;
+  if (d.playNet === 'online' || d.playNet === 'offline') {
+    S.playNet = d.playNet;
+  }
+  S.allowScriptSpawn = true;
+  if (d.roomMinEnabled != null) S.roomMinEnabled = !!d.roomMinEnabled;
+  if (d.roomFillExact != null) S.roomFillExact = !!d.roomFillExact;
+  let rmp = d.roomMinPlayersSetting != null ? d.roomMinPlayersSetting : d.roomMinPlayers;
+  if (rmp != null) S.roomMinPlayers = Math.max(2, Math.floor(+rmp || 2));
+  if (d.snap === 0 || d.snap === .25 || d.snap === .5 || d.snap === 1) {
+    S.snap = d.snap;
+    try {
+      const el = document.querySelector('#bSnap .snap-l');
+      if (el) el.textContent = S.snap ? String(S.snap) : 'حر';
+    } catch (_) {}
+  }
+  if (d.player && typeof d.player === 'object' && typeof PCFG !== 'undefined') {
+    try { Object.assign(PCFG, d.player); } catch (_) {}
+  }
+}
 function packProjectSnapshot(name) {
+  const meta = projectPersistFields();
   return {
     format: 'hawa-project-v3',
     version: 3,
-    name: name || 'مشروع',
+    name: name || (S && S._projName) || 'مشروع',
     objs: JSON.parse(JSON.stringify(S.objs)),
     scripts: JSON.parse(JSON.stringify(S.scripts)),
     sdefs: JSON.parse(JSON.stringify(S.sdefs)),
     media: JSON.parse(JSON.stringify(S.media || {})),
     mediaOrder: Array.isArray(S.mediaOrder) ? S.mediaOrder.slice() : Object.keys(S.media || {}),
     nid: S.nid, sid: S.sid, did: S.did, mid: S.mid || 1,
-    playNet: S.playNet === 'online' || S.playNet === 'offline' ? S.playNet : null,
-    allowScriptSpawn: true,
-    roomMinEnabled: !!S.roomMinEnabled,
-    roomMinPlayers: Math.max(2, Math.floor(+S.roomMinPlayers || 2)),
-    roomFillExact: !!S.roomFillExact,
-    player: (typeof PCFG !== 'undefined') ? JSON.parse(JSON.stringify(PCFG)) : null,
-    builderCam: getBuilderCam(),
-    exportedAt: new Date().toISOString()
+    ...meta,
+    exportedAt: new Date().toISOString(),
+    savedAt: Date.now()
   };
 }
 async function downloadProjectZip() {
@@ -4801,7 +4888,31 @@ $('#fl').onchange = async e => {
   e.target.value = ''; chg();
 };
 
-function dl(n, t, m) { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([t], {type: (m || 'text/plain') + ';charset=utf-8'})); a.download = n; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); }
+function dl(n, t, m) {
+  const blob = new Blob([t], { type: (m || 'text/plain') + ';charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  // موبايل: جرّب Web Share ثم التحميل العادي
+  const mob = (typeof isMobileLike === 'function') ? isMobileLike()
+    : (typeof MOB !== 'undefined' && MOB.on);
+  if (mob && navigator.share && navigator.canShare) {
+    try {
+      const file = new File([blob], n, { type: blob.type });
+      if (navigator.canShare({ files: [file] })) {
+        navigator.share({ files: [file], title: n }).catch(() => {
+          const a = document.createElement('a'); a.href = url; a.download = n; a.click();
+        });
+        setTimeout(() => URL.revokeObjectURL(url), 4000);
+        return;
+      }
+    } catch (_) {}
+  }
+  const a = document.createElement('a');
+  a.href = url; a.download = n;
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { try { a.remove(); URL.revokeObjectURL(url); } catch (_) {} }, 2500);
+}
 
 const TouchUI = {
   root: null,
@@ -4914,7 +5025,9 @@ function resolveAutoCtxFile(sec) {
   if (section === 'objects' || section === 'play') return 'auto_story_level.txt';
   if (section !== 'prog' && section !== 'sobj') return '';
 
-  const mobile = !!(typeof MOB !== 'undefined' && MOB.on);
+  try { if (typeof MOB !== 'undefined' && MOB.detect) MOB.detect(); } catch (_) {}
+  const mobile = !!(typeof MOB !== 'undefined' && MOB.on)
+    || (typeof isMobileLike === 'function' && isMobileLike());
   const device = mobile ? 'PHONE' : 'PC';
   const kind = section === 'sobj' ? 'PROBJ' : 'PROG';
   
@@ -5030,27 +5143,37 @@ function coordBlock() {
 
 (function bindAuto() {
   const run = async (forceSec) => {
-    if (forceSec) S.section = forceSec;
-    const sec = S.mode === 'play' ? 'play' : S.section;
-    
-    const file = resolveAutoCtxFile(sec);
-    let ctx = '';
-    if (file) {
-      ctx = await loadAutoCtx(file);
-      if (!ctx && (sec === 'prog' || sec === 'sobj')) {
-        
-        ctx = await loadAutoCtx('auto_scripted_object.txt');
+    try {
+      // تأكد من كشف الموبايل قبل اختيار ملف التلقائي
+      try { if (typeof MOB !== 'undefined' && MOB.detect) MOB.detect(); } catch (_) {}
+      if (forceSec) S.section = forceSec;
+      const sec = S.mode === 'play' ? 'play' : S.section;
+      const file = resolveAutoCtxFile(sec);
+      let ctx = '';
+      if (file) {
+        ctx = await loadAutoCtx(file);
+        if (!ctx && (sec === 'prog' || sec === 'sobj')) {
+          // احتياطي: ملف الكائنات البرمجية العام
+          ctx = await loadAutoCtx('auto_scripted_object.txt');
+        }
+        // لو ملف الموبايل فاضي — جرّب نسخة PC كمرجع
+        if (!ctx && file.indexOf('PHONE') >= 0) {
+          ctx = await loadAutoCtx(file.replace('PHONE', 'PC'));
+        }
       }
+      const { sec: s2, t } = autoText(ctx);
+      const mobile = !!(typeof MOB !== 'undefined' && MOB.on) || (typeof isMobileLike === 'function' && isMobileLike());
+      const net = S.playNet === 'online' ? 'online' : (S.playNet === 'offline' ? 'offline' : 'unset');
+      const tag = (mobile ? 'phone' : 'pc') + '-' + net;
+      const outName = file
+        ? file.replace(/\.txt$/i, '') + '-export.txt'
+        : ('hawa-auto-' + s2 + '-' + tag + '.txt');
+      dl(outName, t);
+      try { tip('✔ تلقائي · ' + (file || s2) + (mobile ? ' · موبايل' : ' · PC')); } catch (_) {}
+    } catch (e) {
+      console.warn('auto', e);
+      try { tip('⚠ فشل التلقائي: ' + (e.message || e)); } catch (_) {}
     }
-    const { sec: s2, t } = autoText(ctx);
-    const mobile = !!(typeof MOB !== 'undefined' && MOB.on);
-    const net = S.playNet === 'online' ? 'online' : (S.playNet === 'offline' ? 'offline' : 'unset');
-    const tag = (mobile ? 'phone' : 'pc') + '-' + net;
-    const outName = file
-      ? file.replace(/\.txt$/i, '') + '-export.txt'
-      : ('hawa-auto-' + s2 + '-' + tag + '.txt');
-    dl(outName, t);
-    try { tip('✔ تلقائي · ' + (file || s2)); } catch (_) {}
   };
   
   const pA = $('#pAuto'), sA = $('#sAuto');
@@ -5058,15 +5181,53 @@ function coordBlock() {
   if (sA) sA.onclick = () => { run('sobj'); };
 })();
 
+function isMobileLike() {
+  try {
+    if (document.body && document.body.classList.contains('is-mobile')) return true;
+  } catch (_) {}
+  try {
+    return /Android|iPhone|iPad|iPod|Mobile|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+      || (navigator.maxTouchPoints > 1 && Math.min(screen.width, screen.height) < 900);
+  } catch (_) { return false; }
+}
+async function lockLandscapeIfMobile() {
+  if (!isMobileLike()) return;
+  try {
+    const o = screen.orientation || screen.mozOrientation || screen.msOrientation;
+    if (o && typeof o.lock === 'function') {
+      // جرّب landscape ثم any landscape
+      try { await o.lock('landscape'); return; } catch (_) {}
+      try { await o.lock('landscape-primary'); return; } catch (_) {}
+      try { await o.lock('landscape-secondary'); } catch (_) {}
+    }
+  } catch (_) {}
+}
+function unlockOrientation() {
+  try {
+    const o = screen.orientation || screen.mozOrientation || screen.msOrientation;
+    if (o && typeof o.unlock === 'function') o.unlock();
+  } catch (_) {}
+}
 function toggleFullscreen() {
   try {
     const el = document.documentElement;
-    if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+    const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
+    if (!isFs) {
       const req = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
-      if (req) req.call(el);
+      const p = req ? req.call(el, { navigationUI: 'hide' }) : null;
+      Promise.resolve(p).then(() => {
+        // على الموبايل: أفقي (ويس) عشان الشاشة متبقاش مقصوصة/أكبر من مساحتها
+        lockLandscapeIfMobile();
+        try { setTimeout(() => { try { resize(); } catch (_) {} }, 120); } catch (_) {}
+      }).catch(() => {});
     } else {
       const ex = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
-      if (ex) ex.call(document);
+      if (ex) {
+        Promise.resolve(ex.call(document)).then(() => {
+          unlockOrientation();
+          try { setTimeout(() => { try { resize(); } catch (_) {} }, 120); } catch (_) {}
+        }).catch(() => {});
+      }
     }
   } catch (e) { console.warn(e); }
 }
@@ -5076,6 +5237,9 @@ function syncFullscreenBtn() {
   const on = !!(document.fullscreenElement || document.webkitFullscreenElement);
   b.classList.toggle('on', on);
   b.title = on ? 'خروج من ملء الشاشة' : 'ملء الشاشة';
+  if (on && isMobileLike()) lockLandscapeIfMobile();
+  if (!on) unlockOrientation();
+  try { setTimeout(() => { try { resize(); } catch (_) {} }, 80); } catch (_) {}
 }
 (function bindFullscreen() {
   const b = document.getElementById('bFullscreen');
@@ -9178,6 +9342,7 @@ const OnlineMenu = {
 };
 
 async function playStart() {
+  try {
   // إخفاء طبقة البناء فوراً عشان متظهرش ومضة قبل اللعب
   try {
     const app = document.getElementById('app');
@@ -9205,7 +9370,11 @@ async function playStart() {
     };
   } catch (_) { S._playBackup = null; }
   sel(null); S.mode = 'play'; syncMarks(); S.err = []; S.fly = false; updModes();
-  $('#app').hidden = true; $('#play').hidden = false; attach(pvp);
+  const playEl = document.getElementById('play');
+  const appEl = document.getElementById('app');
+  if (playEl) { playEl.hidden = false; playEl.style.display = ''; }
+  if (appEl) { appEl.hidden = true; }
+  try { attach(pvp); } catch (e) { console.warn(e); }
   
   
   (function(){
@@ -9553,6 +9722,31 @@ return {
   }
   for (const h of rt.hooks) if (h.onStart) try { h.onStart(h.self, game); } catch (e) { fail(h.name, e); }
   S.dirty = 1;
+  } catch (err) {
+    // لو فشل الاختبار (سكربت غلط / خطأ شبكة) — ارجع للبناء بدل شاشة سوداء
+    console.error('[playStart]', err);
+    try {
+      const el = document.getElementById('hawaEngineLoad');
+      if (el) { el.style.display = 'none'; try { el.remove(); } catch (_) {} }
+    } catch (_) {}
+    try {
+      S.mode = 'build';
+      const playEl = document.getElementById('play');
+      const app = document.getElementById('app');
+      if (playEl) { playEl.hidden = true; playEl.style.display = 'none'; }
+      if (app) {
+        app.hidden = false;
+        app.removeAttribute('hidden');
+        app.style.display = '';
+        app.style.visibility = '';
+      }
+      document.body.classList.remove('play-on', 'pure-play', 'online-play');
+      try { attach(vp); } catch (_) {}
+      try { MOB.setPlay(false); MOB.detect(); } catch (_) {}
+      try { resize(); camUpdate(); } catch (_) {}
+    } catch (_) {}
+    try { tip('⚠ فشل بدء الاختبار: ' + (err && err.message || err)); } catch (_) {}
+  }
 }
 function playStop() {
   try { MOB.setPlay(false); } catch (_) {}
@@ -9668,18 +9862,24 @@ function playStop() {
 
 function playStartFX() {
   if (S.mode === 'play') return;
-  const FX = window.HawaFX;
-  if (!FX) { playStart(); return; }
-  if (FX.busy) return;
-  let snap = null;
   try {
-    if (R && R.render) R.render(scene, cam);
-    const r = vp.getBoundingClientRect(), o = document.createElement('canvas');
-    o.width = cv.width; o.height = cv.height;
-    o.getContext('2d').drawImage(cv, 0, 0);
-    snap = {img: o, rect: {x: r.left, y: r.top, w: r.width, h: r.height}};
-  } catch (_) { snap = null; }
-  if (!FX.play('test', () => { try { playStart(); } catch (e) { console.error(e); } }, {snap})) playStart();
+    const FX = window.HawaFX;
+    if (!FX) { playStart().catch(e => console.error(e)); return; }
+    if (FX.busy) return;
+    let snap = null;
+    try {
+      if (R && R.render) R.render(scene, cam);
+      const r = vp.getBoundingClientRect(), o = document.createElement('canvas');
+      o.width = cv.width; o.height = cv.height;
+      o.getContext('2d').drawImage(cv, 0, 0);
+      snap = {img: o, rect: {x: r.left, y: r.top, w: r.width, h: r.height}};
+    } catch (_) { snap = null; }
+    const go = () => { try { playStart().catch(e => console.error(e)); } catch (e) { console.error(e); } };
+    if (!FX.play('test', go, {snap})) go();
+  } catch (e) {
+    console.error(e);
+    try { playStart().catch(err => console.error(err)); } catch (_) {}
+  }
 }
 function togglePlay() { S.mode === 'play' ? playStop() : playStartFX(); }
 $('#bTest').onclick = togglePlay;
@@ -10400,35 +10600,53 @@ function boot() {
   }
   try { st = await StoreFS.init(); } catch (e) { console.warn(e); }
   boot();
-  // تخزين صامت: سيرفر تلقائي أو مجلد محفوظ أو localStorage — من غير ما نسأل المستخدم
+  // تحميل مشروع محفوظ من localStorage (احتياطي قوي خصوصاً على الموبايل)
+  async function loadLocalProjectFallback() {
+    try {
+      const raw = localStorage.getItem('hawa2-project');
+      if (!raw) return false;
+      const d = JSON.parse(raw);
+      if (d && (Array.isArray(d.objs) || d.scripts || d.sdefs)) {
+        loadData(d, false);
+        return true;
+      }
+    } catch (e) { console.warn('local project load', e); }
+    return false;
+  }
+  // تخزين صامت: سيرفر / مجلد / localStorage — من غير ما نطلب تفعيل كل ريفرش
   if (st === true) {
     try {
       const d2 = await StoreFS.loadPreferred();
-      if (d2) try { loadData(d2, false); } catch (e) { console.warn(e); }
-    } catch (e) { console.warn(e); }
+      if (d2) try { loadData(d2, false); } catch (e) { console.warn(e); await loadLocalProjectFallback(); }
+      else await loadLocalProjectFallback();
+    } catch (e) { console.warn(e); await loadLocalProjectFallback(); }
   } else if (st === 'migrate') {
-    // محاولة نقل صامتة من المجلد القديم — لو فشلت نكمّل بـ localStorage
     try {
       const d2 = await StoreFS.readFromLegacy();
       if (d2) {
         try { loadData(d2, false); } catch (e) { console.warn(e); }
         try { await StoreFS.saveAll(); StoreFS.legacy = null; tip('✔ اتنقل مشروعك للتخزين التلقائي'); } catch (e) { console.warn(e); }
-      }
-    } catch (e) { console.warn(e); }
+      } else await loadLocalProjectFallback();
+    } catch (e) { console.warn(e); await loadLocalProjectFallback(); }
   } else if (st === 'pending') {
-    // إذن المجلد محتاج إيماءة مستخدم — من غير تنبيه مزعج؛ التفعيل من «عرض التخزين» لو حابب
+    // إذن المجلد بعد الريفرش محتاج ضغطة مستخدم — منشتغلش على localStorage فوراً
+    // ومنطلبش تفعيل إجباري (ده كان بيتعب على الموبايل كل مرة)
     try {
-      const ok = await StoreFS.activatePermission();
-      if (ok) {
-        const d2 = await StoreFS.loadPreferred();
-        if (d2) try { loadData(d2, false); } catch (e) { console.warn(e); }
+      StoreFS.needsGesture = true;
+      // على الموبايل: اعتمد localStorage كتخزين أساسي عشان متتعبش من البرمشن
+      const mob = (typeof isMobileLike === 'function') ? isMobileLike()
+        : /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
+      if (mob) {
+        StoreFS.mode = 'local';
+        StoreFS.label = 'متصفح (localStorage) · المجلد محفوظ للتفعيل اليدوي';
       }
+      await loadLocalProjectFallback();
     } catch (e) { console.warn(e); }
   } else {
-    // مفيش سيرفر ولا مجلد — localStorage يكفي؛ المستخدم يختار مجلد من «عرض التخزين» لو عايز
     try {
       StoreFS.mode = StoreFS.mode === 'none' ? 'local' : StoreFS.mode;
       StoreFS.label = StoreFS.label || 'متصفح (localStorage)';
+      await loadLocalProjectFallback();
     } catch (_) {}
   }
   try { INTRO.start(); } catch (e) { console.warn(e); try { INTRO.finish(true); } catch (_) {} }
