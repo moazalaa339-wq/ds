@@ -8919,7 +8919,13 @@ function boot() {
   try { fromLauncher = !!sessionStorage.getItem('hawa_play_meta'); } catch (e) {}
   const readSession = () => {
     if (window.__HAWA_IDB_GAME && window.__HAWA_IDB_GAME.objs) return window.__HAWA_IDB_GAME;
-    try { const ss = sessionStorage.getItem('hawa_game'); if (ss) return JSON.parse(ss); } catch (e) {}
+    try {
+      const ss = sessionStorage.getItem('hawa_game') || sessionStorage.getItem('hawa_game_data');
+      if (ss) {
+        const parsed = JSON.parse(ss);
+        if (parsed && Array.isArray(parsed.objs)) return parsed;
+      }
+    } catch (e) {}
     return null;
   };
   if (emb && !fromLauncher) d = emb;
@@ -8977,7 +8983,7 @@ function boot() {
     setTimeout(async () => {
       try {
         if (!(d && d.objs && d.objs.length)) {
-          await uiAlert('مفيش بيانات لعبة تتشغّل.\nارجع لصفحة «فتح اللعبة» وارفع ملف اللعبة تاني.');
+          await uiAlert('اللعبة مفيهاش بيانات كافية للتشغيل.\nالسبب: ملف اللعبة ما وصلش لوضع اللعب (ارفعه من «فتح اللعبة» قبل إنشاء/انضمام الرووم، أو أعد رفعه).');
           location.href = 'game.html';
           return;
         }
@@ -8993,7 +8999,7 @@ function boot() {
   if (window.HAWA_PLAY_ONLY) {
     try { StoreFS.handle = null; StoreFS.mode = 'none'; } catch (_) {}
     try {
-      if (!(window.HAWA_EMBEDDED_GAME && window.HAWA_EMBEDDED_GAME.objs) && !sessionStorage.getItem('hawa_game')) {
+      if (!(window.HAWA_EMBEDDED_GAME && window.HAWA_EMBEDDED_GAME.objs) && !sessionStorage.getItem('hawa_game') && !sessionStorage.getItem('hawa_game_data')) {
         window.__HAWA_IDB_GAME = await new Promise(res => {
           try {
             const r = indexedDB.open('hawa_play_tmp', 1);

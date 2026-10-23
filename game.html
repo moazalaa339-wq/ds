@@ -1175,7 +1175,61 @@ $('#btnStart').onclick = async () => {
   startPlay({ mode:'online', data: gameData, slot: 1, players: roomPlayers, net, isHost: true, transport: netType, voice });
 };
 
-function startPlay(opts) {
+function saveGameForPlay(data) {
+  return new Promise((resolve) => {
+    if (!data || typeof data !== 'object') { resolve(false); return; }
+    let ok = false;
+    // المفتاح اللي المحرك بيقرأه: hawa_game (+ نسخة احتياطية hawa_game_data)
+    try {
+      const s = JSON.stringify(data);
+      sessionStorage.setItem('hawa_game', s);
+      sessionStorage.setItem('hawa_game_data', s);
+      ok = true;
+    } catch (e) {
+      // sessionStorage ممتلئ (لعبة كبيرة) — نمسح القديم ونجرب، وإلا IndexedDB
+      try {
+        sessionStorage.removeItem('hawa_game');
+        sessionStorage.removeItem('hawa_game_data');
+        const s = JSON.stringify(data);
+        sessionStorage.setItem('hawa_game', s);
+        ok = true;
+      } catch (_) { ok = false; }
+    }
+    // دائماً نكتب IndexedDB كنسخة موثوقة (خصوصاً الأونلاين/الأكواد)
+    try {
+      const req = indexedDB.open('hawa_play_tmp', 1);
+      req.onupgradeneeded = () => {
+        try { req.result.createObjectStore('g'); } catch (_) {}
+      };
+      req.onsuccess = () => {
+        try {
+          const db = req.result;
+          if (!db.objectStoreNames.contains('g')) {
+            db.close();
+            const r2 = indexedDB.open('hawa_play_tmp', 2);
+            r2.onupgradeneeded = () => { try { r2.result.createObjectStore('g'); } catch (_) {} };
+            r2.onsuccess = () => {
+              try {
+                const tx = r2.result.transaction('g', 'readwrite');
+                tx.objectStore('g').put(data, 'game');
+                tx.oncomplete = () => { try { r2.result.close(); } catch (_) {} resolve(true); };
+                tx.onerror = () => resolve(ok);
+              } catch (_) { resolve(ok); }
+            };
+            r2.onerror = () => resolve(ok);
+            return;
+          }
+          const tx = db.transaction('g', 'readwrite');
+          tx.objectStore('g').put(data, 'game');
+          tx.oncomplete = () => { try { db.close(); } catch (_) {} resolve(true); };
+          tx.onerror = () => resolve(ok);
+        } catch (_) { resolve(ok); }
+      };
+      req.onerror = () => resolve(ok);
+    } catch (_) { resolve(ok); }
+  });
+}
+async function startPlay(opts) {
   try {
     const plist = opts.players || [];
     const me = plist.find(p => p && (+p.slot === +opts.slot)) || plist.find(p => p && p.host) || null;
@@ -1195,7 +1249,14 @@ function startPlay(opts) {
     sessionStorage.setItem('hawa_play', JSON.stringify(meta));
   } catch(_){}
   if (opts.data) {
-    try { sessionStorage.setItem('hawa_game_data', JSON.stringify(opts.data)); } catch(_){}
+    const saved = await saveGameForPlay(opts.data);
+    if (!saved) {
+      alert('⚠ مش قادر أحفظ بيانات اللعبة قبل التشغيل (المساحة ممتلئة أو المتصفح منع التخزين).\nجرّب ترفع ملف اللعبة تاني أو استخدم لعبة أصغر.');
+      return;
+    }
+  } else {
+    alert('⚠ مفيش بيانات لعبة. ارفع ملف اللعبة من صفحة فتح اللعبة أولاً.');
+    return;
   }
   const load = document.getElementById('hawaLoad');
   if (load) {
