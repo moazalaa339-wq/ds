@@ -94,23 +94,27 @@
   }
 
   
+  var logoImg = null, logoReady = false;
+  try {
+    logoImg = new Image();
+    logoImg.onload = function () { logoReady = true; };
+    logoImg.src = 'logo-256.png';
+  } catch (_) {}
   function mark(x, y, r, o) {
     var p = pr(o.p, 0, .5); if (p <= 0) return;
-    var A = o.cfg.rgb, B = o.cfg.rgb2, e = eo(p);
+    var A = o.cfg.rgb, e = eo(p);
+    var size = r * 2.8;
     c.save(); c.translate(x, y); c.globalAlpha = o.a * e;
-    c.rotate(Math.PI / 4 + (1 - e) * Math.PI); c.scale(.6 + .4 * e, .6 + .4 * e);
-    var g = c.createLinearGradient(-r, -r, r, r); g.addColorStop(0, rgba(A, 1)); g.addColorStop(1, rgba(B, 1));
-    c.shadowColor = rgba(A, .85); c.shadowBlur = r * .9; c.fillStyle = g; rr(c, -r, -r, 2 * r, 2 * r, r * .28); c.fill();
-    c.shadowBlur = 0; c.strokeStyle = rgba(A, .6); c.lineWidth = 1.5; rr(c, -r * 1.3, -r * 1.3, 2.6 * r, 2.6 * r, r * .36); c.stroke();
-    c.restore();
-    
-    c.save(); c.globalAlpha = o.a * e; c.translate(x, y);
-    var ew = r * .86, eh = r * .48;
-    c.fillStyle = '#140a1c'; c.strokeStyle = '#140a1c'; c.lineWidth = Math.max(2, r * .11); c.lineJoin = 'round'; c.lineCap = 'round';
-    c.beginPath(); c.moveTo(-ew, 0); c.quadraticCurveTo(0, -eh * 2, ew, 0); c.quadraticCurveTo(0, eh * 2, -ew, 0); c.closePath(); c.stroke();
-    c.beginPath(); c.arc(0, 0, r * .27, 0, 6.2832); c.fill();
-    c.fillStyle = rgba(A, 1); c.beginPath(); c.arc(-r * .08, -r * .08, r * .08, 0, 6.2832); c.fill();
-    c.beginPath(); c.moveTo(-ew * .35, eh * 1.15); c.quadraticCurveTo(-ew * .3, eh * 1.9, -ew * .55, eh * 2.1); c.strokeStyle = '#140a1c'; c.stroke();
+    c.scale(.55 + .45 * e, .55 + .45 * e);
+    if (logoReady && logoImg) {
+      c.shadowColor = rgba(A, .75); c.shadowBlur = r * 1.1;
+      c.drawImage(logoImg, -size / 2, -size / 2, size, size);
+    } else {
+      // احتياطي لو الصورة متأخرة
+      c.shadowColor = rgba(A, .85); c.shadowBlur = r * .9;
+      c.fillStyle = rgba(A, 1);
+      rr(c, -r, -r, 2 * r, 2 * r, r * .28); c.fill();
+    }
     c.restore();
   }
   function title(o) {

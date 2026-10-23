@@ -4,6 +4,18 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Hawa Game</title>
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="apple-touch-icon" href="favicon-180.png">
+<meta name="description" content="Hawa Engine — محرك ألعاب مصري لبناء وتشغيل ألعاب 3D أونلاين وأوفلاين بسهولة.">
+<meta property="og:title" content="Hawa Engine">
+<meta property="og:description" content="محرك ألعاب مصري — بناء وتشغيل ألعاب ثلاثية الأبعاد مع دعم الأونلاين.">
+<meta property="og:image" content="favicon.png">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Hawa Engine">
+<meta name="twitter:description" content="محرك ألعاب مصري لبناء وتشغيل ألعاب 3D.">
+
 <link rel="stylesheet" href="style.css">
 <style>
 #playHome{position:fixed;top:14px;inset-inline-end:14px;z-index:9998;display:inline-flex;align-items:center;gap:8px;padding:9px 18px;text-decoration:none;
@@ -20,7 +32,7 @@
 <!-- ================= طبقة البناء (Build) ================= -->
 <div id="app">
   <header id="bar">
-    <div class="brand"><span class="logo">𓂀</span><div><b>Hawa</b> Engine<small>v2.3 · بناء</small></div></div>
+    <div class="brand"><span class="logo"><img src="logo.png" alt="Hawa"></span><div><b>Hawa</b> Engine<small>v2.3 · بناء</small></div></div>
 
     <nav class="tabs" id="secs">
       <button data-sec="objects" class="on"><span>🏛</span>الكائنات</button>
@@ -147,7 +159,7 @@
     <button id="pExit" class="stop"><span data-ic="stop"></span>خروج للبناء<kbd>P</kbd></button>
   </div>
   <div id="pOnlineBar">
-    <button type="button" id="pMenuBtn" title="قائمة الأونلاين">𓂀</button>
+    <button type="button" id="pMenuBtn" title="قائمة الأونلاين"><img src="logo-64.png" alt="Hawa"></button>
     <button type="button" id="pMic" class="online-compact" title="المايك (B)">
       <span class="mic-ico" aria-hidden="true">
         <svg class="r" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/><line x1="4" y1="4" x2="20" y2="20"/></svg>
@@ -168,7 +180,7 @@
 <div id="pOnlineMenu" aria-hidden="true">
   <div class="pom-card" role="dialog">
     <div class="pom-head">
-      <div class="pom-logo">𓂀</div>
+      <div class="pom-logo"><img src="logo.png" alt="Hawa"></div>
       <div>
         <div class="pom-title">Hawa Online</div>
         <div class="pom-sub">إعدادات الجلسة</div>

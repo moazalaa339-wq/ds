@@ -8293,7 +8293,7 @@ function showEnginePlayLoad(ms) {
       el = document.createElement('div');
       el.id = 'hawaEngineLoad';
       el.style.cssText = 'position:fixed;inset:0;z-index:100000;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;background:radial-gradient(ellipse at 50% 30%,#1a1530 0%,#08060f 70%);color:#f4efe4;font-family:Cairo,Tahoma,sans-serif';
-      el.innerHTML = '<div style="font-size:40px;font-weight:900;letter-spacing:.12em;background:linear-gradient(90deg,#ffe2a6,#7ff0dc,#c4b5fd);-webkit-background-clip:text;background-clip:text;color:transparent">HAWA ENGINE</div><div style="opacity:.85;font-weight:700">تهيئة وضع اللعب…</div><div style="width:min(260px,70vw);height:4px;border-radius:99px;background:#1e1a2e;overflow:hidden"><div id="hawaEngineLoadBar" style="height:100%;width:0%;background:linear-gradient(90deg,#7ff0dc,#ffe2a6)"></div></div>';
+      el.innerHTML = '<img src="logo-256.png" alt="Hawa Engine" style="width:100px;height:100px;object-fit:contain;filter:drop-shadow(0 0 24px rgba(255,190,61,.5));margin-bottom:4px"><div style="font-size:28px;font-weight:900;letter-spacing:.12em;background:linear-gradient(90deg,#ffe2a6,#7ff0dc,#c4b5fd);-webkit-background-clip:text;background-clip:text;color:transparent">HAWA ENGINE</div><div style="opacity:.85;font-weight:700">تهيئة وضع اللعب…</div><div style="width:min(260px,70vw);height:4px;border-radius:99px;background:#1e1a2e;overflow:hidden"><div id="hawaEngineLoadBar" style="height:100%;width:0%;background:linear-gradient(90deg,#7ff0dc,#ffe2a6)"></div></div>';
       document.body.appendChild(el);
     }
     el.style.display = 'flex';

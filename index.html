@@ -4,7 +4,19 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#06050a">
-<title>Hawa Engine</title>
+<title>Hawa Engine · محرك هوا</title>
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="apple-touch-icon" href="favicon-180.png">
+<meta name="description" content="Hawa Engine — محرك ألعاب مصري لبناء وتشغيل ألعاب 3D أونلاين وأوفلاين بسهولة.">
+<meta property="og:title" content="Hawa Engine">
+<meta property="og:description" content="محرك ألعاب مصري — بناء وتشغيل ألعاب ثلاثية الأبعاد مع دعم الأونلاين.">
+<meta property="og:image" content="favicon.png">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Hawa Engine">
+<meta name="twitter:description" content="محرك ألعاب مصري لبناء وتشغيل ألعاب 3D.">
+
 <style>
 :root{
   --bg:#06050a;--pan:#0e0c14;--tx:#f4efe4;--mu:#a199ae;
@@ -138,6 +150,12 @@ kbd{font:700 11px/1 Consolas,monospace;padding:5px 9px;border:1px solid var(--li
 #gate .eye{font-size:clamp(22px,5vw,34px);color:rgba(220,212,196,.6);margin-bottom:clamp(10px,2vh,18px);opacity:0;transform:translateY(-10px);
   transition:opacity .9s ease,transform .9s ease}
 #gate.logo .eye{opacity:1;transform:none}
+#gate .eye .gate-logo{width:clamp(48px,10vw,88px);height:clamp(48px,10vw,88px);object-fit:contain;filter:drop-shadow(0 0 18px rgba(255,190,61,.55));display:block;margin:0 auto}
+.bg-logo{width:min(42vw,280px);height:auto;opacity:.12;filter:blur(1px);display:inline-block}
+.mark-logo{width:72px;height:72px;object-fit:contain;position:relative;z-index:2;filter:drop-shadow(0 0 16px rgba(255,190,61,.5));display:block}
+.mark em{display:none}
+.mark{background:none!important}
+.mark::before,.mark::after{display:none!important}
 #gate .big{display:flex;font-weight:700;font-size:clamp(54px,17vw,132px);line-height:1;letter-spacing:.14em;padding-inline-start:.14em;color:#f4f0e8}
 #gate .small{display:flex;font-weight:500;font-size:clamp(14px,4.4vw,28px);line-height:1;color:rgba(45,226,196,.92);
   margin-top:clamp(12px,2.4vh,22px);letter-spacing:1.1em;padding-inline-start:1.1em;transition:letter-spacing 1.5s cubic-bezier(.16,1,.3,1),padding .9s}
@@ -185,13 +203,13 @@ kbd{font:700 11px/1 Consolas,monospace;padding:5px 9px;border:1px solid var(--li
 
 <div id="gate" aria-hidden="true">
   <div id="beam"></div>
-  <div class="door top"><div class="stage"><div class="eye">𓂀</div><div class="big"><span class="ch" style="--d:0ms">H</span><span class="ch" style="--d:90ms">A</span><span class="ch" style="--d:180ms">W</span><span class="ch" style="--d:270ms">A</span></div><div class="small"><span class="ch" style="--d:420ms">E</span><span class="ch" style="--d:485ms">N</span><span class="ch" style="--d:550ms">G</span><span class="ch" style="--d:615ms">I</span><span class="ch" style="--d:680ms">N</span><span class="ch" style="--d:745ms">E</span></div></div></div>
-  <div class="door bot"><div class="stage"><div class="eye">𓂀</div><div class="big"><span class="ch" style="--d:0ms">H</span><span class="ch" style="--d:90ms">A</span><span class="ch" style="--d:180ms">W</span><span class="ch" style="--d:270ms">A</span></div><div class="small"><span class="ch" style="--d:420ms">E</span><span class="ch" style="--d:485ms">N</span><span class="ch" style="--d:550ms">G</span><span class="ch" style="--d:615ms">I</span><span class="ch" style="--d:680ms">N</span><span class="ch" style="--d:745ms">E</span></div></div></div>
+  <div class="door top"><div class="stage"><div class="eye"><img src="logo-256.png" alt="Hawa" class="gate-logo"></div><div class="big"><span class="ch" style="--d:0ms">H</span><span class="ch" style="--d:90ms">A</span><span class="ch" style="--d:180ms">W</span><span class="ch" style="--d:270ms">A</span></div><div class="small"><span class="ch" style="--d:420ms">E</span><span class="ch" style="--d:485ms">N</span><span class="ch" style="--d:550ms">G</span><span class="ch" style="--d:615ms">I</span><span class="ch" style="--d:680ms">N</span><span class="ch" style="--d:745ms">E</span></div></div></div>
+  <div class="door bot"><div class="stage"><div class="eye"><img src="logo-256.png" alt="Hawa" class="gate-logo"></div><div class="big"><span class="ch" style="--d:0ms">H</span><span class="ch" style="--d:90ms">A</span><span class="ch" style="--d:180ms">W</span><span class="ch" style="--d:270ms">A</span></div><div class="small"><span class="ch" style="--d:420ms">E</span><span class="ch" style="--d:485ms">N</span><span class="ch" style="--d:550ms">G</span><span class="ch" style="--d:615ms">I</span><span class="ch" style="--d:680ms">N</span><span class="ch" style="--d:745ms">E</span></div></div></div>
   <div id="burst"></div><div id="seam"></div><div id="prog"></div>
 </div>
 
 <div class="bg"></div>
-<div class="eye">𓂀</div>
+<div class="eye"><img src="logo-256.png" alt="" class="bg-logo"></div>
 <div class="ring"></div><div class="ring r2"></div>
 <canvas id="fx"></canvas>
 <div class="vig"></div>
@@ -200,7 +218,7 @@ kbd{font:700 11px/1 Consolas,monospace;padding:5px 9px;border:1px solid var(--li
 
 <main class="page boot-hide" id="mainPage">
   <header class="hero">
-    <div class="mark"><em>𓂀</em></div>
+    <div class="mark"><img src="logo.png" alt="Hawa Engine" class="mark-logo"></div>
     <h1>HAWA</h1>
     <div class="sub">ENGINE</div>
     <div class="pick">اختر الوضع</div>
