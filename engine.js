@@ -5037,33 +5037,7 @@ const VoiceChat = {
     return this.level * (+VOICE_CFG.headShake || 0.045);
   },
 
-  _shareStream() {
-    if (!this.stream || !NetMP || !NetMP.on) return;
-    if (NetMP.transport === 'peerjs' && NetMP.peer) {
-      for (const [pid] of NetMP.conns) this._callPeer(pid);
-    }
-    if (NetMP.transport === 'lan' && NetMP._dcMap) {
-      for (const [pid, entry] of NetMP._dcMap) this._addLanTrack(pid, entry);
-    }
-    // تبادل الأكواد / أي WebRTC مباشر: احقن الصوت على الـ PeerConnections الموجودة
-    try { this._attachCodesAudio(); } catch (e) { console.warn('codes audio', e); }
-    // إعادة محاولة الربط لعدة ثوانٍ (اتصال متأخر أو مايك اتفعّل بعد العرض)
-    if (!this._codesRetry) {
-      this._codesRetry = 0;
-      const retry = () => {
-        if (!this.on || !this.stream) { this._codesRetry = 0; return; }
-        this._codesRetry++;
-        try { this._attachCodesAudio(); } catch (_) {}
-        if (this._codesRetry < 12) setTimeout(retry, 800);
-        else this._codesRetry = 0;
-      };
-      setTimeout(retry, 600);
-    }
-  },
-  _attachCodesAudio() {
-    if (!this.stream) return;
-    const track = this.stream.getAudioTracks()[0];
-    if (!track || track.readyState === 'ended') return;
+  _collectPcs() {
     const pcs = [];
     const seen = new Set();
     const pushPc = (id, pc) => {
@@ -5071,7 +5045,6 @@ const VoiceChat = {
       seen.add(pc);
       pcs.push({ id: String(id), pc });
     };
-    // من NetMP._codesNet / __HAWA_LIVE_NET__
     try {
       const live = (NetMP && NetMP._codesNet) || (typeof window !== 'undefined' && window.__HAWA_LIVE_NET__);
       if (live) {
@@ -5089,9 +5062,81 @@ const VoiceChat = {
         for (const [id, e] of NetMP._dcMap) if (e && e.pc) pushPc(id, e.pc);
       }
     } catch (_) {}
+    return pcs;
+  },
+  /** استقبال الصوت فقط — يشتغل من غير ما تفتح مايك */
+  _ensureListenAll() {
+    const pcs = this._collectPcs();
     for (const { id, pc } of pcs) {
       try {
-        // حافظ على sendrecv
+        if (!pc.__hawaVoiceOnTrack) {
+          pc.__hawaVoiceOnTrack = true;
+          pc.addEventListener('track', (ev) => {
+            try {
+              if (ev.track && ev.track.kind === 'audio') {
+                const stream = (ev.streams && ev.streams[0]) || new MediaStream([ev.track]);
+                this._playRemote(id, stream);
+              }
+            } catch (_) {}
+          });
+        }
+        try {
+          const recs = pc.getReceivers ? pc.getReceivers() : [];
+          for (const r of recs) {
+            if (r.track && r.track.kind === 'audio' && r.track.readyState !== 'ended') {
+              this._playRemote(id, new MediaStream([r.track]));
+            }
+          }
+        } catch (_) {}
+      } catch (e) { console.warn('ensure listen', id, e); }
+    }
+  },
+  _startListenLoop() {
+    if (this._listenLoop) return;
+    this._ensureListenAll();
+    let n = 0;
+    this._listenLoop = setInterval(() => {
+      n++;
+      try { this._ensureListenAll(); } catch (_) {}
+      // بعد دقيقتين خفّف التكرار
+      if (n > 60 && this._listenLoop) {
+        clearInterval(this._listenLoop);
+        this._listenLoop = setInterval(() => { try { this._ensureListenAll(); } catch (_) {} }, 3000);
+      }
+    }, 700);
+  },
+  _shareStream() {
+    // الاستماع دائماً (حتى بدون مايك)
+    try { this._startListenLoop(); } catch (_) {}
+    if (!this.stream || !NetMP || !NetMP.on) return;
+    if (NetMP.transport === 'peerjs' && NetMP.peer) {
+      for (const [pid] of NetMP.conns) this._callPeer(pid);
+    }
+    if (NetMP.transport === 'lan' && NetMP._dcMap) {
+      for (const [pid, entry] of NetMP._dcMap) this._addLanTrack(pid, entry);
+    }
+    try { this._attachCodesAudio(); } catch (e) { console.warn('codes audio', e); }
+    if (!this._codesRetry) {
+      this._codesRetry = 0;
+      const retry = () => {
+        if (!this.on || !this.stream) { this._codesRetry = 0; return; }
+        this._codesRetry++;
+        try { this._attachCodesAudio(); } catch (_) {}
+        if (this._codesRetry < 12) setTimeout(retry, 800);
+        else this._codesRetry = 0;
+      };
+      setTimeout(retry, 600);
+    }
+  },
+  _attachCodesAudio() {
+    // إرسال فقط — الاستماع في _ensureListenAll
+    try { this._ensureListenAll(); } catch (_) {}
+    if (!this.stream) return;
+    const track = this.stream.getAudioTracks()[0];
+    if (!track || track.readyState === 'ended') return;
+    const pcs = this._collectPcs();
+    for (const { id, pc } of pcs) {
+      try {
         try {
           if (pc.getTransceivers) {
             for (const tr of pc.getTransceivers()) {
@@ -5118,9 +5163,8 @@ const VoiceChat = {
 
         const key = 'codes_' + id;
         const already = this._lanTracks.get(key);
-        // لو نفس الـ track متثبت، متكررش — غير كده حدّث
         if (already && already.track === track) {
-          // استمر لاستقبال الصوت فقط
+          // already sending
         } else if (audioSender && typeof audioSender.replaceTrack === 'function') {
           audioSender.replaceTrack(track).catch(() => {
             try { pc.addTrack(track, this.stream); } catch (_) {}
@@ -5131,32 +5175,9 @@ const VoiceChat = {
             const s = pc.addTrack(track, this.stream);
             this._lanTracks.set(key, s || track);
           } catch (e) {
-            // قد يكون الـ track مضاف مسبقاً
             this._lanTracks.set(key, audioSender || track);
           }
         }
-
-        // استقبال صوت الطرف الآخر
-        if (!pc.__hawaVoiceOnTrack) {
-          pc.__hawaVoiceOnTrack = true;
-          pc.addEventListener('track', (ev) => {
-            try {
-              if (ev.track && ev.track.kind === 'audio') {
-                const stream = (ev.streams && ev.streams[0]) || new MediaStream([ev.track]);
-                this._playRemote(id, stream);
-              }
-            } catch (_) {}
-          });
-        }
-        // tracks وصلت قبل المستمع
-        try {
-          const recs = pc.getReceivers ? pc.getReceivers() : [];
-          for (const r of recs) {
-            if (r.track && r.track.kind === 'audio' && r.track.readyState !== 'ended') {
-              this._playRemote(id, new MediaStream([r.track]));
-            }
-          }
-        } catch (_) {}
       } catch (e) { console.warn('attach codes audio', id, e); }
     }
   },
@@ -5225,16 +5246,42 @@ const VoiceChat = {
     } catch (e) { console.warn('lan track', e); }
   },
   _playRemote(peerId, stream) {
+    // لو نفس الـ stream شغال متوقفش/تعيدش عشان متقطعش الصوت
+    const prev = this._remoteAudios.get(peerId);
+    if (prev && prev.srcObject === stream) {
+      try { prev.play().catch(() => {}); } catch (_) {}
+      return;
+    }
     this._stopRemote(peerId);
     try {
       const a = new Audio();
       a.autoplay = true;
+      a.playsInline = true;
+      a.setAttribute('playsinline', '');
+      a.setAttribute('autoplay', '');
       a.srcObject = stream;
       a.volume = 1;
       const go = () => a.play().catch(() => {});
       go();
-      if (!this._unlock) { this._unlock = () => { for (const x of this._remoteAudios.values()) { try { x.play(); } catch (_) {} } }; addEventListener('click', this._unlock); addEventListener('keydown', this._unlock); }
+      // فك قفل الصوت بأي لمسة/ضغطة — من غير ما تحتاج تفتح مايك
+      if (!this._unlock) {
+        this._unlock = () => {
+          for (const x of this._remoteAudios.values()) {
+            try { x.muted = false; x.play().catch(() => {}); } catch (_) {}
+          }
+          try {
+            if (this.ac && this.ac.state === 'suspended') this.ac.resume();
+          } catch (_) {}
+        };
+        addEventListener('click', this._unlock, { passive: true });
+        addEventListener('keydown', this._unlock, { passive: true });
+        addEventListener('touchstart', this._unlock, { passive: true });
+        addEventListener('pointerdown', this._unlock, { passive: true });
+      }
       this._remoteAudios.set(peerId, a);
+      // محاولة فورية + بعد شوية (بعض المتصفحات تحتاج gesture سابق)
+      setTimeout(go, 120);
+      setTimeout(go, 600);
     } catch (_) {}
   },
   _stopRemote(peerId) {
@@ -8197,6 +8244,17 @@ async function playStart() {
         VoiceChat.ensureBtn();
         const b = document.getElementById('pMic');
         if (b) { b.style.display = 'flex'; b.style.visibility = 'visible'; b.style.opacity = '1'; b.style.zIndex = '50'; }
+        // استماع لصوت الآخرين من غير مايك — فك قفل الصوت بأول لمسة
+        try { VoiceChat._startListenLoop(); } catch (_) {}
+        try {
+          const unlockOnce = () => {
+            try { VoiceChat._unlock && VoiceChat._unlock(); } catch (_) {}
+            try { VoiceChat._ensureListenAll && VoiceChat._ensureListenAll(); } catch (_) {}
+          };
+          addEventListener('pointerdown', unlockOnce, { once: false, passive: true });
+          addEventListener('keydown', unlockOnce, { once: false, passive: true });
+        } catch (_) {}
+        try { say('🔊 اضغط أي مكان لسماع الآخرين · المايك (B) عشان يسمعوك', 4500); } catch (_) {}
       } else {
         
         try { VoiceChat.off(); } catch (_) {}

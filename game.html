@@ -597,32 +597,85 @@ function setNetType(t) {
   } else {
     if (hint) hint.textContent = 'من غير بايثون ومن غير PeerJS — تبادل أكواد العرض/الرد يدوياً (واتساب وغيرها)';
     if (lanInfo) lanInfo.style.display = 'none';
-    if (codesBox) codesBox.style.display = 'flex';
+    if (codesBox) codesBox.style.display = 'none'; // يظهر فقط بعد اختيار إنشاء أو انضمام
     if (peerLanJoin) peerLanJoin.style.display = 'none';
     if (peerLanCreate) peerLanCreate.style.display = 'none';
     if (codesHint) codesHint.style.display = 'block';
+    if ($('#codesHostPane')) $('#codesHostPane').style.display = 'none';
+    if ($('#codesJoinPane')) $('#codesJoinPane').style.display = 'none';
   }
+  // عند تغيير نوع الشبكة: اخفِ الإنشاء والانضمام عشان متتلخبطش
+  showEl('createBox', 'none');
+  showEl('joinBox', 'none');
+  showEl('hostCodeBox', 'none');
+  const bc = $('#btnCreate'), bj = $('#btnJoin');
+  if (bc) bc.classList.remove('on');
+  if (bj) bj.classList.remove('on');
 }
 $('#ntPeer').onclick = () => setNetType('peerjs');
 $('#ntLan').onclick = () => setNetType('lan');
 $('#ntCodes').onclick = () => setNetType('codes');
 setNetType('peerjs');
 
-$('#btnCreate').onclick = () => {
-  showEl('createBox', 'flex'); showEl('joinBox', 'none');
+function hideLobbyUi() {
+  const lob = $('#lobby');
+  if (lob) lob.classList.remove('on');
+  showEl('btnStart', 'none');
+  const ready = document.getElementById('btnReady');
+  if (ready) ready.style.display = 'none';
+}
+function showCreateUi() {
+  hideLobbyUi();
+  showEl('createBox', 'flex');
+  showEl('joinBox', 'none');
+  showEl('hostCodeBox', 'none');
+  // إخفاء عناصر الانضمام تماماً
+  if ($('#codesJoinPane')) $('#codesJoinPane').style.display = 'none';
   if (netType === 'codes') {
     if ($('#codesBox')) $('#codesBox').style.display = 'flex';
     if ($('#codesHostPane')) $('#codesHostPane').style.display = 'flex';
-    if ($('#codesJoinPane')) $('#codesJoinPane').style.display = 'none';
+    const ansHost = document.getElementById('codesAnswersHost');
+    if (ansHost) ansHost.style.display = 'none';
+  } else {
+    if ($('#codesBox')) $('#codesBox').style.display = 'none';
   }
-};
-$('#btnJoin').onclick = () => {
-  showEl('joinBox', 'flex'); showEl('createBox', 'none');
+  // تمييز الأزرار
+  const bc = $('#btnCreate'), bj = $('#btnJoin');
+  if (bc) bc.classList.add('on');
+  if (bj) bj.classList.remove('on');
+}
+function showJoinUi() {
+  hideLobbyUi();
+  showEl('joinBox', 'flex');
+  showEl('createBox', 'none');
+  showEl('hostCodeBox', 'none');
+  if ($('#codesHostPane')) $('#codesHostPane').style.display = 'none';
+  const ansHost = document.getElementById('codesAnswersHost');
+  if (ansHost) ansHost.style.display = 'none';
   if (netType === 'codes') {
     if ($('#codesBox')) $('#codesBox').style.display = 'flex';
-    if ($('#codesHostPane')) $('#codesHostPane').style.display = 'none';
     if ($('#codesJoinPane')) $('#codesJoinPane').style.display = 'flex';
+  } else {
+    if ($('#codesBox')) $('#codesBox').style.display = 'none';
+    if ($('#codesJoinPane')) $('#codesJoinPane').style.display = 'none';
   }
+  const bc = $('#btnCreate'), bj = $('#btnJoin');
+  if (bj) bj.classList.add('on');
+  if (bc) bc.classList.remove('on');
+}
+$('#btnCreate').onclick = () => {
+  if ($('#lobby') && $('#lobby').classList.contains('on')) {
+    const m = $('#lobbyMsg'); if (m) { m.className='msg err'; m.textContent='⚠ أنت بالفعل في لوبي — اعمل تحديث للصفحة لو عايز تبدأ من جديد'; }
+    return;
+  }
+  showCreateUi();
+};
+$('#btnJoin').onclick = () => {
+  if ($('#lobby') && $('#lobby').classList.contains('on')) {
+    const m = $('#lobbyMsg'); if (m) { m.className='msg err'; m.textContent='⚠ أنت بالفعل في لوبي — اعمل تحديث للصفحة لو عايز تبدأ من جديد'; }
+    return;
+  }
+  showJoinUi();
 };
 
 function maxSlots() {
@@ -809,15 +862,18 @@ $('#btnDoCreate').onclick = async () => {
       if ($('#codesBox')) $('#codesBox').style.display = 'flex';
       if ($('#codesHostPane')) $('#codesHostPane').style.display = 'none';
       if ($('#codesJoinPane')) $('#codesJoinPane').style.display = 'none';
+      showEl('joinBox', 'none');
+      showEl('createBox', 'none');
       if (net.offerCode && $('#codesOfferOut')) $('#codesOfferOut').value = net.offerCode;
       const guests = Math.max(0, maxSlots() - 1);
       $('#createMsg').textContent = '✔ جاهز · '+guests+' رد. انسخ كود العرض لكل سلوت وابعته للضيف، وبعدين الصق الرد واضغط تأكيد.';
       $('#lobby').classList.add('on');
-      showEl('createBox', 'none');
       showEl('btnStart', '');
       renderSlots();
       $('#lobbyTitle').textContent = 'لوبي (تبادل أكواد) · سعة '+maxSlots()+' · ضيوف '+guests;
       buildCodesAnswersHost();
+      const ansHost = document.getElementById('codesAnswersHost');
+      if (ansHost) ansHost.style.display = 'flex';
     } else {
       const common = {
         roomName: rn || 'Room',
@@ -1280,6 +1336,16 @@ async function startPlay(opts) {
 }
 function goPlay(opts) {
   if (opts.mode === 'online' && opts.net && (opts.transport === 'codes' || netType === 'codes')) {
+    // اخفِ واجهة اللوبي/الإنشاء عشان متبقاش طبقتين فوق بعض
+    try {
+      const wrap = document.querySelector('.wrap') || document.querySelector('main') || document.getElementById('app');
+      if (wrap) wrap.style.display = 'none';
+      const lob = document.getElementById('lobby');
+      if (lob) lob.classList.remove('on');
+      document.body.style.overflow = 'hidden';
+      const load = document.getElementById('hawaLoad');
+      if (load) { load.classList.remove('on'); load.style.display = 'none'; }
+    } catch (_) {}
     let fr = document.getElementById('hawaCodesFrame');
     if (!fr) {
       fr = document.createElement('iframe');
