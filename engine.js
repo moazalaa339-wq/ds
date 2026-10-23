@@ -5047,52 +5047,95 @@ const VoiceChat = {
     }
     // تبادل الأكواد / أي WebRTC مباشر: احقن الصوت على الـ PeerConnections الموجودة
     try { this._attachCodesAudio(); } catch (e) { console.warn('codes audio', e); }
+    // إعادة محاولة الربط لعدة ثوانٍ (اتصال متأخر أو مايك اتفعّل بعد العرض)
+    if (!this._codesRetry) {
+      this._codesRetry = 0;
+      const retry = () => {
+        if (!this.on || !this.stream) { this._codesRetry = 0; return; }
+        this._codesRetry++;
+        try { this._attachCodesAudio(); } catch (_) {}
+        if (this._codesRetry < 12) setTimeout(retry, 800);
+        else this._codesRetry = 0;
+      };
+      setTimeout(retry, 600);
+    }
   },
   _attachCodesAudio() {
     if (!this.stream) return;
     const track = this.stream.getAudioTracks()[0];
-    if (!track) return;
+    if (!track || track.readyState === 'ended') return;
     const pcs = [];
-    // من NetMP._codesNet
+    const seen = new Set();
+    const pushPc = (id, pc) => {
+      if (!pc || seen.has(pc)) return;
+      seen.add(pc);
+      pcs.push({ id: String(id), pc });
+    };
+    // من NetMP._codesNet / __HAWA_LIVE_NET__
     try {
-      const live = NetMP._codesNet || (typeof window !== 'undefined' && window.__HAWA_LIVE_NET__);
+      const live = (NetMP && NetMP._codesNet) || (typeof window !== 'undefined' && window.__HAWA_LIVE_NET__);
       if (live) {
         if (typeof live.forEachChannel === 'function') {
-          live.forEachChannel((e) => { if (e && e.pc) pcs.push({ id: 's' + (e.slot || pcs.length), pc: e.pc }); });
+          live.forEachChannel((e, s) => { if (e && e.pc) pushPc('s' + (e.slot != null ? e.slot : s), e.pc); });
         }
-        if (live._pc) pcs.push({ id: 'guest', pc: live._pc });
-        if (live.bySlot) {
-          live.bySlot.forEach((e, s) => { if (e && e.pc) pcs.push({ id: 'slot' + s, pc: e.pc }); });
+        if (live._pc) pushPc('guest', live._pc);
+        if (live.bySlot && typeof live.bySlot.forEach === 'function') {
+          live.bySlot.forEach((e, s) => { if (e && e.pc) pushPc('slot' + s, e.pc); });
         }
       }
     } catch (_) {}
-    // من NetMP نفسه لو فيه خريطة
     try {
-      if (NetMP._dcMap) {
-        for (const [id, e] of NetMP._dcMap) if (e && e.pc) pcs.push({ id, pc: e.pc });
+      if (NetMP && NetMP._dcMap) {
+        for (const [id, e] of NetMP._dcMap) if (e && e.pc) pushPc(id, e.pc);
       }
     } catch (_) {}
     for (const { id, pc } of pcs) {
-      if (!pc || this._lanTracks.has('codes_' + id)) continue;
       try {
-        // لو في sender صوتي فاضي: replaceTrack، وإلا addTrack
+        // حافظ على sendrecv
+        try {
+          if (pc.getTransceivers) {
+            for (const tr of pc.getTransceivers()) {
+              try {
+                if (tr.receiver && tr.receiver.track && tr.receiver.track.kind === 'audio') {
+                  if (tr.direction === 'recvonly' || tr.direction === 'inactive') tr.direction = 'sendrecv';
+                }
+              } catch (_) {}
+            }
+          }
+        } catch (_) {}
+
         const senders = pc.getSenders ? pc.getSenders() : [];
         let audioSender = senders.find(s => s.track && s.track.kind === 'audio');
-        if (!audioSender) audioSender = senders.find(s => !s.track || (s.track && s.track.kind === 'audio'));
-        // transceiver صوتي بدون track
+        if (!audioSender) audioSender = senders.find(s => !s.track);
         if (!audioSender && pc.getTransceivers) {
-          const tr = pc.getTransceivers().find(t => t.receiver && t.receiver.track && t.receiver.track.kind === 'audio')
-            || pc.getTransceivers().find(t => (t.sender && (!t.sender.track || t.sender.track.kind === 'audio')));
+          const tr = pc.getTransceivers().find(t => t.sender && (
+            (t.receiver && t.receiver.track && t.receiver.track.kind === 'audio') ||
+            (t.sender.track && t.sender.track.kind === 'audio') ||
+            !t.sender.track
+          ));
           if (tr && tr.sender) audioSender = tr.sender;
         }
-        if (audioSender && typeof audioSender.replaceTrack === 'function') {
+
+        const key = 'codes_' + id;
+        const already = this._lanTracks.get(key);
+        // لو نفس الـ track متثبت، متكررش — غير كده حدّث
+        if (already && already.track === track) {
+          // استمر لاستقبال الصوت فقط
+        } else if (audioSender && typeof audioSender.replaceTrack === 'function') {
           audioSender.replaceTrack(track).catch(() => {
             try { pc.addTrack(track, this.stream); } catch (_) {}
           });
+          this._lanTracks.set(key, audioSender);
         } else {
-          try { pc.addTrack(track, this.stream); } catch (_) {}
+          try {
+            const s = pc.addTrack(track, this.stream);
+            this._lanTracks.set(key, s || track);
+          } catch (e) {
+            // قد يكون الـ track مضاف مسبقاً
+            this._lanTracks.set(key, audioSender || track);
+          }
         }
-        this._lanTracks.set('codes_' + id, audioSender || track);
+
         // استقبال صوت الطرف الآخر
         if (!pc.__hawaVoiceOnTrack) {
           pc.__hawaVoiceOnTrack = true;
@@ -5105,11 +5148,11 @@ const VoiceChat = {
             } catch (_) {}
           });
         }
-        // لو فيه tracks وصلت قبل تفعيل المستمع
+        // tracks وصلت قبل المستمع
         try {
           const recs = pc.getReceivers ? pc.getReceivers() : [];
           for (const r of recs) {
-            if (r.track && r.track.kind === 'audio' && r.track.readyState === 'live') {
+            if (r.track && r.track.kind === 'audio' && r.track.readyState !== 'ended') {
               this._playRemote(id, new MediaStream([r.track]));
             }
           }
@@ -5120,8 +5163,11 @@ const VoiceChat = {
   _stopSharing() {
     for (const [, call] of this._mediaCalls) { try { call.close(); } catch (_) {} }
     this._mediaCalls.clear();
+    // لا توقف مسار المايك المحلي — فقط افصل الإرسال عن الـ PeerConnections
     for (const [, sender] of this._lanTracks) {
-      try { if (sender && sender.track) sender.track.stop(); } catch (_) {}
+      try {
+        if (sender && typeof sender.replaceTrack === 'function') sender.replaceTrack(null);
+      } catch (_) {}
     }
     this._lanTracks.clear();
   },
@@ -5147,6 +5193,23 @@ const VoiceChat = {
       call.on('stream', remote => this._playRemote(pid, remote));
       call.on('close', () => { if (this._inCalls.get(pid) === call) { this._inCalls.delete(pid); this._stopRemote(pid); } });
       call.on('error', () => {});
+      // لو المايك اتفعّل بعد الرد: PeerJS لا يدعم replace بسهولة — أعد الاتصال الصوتي
+      if (!this.stream) {
+        const waitMic = setInterval(() => {
+          if (!this._inCalls.has(pid) || this._inCalls.get(pid) !== call) { clearInterval(waitMic); return; }
+          if (this.stream) {
+            clearInterval(waitMic);
+            try {
+              // أغلق الرد القديم وابدأ نداء صادر بمجرى المايك
+              try { call.close(); } catch (_) {}
+              this._inCalls.delete(pid);
+              this._mediaCalls.delete(pid);
+              this._callPeer(pid);
+            } catch (_) {}
+          }
+        }, 500);
+        setTimeout(() => clearInterval(waitMic), 20000);
+      }
     } catch (e) { console.warn('voice answer', e); }
   },
   _addLanTrack(peerId, entry) {
@@ -8164,11 +8227,20 @@ async function playStart() {
     NetMP.initFromSession();
     const placeOnline = () => {
       if (!NetMP.on) return;
-      const sp = S.objs.filter(o => o.type === 'online_spawn');
-      const mine = sp.find(o => +((o.p && o.p.slot) || 0) === NetMP.slot) || sp[NetMP.slot - 1];
+      // رتب نقاط الأونلاين حسب رقم السلوت — كل لاعب على نقطته، مش نفس النقطة
+      const sp = S.objs.filter(o => o.type === 'online_spawn')
+        .slice()
+        .sort((a, b) => (+((a.p && a.p.slot) || 0)) - (+((b.p && b.p.slot) || 0)));
+      let mine = sp.find(o => +((o.p && o.p.slot) || 0) === +NetMP.slot);
+      if (!mine && sp.length) {
+        // لو مفيش نقطة بنفس رقم السلوت: وزّع حسب ترتيب السلوت (فريد لكل لاعب)
+        const idx = Math.max(0, (+NetMP.slot || 1) - 1) % sp.length;
+        mine = sp[idx];
+      }
       if (mine) {
         rt.p.set(mine.pos[0], mine.pos[1] + .02, mine.pos[2]);
         rt.v.set(0, 0, 0);
+        rt.cur = mine;
       }
       say((NetMP.transport === 'codes' ? '🔑' : '🌐') + ' أونلاين · سلوت ' + NetMP.slot + ' · ' + (NetMP.isHost ? 'مضيف' : 'ضيف'), 2500);
     };

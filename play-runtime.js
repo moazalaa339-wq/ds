@@ -871,6 +871,23 @@ const HawaNet = (() => {
       async makeAnswerFromOffer(text) {
         const sdp = rtcDecodeSdp(text, 'offer');
         await pc.setRemoteDescription({ type: 'offer', sdp });
+        // فرض مسار صوت ثنائي الاتجاه قبل إنشاء الرد (حتى لو المايك لسه مش مفعّل)
+        try {
+          let audioTr = null;
+          if (pc.getTransceivers) {
+            const trs = pc.getTransceivers();
+            audioTr = trs.find(t =>
+              (t.receiver && t.receiver.track && t.receiver.track.kind === 'audio') ||
+              (t.sender && t.sender.track && t.sender.track.kind === 'audio')
+            ) || trs.find(t => t.receiver && t.receiver.track == null && t.sender);
+            if (!audioTr && trs.length) audioTr = trs[0];
+          }
+          if (audioTr) {
+            try { audioTr.direction = 'sendrecv'; } catch (_) {}
+          } else {
+            try { pc.addTransceiver('audio', { direction: 'sendrecv' }); } catch (_) {}
+          }
+        } catch (_) {}
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
         await rtcWaitIce(pc, 4500);
