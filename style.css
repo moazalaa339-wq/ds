@@ -219,11 +219,11 @@ label.r{color:var(--tx)}
   padding-bottom:12px;border-bottom:1px solid rgba(255,255,255,.08);
 }
 #pOnlineMenu .pom-logo{
-  width:40px;height:40px;border-radius:12px;display:grid;place-items:center;
+  width:44px;height:44px;border-radius:50%;display:grid;place-items:center;
   background:transparent;border:0;padding:0;overflow:hidden;
 }
-#pOnlineMenu .pom-logo img{width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 0 10px rgba(255,190,61,.4))}
-#pMenuBtn img{width:28px;height:28px;object-fit:contain;display:block;filter:drop-shadow(0 0 6px rgba(255,190,61,.35))}
+#pOnlineMenu .pom-logo img{width:100%;height:100%;object-fit:contain;border-radius:50%;filter:drop-shadow(0 0 12px rgba(255,190,61,.5))}
+#pMenuBtn img{width:30px;height:30px;object-fit:contain;border-radius:50%;display:block;filter:drop-shadow(0 0 8px rgba(255,190,61,.45))}
 #pMenuBtn{padding:6px}
 #pOnlineMenu .pom-title{font-weight:900;font-size:15px;letter-spacing:.02em}
 #pOnlineMenu .pom-sub{font-size:11px;opacity:.65;margin-top:2px}
@@ -773,7 +773,7 @@ body.intro-on #cv{animation:introGrade 5.2s linear both}
   100%{opacity:0;letter-spacing:.5em;filter:blur(6px)}
 }
 #intro .in-logo{font-size:44px;color:var(--gold);text-shadow:0 0 22px rgba(255,190,61,.7)}
-#intro .in-logo img,#intro .in-title .in-logo-img{width:72px;height:72px;object-fit:contain;filter:drop-shadow(0 0 22px rgba(255,190,61,.55));display:block;margin:0 auto 8px}
+#intro .in-logo img,#intro .in-title .in-logo-img{width:80px;height:80px;object-fit:contain;border-radius:50%;filter:drop-shadow(0 0 24px rgba(255,190,61,.6)) drop-shadow(0 4px 14px rgba(0,0,0,.35));display:block;margin:0 auto 10px}
 #intro .in-title b{font:800 44px/1 Cairo,Tahoma,sans-serif;letter-spacing:inherit;color:#fff;text-shadow:0 0 26px rgba(45,226,196,.8)}
 #intro .in-title i{font:600 15px/1 Cairo,Tahoma,sans-serif;font-style:normal;letter-spacing:.7em;color:var(--acc)}
 #intro .in-title small{margin-top:10px;font:500 12px/1 Cairo,Tahoma,sans-serif;color:#d8d0c2;letter-spacing:.05em;opacity:.85;direction:rtl}
@@ -1014,7 +1014,8 @@ body:not(.is-mobile) #bar .seg{flex:0 0 auto}
   background:var(--brk),linear-gradient(135deg,#1b1424,#0e0b15);
   border:1px solid var(--line2);box-sizing:border-box;flex:0 0 auto}
 .brand .logo{
-  width:34px;height:34px;border:0;border-radius:0;background:none;position:relative;display:grid;place-items:center;color:#1a1206}
+  width:36px;height:36px;border:0;border-radius:50%;background:none;position:relative;display:grid;place-items:center;color:#1a1206;overflow:hidden}
+.brand .logo img{width:100%;height:100%;object-fit:contain;border-radius:50%;filter:drop-shadow(0 0 10px rgba(255,190,61,.5))}
 .brand .logo:has(img)::before{display:none!important}
 .brand .logo::before{
   content:"";position:absolute;inset:3px;transform:rotate(45deg);border-radius:6px;

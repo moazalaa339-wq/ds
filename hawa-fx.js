@@ -98,19 +98,43 @@
   try {
     logoImg = new Image();
     logoImg.onload = function () { logoReady = true; };
+    logoImg.decoding = 'async';
     logoImg.src = 'logo-256.png';
   } catch (_) {}
+  /* لوجو المحرك — يظهر ملتصق بالأنيميشن (scale + glow + bounce خفيف) */
   function mark(x, y, r, o) {
-    var p = pr(o.p, 0, .5); if (p <= 0) return;
-    var A = o.cfg.rgb, e = eo(p);
-    var size = r * 2.8;
-    c.save(); c.translate(x, y); c.globalAlpha = o.a * e;
-    c.scale(.55 + .45 * e, .55 + .45 * e);
+    var p = pr(o.p, 0, .55); if (p <= 0) return;
+    var A = o.cfg.rgb, B = o.cfg.rgb2 || A;
+    var e = eob(Math.min(1, p * 1.15)); /* overshoot bounce */
+    var fade = eo(pr(o.p, 0, .28));
+    var size = r * 3.05;
+    var sc = .42 + .58 * e;
+    c.save();
+    c.translate(x, y);
+    c.globalAlpha = o.a * fade;
+    c.scale(sc, sc);
+    /* هالة خلف اللوجو */
+    var glowR = size * .62;
+    var rg = c.createRadialGradient(0, 0, size * .12, 0, 0, glowR);
+    rg.addColorStop(0, rgba(A, .55 * fade));
+    rg.addColorStop(.55, rgba(B, .22 * fade));
+    rg.addColorStop(1, rgba(A, 0));
+    c.fillStyle = rg;
+    c.beginPath(); c.arc(0, 0, glowR, 0, Math.PI * 2); c.fill();
     if (logoReady && logoImg) {
-      c.shadowColor = rgba(A, .75); c.shadowBlur = r * 1.1;
+      c.shadowColor = rgba(A, .9);
+      c.shadowBlur = r * 1.35;
       c.drawImage(logoImg, -size / 2, -size / 2, size, size);
+      /* لمسة ضوء علوية خفيفة */
+      c.shadowBlur = 0;
+      c.globalAlpha = o.a * fade * .35;
+      c.globalCompositeOperation = 'lighter';
+      var hg = c.createRadialGradient(0, -size * .18, 0, 0, -size * .1, size * .45);
+      hg.addColorStop(0, 'rgba(255,255,255,.55)');
+      hg.addColorStop(1, 'rgba(255,255,255,0)');
+      c.fillStyle = hg;
+      c.beginPath(); c.arc(0, -size * .08, size * .42, 0, Math.PI * 2); c.fill();
     } else {
-      // احتياطي لو الصورة متأخرة
       c.shadowColor = rgba(A, .85); c.shadowBlur = r * .9;
       c.fillStyle = rgba(A, 1);
       rr(c, -r, -r, 2 * r, 2 * r, r * .28); c.fill();
@@ -125,7 +149,7 @@
     var L = 'HAWA'.split(''), ws = L.map(function (ch) { return c.measureText(ch).width; }), tot = gap * (L.length - 1);
     ws.forEach(function (w) { tot += w; });
     var x = cx - tot / 2, i;
-    mark(cx, base - fs * 1.18, fs * .27, o);
+    mark(cx, base - fs * 1.28, fs * .30, o);
     for (i = 0; i < L.length; i++) {
       var lp = pr(o.p, i * .13, i * .13 + .5);
       if (lp > 0) {

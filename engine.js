@@ -1084,7 +1084,9 @@ AXC.forEach((c, i) => {
 let HOV = null;
 function hiAx(rec, on) { if (rec) rec.vis.forEach(v => v.material.color.set(on ? 0xfff06a : AXC[rec.ax])); }
 function hoverGizmo(e) {
-  if (!S.sel || !gizmo.visible || S.mode !== 'build') { if (HOV) { hiAx(HOV, false); HOV = null; S.dirty = 1; } return; }
+  if (!S.sel || !gizmo.visible || S.mode !== 'build' || S.tool === 'place' || S.tool === 'respawn' || S.tool === 'online_spawn') {
+    if (HOV) { hiAx(HOV, false); HOV = null; S.dirty = 1; } return;
+  }
   const list = HIT.filter(h => h.mode === S.gz).map(h => h.m);
   const hh = ray(e).intersectObjects(list, false)[0];
   const rec = hh ? HIT.find(h => h.m === hh.object) : null;
@@ -1111,11 +1113,14 @@ function ugizmo() {
   try { updGzParamsBtn(); } catch (_) {}
 
   const o = OBJ.get(S.sel), g = $('#gz');
-  if (!o || S.mode !== 'build') { gizmo.visible = false; g.hidden = true; return; }
+  // أثناء وضع كائن: اخفِ الجيزمو عشان تقدر تحط حوالين الكائن من غير ما المحاور تعترض
+  const placingNow = (S.tool === 'place' || S.tool === 'respawn' || S.tool === 'online_spawn');
+  if (!o || S.mode !== 'build' || placingNow) { gizmo.visible = false; if (g) g.hidden = true; return; }
   const cy = o.base ? o.pos[1] + o.scl[1] / 2 : o.pos[1];
   g.hidden = false; gizmo.visible = true; gizmo.position.set(o.pos[0], cy, o.pos[2]);
   try { fatHits(!!(typeof MOB !== 'undefined' && MOB.on)); } catch (_) {}
-  const gzMul = (typeof MOB !== 'undefined' && MOB.on) ? .32 : .22;
+  // موبايل: محاور أصغر بوضوح عشان متشفطش المنطقة حوالين الجسم
+  const gzMul = (typeof MOB !== 'undefined' && MOB.on) ? .14 : .22;
   gizmo.scale.setScalar(cam.position.distanceTo(gizmo.position) * gzMul); gizmo.updateMatrixWorld(true);
   if (typeof MOB !== 'undefined' && MOB.on) {
     
@@ -1187,9 +1192,11 @@ function fatHits(on) {
   if (on === _fatHits) return; _fatHits = on;
   for (const h of HIT) {
     const old = h.m.geometry;
+    // موبايل: hit أصغر بكتير (كان 0.72/0.6 بيشفط حوالين الجسم)
+    // لسه قابل للمس بس مش بياخد نصف الشاشة
     h.m.geometry = h.mode === 'rotate'
-      ? new T.TorusGeometry(1.2, on ? .6 : .28, 8, 48)
-      : new T.CylinderGeometry(on ? .72 : .32, on ? .72 : .32, on ? 2.4 : 1.9, 10);
+      ? new T.TorusGeometry(1.2, on ? .22 : .28, 8, 48)
+      : new T.CylinderGeometry(on ? .28 : .32, on ? .28 : .32, on ? 1.7 : 1.9, 10);
     try { old.dispose(); } catch (_) {}
   }
 }
@@ -1338,7 +1345,9 @@ cv.addEventListener('pointerdown', e => {
     mv.moved = 0;
     return;
   }
-  if (e.button === 0 && S.sel != null && gizmo.visible) {
+  // أثناء وضع كائن: تجاهل محاور الجيزمو عشان تقدر تحط حول الكائن المختار
+  const placingTool = (S.tool === 'place' || S.tool === 'respawn' || S.tool === 'online_spawn');
+  if (e.button === 0 && S.sel != null && gizmo.visible && !placingTool && !S.pick) {
     const list = HIT.filter(h => h.mode === S.gz).map(h => h.m);
     const hh = ray(e).intersectObjects(list, false)[0];
     if (hh) { const rec = HIT.find(h => h.m === hh.object); if (rec) { startDrag(rec, e); mv.moved = 99; } }
@@ -4873,11 +4882,14 @@ const VoiceChat = {
   src: null,
   filters: null,
   _btn: null,
-  _remoteAudios: new Map(),
+  _remoteAudios: new Map(),  // peerId -> { el, stream, slot, name, username, volume, muted, gain, panner }
+  _bySlot: new Map(),        // slot -> peerId
+  _byName: new Map(),        // lowercase name -> peerId
   _mediaCalls: new Map(), 
   _inCalls: new Map(),    
   _lanTracks: new Map(),
   _wantOn: false,
+  spatial: false,            // صوت مكاني مرتبط بموقع الشخصية
 
   ensureBtn() {
     let b = document.getElementById('pMic');
@@ -5247,11 +5259,45 @@ const VoiceChat = {
       };
     } catch (e) { console.warn('lan track', e); }
   },
+  // ربط peerId → معلومات اللاعب (سلوت / اسم / شخصية)
+  _resolvePlayer(peerId) {
+    const out = { peerId, slot: null, name: null, username: null };
+    try {
+      if (typeof NetMP !== 'undefined' && NetMP.remotes) {
+        for (const r of NetMP.remotes.values()) {
+          if (r && r.peerId === peerId) {
+            out.slot = r.slot;
+            out.name = r.name || ('لاعب ' + r.slot);
+            out.username = out.name;
+            return out;
+          }
+        }
+      }
+    } catch (_) {}
+    try {
+      if (typeof NetMP !== 'undefined' && NetMP.conns) {
+        // peerId هو المفتاح في conns أحياناً
+      }
+    } catch (_) {}
+    return out;
+  },
+  _bindMeta(peerId, entry) {
+    const info = this._resolvePlayer(peerId);
+    entry.peerId = peerId;
+    entry.slot = info.slot;
+    entry.name = info.name;
+    entry.username = info.username || info.name;
+    // فهرس بالسلوت والاسم عشان السكربتات
+    if (info.slot != null) this._bySlot.set(+info.slot, peerId);
+    if (info.name) this._byName.set(String(info.name).toLowerCase(), peerId);
+    return entry;
+  },
   _playRemote(peerId, stream) {
     // لو نفس الـ stream شغال متوقفش/تعيدش عشان متقطعش الصوت
     const prev = this._remoteAudios.get(peerId);
-    if (prev && prev.srcObject === stream) {
-      try { prev.play().catch(() => {}); } catch (_) {}
+    if (prev && prev.el && prev.el.srcObject === stream) {
+      try { prev.el.play().catch(() => {}); } catch (_) {}
+      this._bindMeta(peerId, prev);
       return;
     }
     this._stopRemote(peerId);
@@ -5262,7 +5308,8 @@ const VoiceChat = {
       a.setAttribute('playsinline', '');
       a.setAttribute('autoplay', '');
       a.srcObject = stream;
-      a.volume = this.muteAll ? 0 : 1;
+      const vol = this._volFor(peerId);
+      a.volume = this.muteAll ? 0 : vol;
       a.muted = !!this.muteAll;
       const go = () => a.play().catch(() => {});
       go();
@@ -5270,7 +5317,11 @@ const VoiceChat = {
       if (!this._unlock) {
         this._unlock = () => {
           for (const x of this._remoteAudios.values()) {
-            try { x.muted = false; x.play().catch(() => {}); } catch (_) {}
+            try {
+              const el = x.el || x;
+              el.muted = !!this.muteAll;
+              el.play().catch(() => {});
+            } catch (_) {}
           }
           try {
             if (this.ac && this.ac.state === 'suspended') this.ac.resume();
@@ -5281,16 +5332,61 @@ const VoiceChat = {
         addEventListener('touchstart', this._unlock, { passive: true });
         addEventListener('pointerdown', this._unlock, { passive: true });
       }
-      this._remoteAudios.set(peerId, a);
-      // محاولة فورية + بعد شوية (بعض المتصفحات تحتاج gesture سابق)
+      const entry = { el: a, stream, peerId, slot: null, name: null, username: null, volume: vol, muted: false, gain: null, panner: null };
+      this._bindMeta(peerId, entry);
+      // مسار Web Audio اختياري للتأثيرات المكانية / الفلاتر من السكربت
+      try {
+        if (!this.ac) {
+          const AC = window.AudioContext || window.webkitAudioContext;
+          this.ac = new AC();
+        }
+        if (this.ac && this.ac.state === 'suspended') this.ac.resume().catch(() => {});
+        const srcNode = this.ac.createMediaStreamSource(stream);
+        const gain = this.ac.createGain();
+        gain.gain.value = this.muteAll || entry.muted ? 0 : vol;
+        const panner = this.ac.createPanner();
+        panner.panningModel = 'HRTF';
+        panner.distanceModel = 'inverse';
+        panner.refDistance = 2;
+        panner.maxDistance = 60;
+        panner.rolloffFactor = 1.2;
+        panner.coneInnerAngle = 360;
+        panner.coneOuterAngle = 360;
+        srcNode.connect(gain);
+        gain.connect(panner);
+        // لو spatial مفعّل نستخدم panner، وإلا نفضل عنصر Audio العادي (أوضح على الموبايل)
+        if (this.spatial) {
+          panner.connect(this.ac.destination);
+          a.muted = true; // نمنع مضاعفة الصوت
+        }
+        entry.gain = gain;
+        entry.panner = panner;
+        entry.srcNode = srcNode;
+      } catch (_) {}
+      this._remoteAudios.set(peerId, entry);
       setTimeout(go, 120);
       setTimeout(go, 600);
     } catch (_) {}
   },
+  _volFor(peerId) {
+    const e = this._remoteAudios.get(peerId);
+    if (e && typeof e.volume === 'number') return Math.max(0, Math.min(1, e.volume));
+    return 1;
+  },
   _stopRemote(peerId) {
     const a = this._remoteAudios.get(peerId);
     if (a) {
-      try { a.pause(); a.srcObject = null; } catch (_) {}
+      try {
+        if (a.el) { a.el.pause(); a.el.srcObject = null; }
+        else if (a.pause) { a.pause(); a.srcObject = null; }
+      } catch (_) {}
+      try {
+        if (a.srcNode) a.srcNode.disconnect();
+        if (a.gain) a.gain.disconnect();
+        if (a.panner) a.panner.disconnect();
+      } catch (_) {}
+      if (a.slot != null) this._bySlot.delete(+a.slot);
+      if (a.name) this._byName.delete(String(a.name).toLowerCase());
       this._remoteAudios.delete(peerId);
     }
   },
@@ -5300,11 +5396,252 @@ const VoiceChat = {
       try { this._attachCodesAudio(); } catch (_) {}
     }
   },
+  // ——— API للاعبين / السكربتات ———
+  /** يرجع قائمة كل أصوات اللاعبين البعيدين مع السلوت والاسم */
+  listPlayers() {
+    const out = [];
+    for (const [pid, e] of this._remoteAudios) {
+      this._bindMeta(pid, e);
+      out.push({
+        peerId: pid,
+        slot: e.slot,
+        name: e.name,
+        username: e.username || e.name,
+        volume: e.volume != null ? e.volume : 1,
+        muted: !!e.muted,
+        speaking: false
+      });
+    }
+    return out;
+  },
+  /** يلاقي peerId من سلوت أو اسم لاعب أو peerId مباشرة */
+  _findPeer(who) {
+    if (who == null) return null;
+    if (typeof who === 'number' || (/^\d+$/).test(String(who))) {
+      const pid = this._bySlot.get(+who);
+      if (pid) return pid;
+      // محاولة من NetMP
+      try {
+        if (NetMP.remotes) {
+          const r = NetMP.remotes.get(+who);
+          if (r && r.peerId) return r.peerId;
+        }
+      } catch (_) {}
+    }
+    const key = String(who).toLowerCase();
+    if (this._byName.has(key)) return this._byName.get(key);
+    if (this._remoteAudios.has(who)) return who;
+    // بحث بالاسم الجزئي
+    for (const [pid, e] of this._remoteAudios) {
+      if (e.name && String(e.name).toLowerCase() === key) return pid;
+      if (e.username && String(e.username).toLowerCase() === key) return pid;
+    }
+    try {
+      if (NetMP.remotes) {
+        for (const r of NetMP.remotes.values()) {
+          if (r && r.name && String(r.name).toLowerCase() === key && r.peerId) return r.peerId;
+        }
+      }
+    } catch (_) {}
+    return null;
+  },
+  getPlayer(who) {
+    const pid = this._findPeer(who);
+    if (!pid) return null;
+    const e = this._remoteAudios.get(pid);
+    if (!e) return null;
+    this._bindMeta(pid, e);
+    return {
+      peerId: pid,
+      slot: e.slot,
+      name: e.name,
+      username: e.username || e.name,
+      volume: e.volume != null ? e.volume : 1,
+      muted: !!e.muted
+    };
+  },
+  setVolume(who, vol) {
+    const pid = this._findPeer(who);
+    if (!pid) return false;
+    const e = this._remoteAudios.get(pid);
+    if (!e) return false;
+    vol = Math.max(0, Math.min(1, +vol));
+    e.volume = vol;
+    try {
+      if (e.el) e.el.volume = this.muteAll || e.muted ? 0 : vol;
+      if (e.gain) e.gain.gain.value = this.muteAll || e.muted ? 0 : vol;
+    } catch (_) {}
+    return true;
+  },
+  mutePlayer(who, on) {
+    const pid = this._findPeer(who);
+    if (!pid) return false;
+    const e = this._remoteAudios.get(pid);
+    if (!e) return false;
+    e.muted = !!on;
+    try {
+      if (e.el) {
+        e.el.muted = this.muteAll || e.muted;
+        e.el.volume = this.muteAll || e.muted ? 0 : (e.volume != null ? e.volume : 1);
+      }
+      if (e.gain) e.gain.gain.value = this.muteAll || e.muted ? 0 : (e.volume != null ? e.volume : 1);
+    } catch (_) {}
+    return true;
+  },
+  setSpatial(on) {
+    this.spatial = !!on;
+    // إعادة توصيل المسارات حسب الحالة
+    for (const [pid, e] of this._remoteAudios) {
+      try {
+        if (!e.panner || !e.gain) continue;
+        e.panner.disconnect();
+        e.gain.disconnect();
+        e.gain.connect(e.panner);
+        if (this.spatial) {
+          e.panner.connect(this.ac.destination);
+          if (e.el) e.el.muted = true;
+        } else {
+          if (e.el) {
+            e.el.muted = this.muteAll || e.muted;
+            e.el.volume = this.muteAll || e.muted ? 0 : (e.volume != null ? e.volume : 1);
+            e.el.play().catch(() => {});
+          }
+        }
+      } catch (_) {}
+    }
+    return this.spatial;
+  },
+  /** يحدّث مواقع الصوت المكاني من شخصيات اللاعبين البعيدين */
+  tickSpatial() {
+    if (!this.spatial || !this.ac) return;
+    try {
+      if (typeof RT !== 'undefined' && RT && RT.p && this.ac.listener) {
+        const L = this.ac.listener;
+        if (L.positionX) {
+          L.positionX.value = RT.p.x;
+          L.positionY.value = RT.p.y + 1.6;
+          L.positionZ.value = RT.p.z;
+        } else if (L.setPosition) {
+          L.setPosition(RT.p.x, RT.p.y + 1.6, RT.p.z);
+        }
+      }
+    } catch (_) {}
+    for (const [pid, e] of this._remoteAudios) {
+      if (!e.panner) continue;
+      try {
+        this._bindMeta(pid, e);
+        let pos = null;
+        if (e.slot != null && NetMP.remotes) {
+          const r = NetMP.remotes.get(+e.slot);
+          if (r && r.rig && r.rig.root) pos = r.rig.root.position;
+          else if (r && r.tp) pos = r.tp;
+        }
+        if (!pos) continue;
+        const P = e.panner;
+        if (P.positionX) {
+          P.positionX.value = pos.x;
+          P.positionY.value = pos.y + 1.5;
+          P.positionZ.value = pos.z;
+        } else if (P.setPosition) {
+          P.setPosition(pos.x, pos.y + 1.5, pos.z);
+        }
+      } catch (_) {}
+    }
+  },
+
+    // ——— وصول مفتوح مالانهاية للسكربتات (أي فلتر / أي ظرف) ———
+  /** MediaStream الخام لصوت لاعب بعيد (أو null) */
+  getStream(who) {
+    const pid = this._findPeer(who);
+    if (!pid) return null;
+    const e = this._remoteAudios.get(pid);
+    return (e && (e.stream || (e.el && e.el.srcObject))) || null;
+  },
+  /** عنصر Audio الخام للاعب */
+  getAudioElement(who) {
+    const pid = this._findPeer(who);
+    if (!pid) return null;
+    const e = this._remoteAudios.get(pid);
+    return (e && e.el) || null;
+  },
+  /** Web Audio nodes للاعب: { src, gain, panner, stream, peerId, slot, name } — عدّل بحرية */
+  getNodes(who) {
+    const pid = this._findPeer(who);
+    if (!pid) return null;
+    const e = this._remoteAudios.get(pid);
+    if (!e) return null;
+    this._bindMeta(pid, e);
+    return {
+      peerId: pid,
+      slot: e.slot,
+      name: e.name,
+      username: e.username || e.name,
+      stream: e.stream || (e.el && e.el.srcObject) || null,
+      audio: e.el || null,
+      src: e.srcNode || null,
+      gain: e.gain || null,
+      panner: e.panner || null,
+      entry: e
+    };
+  },
+  /** AudioContext المشترك (اعمل عليه أي Effect / Convolver / Biquad / ScriptProcessor) */
+  getContext() {
+    try {
+      if (!this.ac) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        this.ac = new AC();
+      }
+      if (this.ac.state === 'suspended') this.ac.resume().catch(() => {});
+    } catch (_) {}
+    return this.ac || null;
+  },
+  /** مجرى المايك المحلي الخام (للإرسال أو التحليل) */
+  getLocalStream() { return this.stream || null; },
+  /** كل الـ entries الداخلية (Map-like array) للتحكم الكامل */
+  getAllEntries() {
+    const out = [];
+    for (const [pid, e] of this._remoteAudios) {
+      this._bindMeta(pid, e);
+      out.push({
+        peerId: pid,
+        slot: e.slot,
+        name: e.name,
+        username: e.username || e.name,
+        stream: e.stream || (e.el && e.el.srcObject) || null,
+        audio: e.el || null,
+        src: e.srcNode || null,
+        gain: e.gain || null,
+        panner: e.panner || null,
+        entry: e
+      });
+    }
+    return out;
+  },
+  /** وصّل فلتر/عقده مخصصة على صوت لاعب — src → yourNode → gain → (panner) → destination
+      fn(nodes, ac) يبني ويوصل؛ رجّع العقدة الأخيرة أو void */
+  pipe(who, fn) {
+    const nodes = this.getNodes(who);
+    const ac = this.getContext();
+    if (!nodes || !ac || typeof fn !== 'function') return null;
+    try {
+      return fn(nodes, ac) || nodes;
+    } catch (e) {
+      console.warn('VoiceChat.pipe', e);
+      return null;
+    }
+  },
   muteAll: false,
+
   setMuteAll(on) {
     this.muteAll = !!on;
     for (const a of this._remoteAudios.values()) {
-      try { a.muted = this.muteAll; a.volume = this.muteAll ? 0 : 1; } catch (_) {}
+      try {
+        const el = a.el || a;
+        const vol = (a.volume != null ? a.volume : 1);
+        const silent = this.muteAll || !!a.muted;
+        if (el && el.volume != null) { el.muted = silent; el.volume = silent ? 0 : vol; }
+        if (a.gain) a.gain.gain.value = silent ? 0 : vol;
+      } catch (_) {}
     }
     return this.muteAll;
   },
@@ -6461,7 +6798,7 @@ function animRig(rig, dt, s, locks) {
   const hp = -lean * .85 + clamp((s.camPitch - .35) * .5, -.4, .4) + land * .1;
   set('head', rig.head, hp, tgt, -turnRoll * .5, kS);
   if (s.local) {
-    VoiceChat.tick();
+    VoiceChat.tick(); try { VoiceChat.tickSpatial(); } catch(_){}
     const sh = VoiceChat.headShakeAmount();
     // إيماءة كلام واضحة: رأس لأعلى/أسفل + اهتزاز خفيف جانبي مع الصوت
     const baseHx = hp, baseHy = tgt, baseHz = -turnRoll * .5;
@@ -6819,7 +7156,22 @@ function bigGame(rt, o, root) {
       on: () => VoiceChat.start(),
       off: () => VoiceChat.off(),
       isOn: () => VoiceChat.isOn(),
-      level: () => VoiceChat.level01()
+      level: () => VoiceChat.level01(),
+      // مايك مرتبط باللاعب (سلوت / اسم / peerId) — مش مايك عام
+      listPlayers: () => VoiceChat.listPlayers(),
+      getPlayer: (who) => VoiceChat.getPlayer(who),
+      setVolume: (who, vol) => VoiceChat.setVolume(who, vol),
+      mutePlayer: (who, on) => VoiceChat.mutePlayer(who, on),
+      setSpatial: (on) => VoiceChat.setSpatial(on),
+      spatial: () => !!VoiceChat.spatial,
+      // وصول مفتوح مالانهاية: stream / nodes / context لأي ظرف تبنيه في السكربت
+      getStream: (who) => VoiceChat.getStream(who),
+      getAudioElement: (who) => VoiceChat.getAudioElement(who),
+      getNodes: (who) => VoiceChat.getNodes(who),
+      getContext: () => VoiceChat.getContext(),
+      getLocalStream: () => VoiceChat.getLocalStream(),
+      getAllEntries: () => VoiceChat.getAllEntries(),
+      pipe: (who, fn) => VoiceChat.pipe(who, fn)
     },
     clearHud() {
       if (S.mode !== 'play') return;
@@ -8293,7 +8645,7 @@ function showEnginePlayLoad(ms) {
       el = document.createElement('div');
       el.id = 'hawaEngineLoad';
       el.style.cssText = 'position:fixed;inset:0;z-index:100000;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;background:radial-gradient(ellipse at 50% 30%,#1a1530 0%,#08060f 70%);color:#f4efe4;font-family:Cairo,Tahoma,sans-serif';
-      el.innerHTML = '<img src="logo-256.png" alt="Hawa Engine" style="width:100px;height:100px;object-fit:contain;filter:drop-shadow(0 0 24px rgba(255,190,61,.5));margin-bottom:4px"><div style="font-size:28px;font-weight:900;letter-spacing:.12em;background:linear-gradient(90deg,#ffe2a6,#7ff0dc,#c4b5fd);-webkit-background-clip:text;background-clip:text;color:transparent">HAWA ENGINE</div><div style="opacity:.85;font-weight:700">تهيئة وضع اللعب…</div><div style="width:min(260px,70vw);height:4px;border-radius:99px;background:#1e1a2e;overflow:hidden"><div id="hawaEngineLoadBar" style="height:100%;width:0%;background:linear-gradient(90deg,#7ff0dc,#ffe2a6)"></div></div>';
+      el.innerHTML = '<img src="logo-256.png" alt="Hawa Engine" style="width:112px;height:112px;object-fit:contain;border-radius:50%;filter:drop-shadow(0 0 28px rgba(255,190,61,.55)) drop-shadow(0 0 50px rgba(255,190,61,.22));margin-bottom:8px"><div style="font-size:28px;font-weight:900;letter-spacing:.12em;background:linear-gradient(90deg,#ffe2a6,#7ff0dc,#c4b5fd);-webkit-background-clip:text;background-clip:text;color:transparent">HAWA ENGINE</div><div style="opacity:.85;font-weight:700">تهيئة وضع اللعب…</div><div style="width:min(260px,70vw);height:4px;border-radius:99px;background:#1e1a2e;overflow:hidden"><div id="hawaEngineLoadBar" style="height:100%;width:0%;background:linear-gradient(90deg,#7ff0dc,#ffe2a6)"></div></div>';
       document.body.appendChild(el);
     }
     el.style.display = 'flex';
@@ -8606,7 +8958,22 @@ async function playStart() {
       on: () => VoiceChat.start(),
       off: () => VoiceChat.off(),
       isOn: () => VoiceChat.isOn(),
-      level: () => VoiceChat.level01()
+      level: () => VoiceChat.level01(),
+      // مايك مرتبط باللاعب (سلوت / اسم / peerId) — مش مايك عام
+      listPlayers: () => VoiceChat.listPlayers(),
+      getPlayer: (who) => VoiceChat.getPlayer(who),
+      setVolume: (who, vol) => VoiceChat.setVolume(who, vol),
+      mutePlayer: (who, on) => VoiceChat.mutePlayer(who, on),
+      setSpatial: (on) => VoiceChat.setSpatial(on),
+      spatial: () => !!VoiceChat.spatial,
+      // وصول مفتوح مالانهاية: stream / nodes / context لأي ظرف تبنيه في السكربت
+      getStream: (who) => VoiceChat.getStream(who),
+      getAudioElement: (who) => VoiceChat.getAudioElement(who),
+      getNodes: (who) => VoiceChat.getNodes(who),
+      getContext: () => VoiceChat.getContext(),
+      getLocalStream: () => VoiceChat.getLocalStream(),
+      getAllEntries: () => VoiceChat.getAllEntries(),
+      pipe: (who, fn) => VoiceChat.pipe(who, fn)
     },
     clearHud() { const el = document.getElementById('hawaScriptHud'); if (el) { el.innerHTML = ''; el.style.display = 'none'; } },
     get allowScriptSpawn() { return !!S.allowScriptSpawn; },
@@ -9283,7 +9650,8 @@ const MOB = {
       const t = e.changedTouches[0] || e.targetTouches[0];
       if (!t) return;
       this.gizmoTouch = false;
-      if (S.sel != null && gizmo.visible) {
+      const placingTouch = (S.tool === 'place' || S.tool === 'respawn' || S.tool === 'online_spawn' || S.pick);
+      if (S.sel != null && gizmo.visible && !placingTouch) {
         try {
           const list = HIT.filter(h => h.mode === S.gz).map(h => h.m);
           const hh = ray({ clientX: t.clientX, clientY: t.clientY }).intersectObjects(list, false)[0];
