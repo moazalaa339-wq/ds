@@ -215,9 +215,36 @@ function schemaOf(code) {
 }
 const defOf = id => S.sdefs.find(x => x.id === id);
 
+/** بارامترات افتراضية من ملف (defineParams + @param + d.p المخزّنة على الملف) — لا تمس نُسخ الكائنات */
+function fileDefaultParams(code, fileP) {
+  const p = {};
+  for (const e of schemaOf(code || '')) {
+    try { p[e.key] = e.value !== undefined ? JSON.parse(JSON.stringify(e.value)) : e.value; }
+    catch (_) { p[e.key] = e.value; }
+  }
+  const parsed = parseParams(code || '');
+  for (const k of Object.keys(parsed)) if (p[k] === undefined) p[k] = parsed[k];
+  if (fileP && typeof fileP === 'object') {
+    for (const k of Object.keys(fileP)) {
+      try { p[k] = JSON.parse(JSON.stringify(fileP[k])); }
+      catch (_) { p[k] = fileP[k]; }
+    }
+  }
+  return p;
+}
+function applyFileParamsToObject(o) {
+  if (!o || o.type !== 'sobj') return;
+  const d = defOf(o.def); if (!d) return;
+  o.p = fileDefaultParams(d.code, d.p);
+  clearTimeout(prevT);
+  prevT = setTimeout(() => { try { refreshPreview(o); } catch (_) {} }, 80);
+  chg();
+}
+
 /* ---------- الحالة ---------- */
 const S = {objs:[], scripts:[], sdefs:[], sel:null, mode:'build', tool:'select', gz:'move', item:'cube', section:'objects',
-  snap:.5, nid:1, sid:1, did:1, mid:1, dirty:1, err:[], hr:null, fly:false, media:{}, paramOpen:false,
+  snap:.5, nid:1, sid:1, did:1, mid:1, dirty:1, err:[], hr:null, fly:false, media:{}, mediaOrder:[], paramOpen:false,
+  allowScriptSpawn:false,
   /* playNet: null = لم يُختر بعد | 'offline' | 'online' — اختيار مرة واحدة لكل مشروع */
   playNet: null};
 const OBJ = new Map(), MESH = new Map(), K = {};
@@ -262,8 +289,21 @@ let RT = null, rmb = false, edI = null, edK = 'script', SELH = null;
 const cv = $('#cv'), vp = $('#vp'), pvp = $('#pvp');
 let R, scene, cam, sun, grid;
 try {
-  R = new T.WebGLRenderer({canvas: cv, antialias: true, powerPreference: 'high-performance'});
-  R.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+  const _isMob = /Android|iPhone|iPad|iPod|Mobile|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+    || (navigator.maxTouchPoints > 1 && Math.min(screen.width, screen.height) < 900);
+  R = new T.WebGLRenderer({
+    canvas: cv,
+    antialias: !_isMob,
+    powerPreference: _isMob ? 'low-power' : 'high-performance',
+    alpha: false,
+    stencil: false,
+    depth: true,
+    preserveDrawingBuffer: false
+  });
+  // موبايل: حد أقصى 1.5 لتقليل الضغط على GPU، ديسكتوب 2
+  R.setPixelRatio(Math.min(devicePixelRatio || 1, _isMob ? 1.5 : 2));
+  try { R.shadowMap.enabled = false; } catch (_) {}
+  try { if (R.outputColorSpace != null) R.outputColorSpace = T.SRGBColorSpace; } catch (_) {}
   scene = new T.Scene(); scene.background = new T.Color(0x0e1726);
   cam = new T.PerspectiveCamera(60, 1, .1, 1500);
   scene.add(new T.HemisphereLight(0xcfe3ff, 0x3a3f4a, .9));
@@ -373,7 +413,14 @@ function lookAround(dx, dy) {
 }
 function resize() {
   const host = cv.parentElement, w = host.clientWidth || 1, h = host.clientHeight || 1;
-  R.setSize(w, h, false); cam.aspect = w / h; cam.updateProjectionMatrix(); S.dirty = 1;
+  R.setSize(w, h, false); cam.aspect = w / h;
+  try {
+    const mob = !!(typeof MOB !== 'undefined' && MOB.on) || (Math.min(w, h) < 700);
+    cam.fov = mob ? 65 : 60;
+    cam.far = mob ? 900 : 1500;
+    cam.near = 0.12;
+  } catch (_) {}
+  cam.updateProjectionMatrix(); S.dirty = 1;
 }
 const ro = new ResizeObserver(() => resize());
 function attach(host) {
@@ -465,37 +512,152 @@ function nextOnlineSlot() {
   for (let i = 1; i <= 3; i++) if (!used.has(i)) return i;
   return 0;
 }
-function updOnRsBtn() {
-  const n = countOnlineSpawns();
-  const el = $('#onRsN'); if (el) el.textContent = n + '/3';
-  const b = $('#bOnRs');
+function countOfflineSpawns() { return S.objs.filter(o => o.type === 'respawn').length; }
+function updOnRsBtn() { try { updSpawnBtn(); } catch (_) {} }
+function updSpawnBtn() {
+  const nOn = countOnlineSpawns(), nOff = countOfflineSpawns();
+  const el = document.getElementById('spawnN');
+  if (el) el.textContent = String(nOff + nOn);
+  const elOld = document.getElementById('onRsN');
+  if (elOld) elOld.textContent = nOn + '/3';
+  const b = document.getElementById('bSpawns') || document.getElementById('bOnRs');
   if (b) {
-    b.classList.toggle('on', S.tool === 'online_spawn');
+    b.classList.toggle('on', S.tool === 'respawn' || S.tool === 'online_spawn');
+    b.title = 'نقط البداية — أوفلاين ' + nOff + '/1 · أونلاين ' + nOn + '/3';
+  }
+  try { refreshSpawnsPanel(); } catch (_) {}
+}
+
+function openSpawnsPanel() {
+  const m = document.getElementById('spawnsModal');
+  if (!m) { tip('⚠ نافذة نقط البداية غير موجودة'); return; }
+  m.hidden = false;
+  m.removeAttribute('hidden');
+  m.style.display = 'flex';
+  m.classList.add('open');
+  const ai = document.getElementById('spAllowScript');
+  if (ai) ai.checked = !!S.allowScriptSpawn;
+  refreshSpawnsPanel();
+  bindSpawnsPanelOnce();
+}
+function closeSpawnsPanel() {
+  const m = document.getElementById('spawnsModal');
+  if (m) {
+    m.hidden = true;
+    m.setAttribute('hidden', '');
+    m.style.display = 'none';
+    m.classList.remove('open');
+  }
+  S._spReopen = false;
+  if (S.tool === 'respawn' || S.tool === 'online_spawn') setTool('select');
+}
+function refreshSpawnsPanel() {
+  const offList = document.getElementById('spOffList');
+  const onList = document.getElementById('spOnList');
+  if (!offList || !onList) return;
+  const offs = S.objs.filter(o => o.type === 'respawn');
+  const ons = S.objs.filter(o => o.type === 'online_spawn').slice().sort((a, b) => (+(a.p && a.p.slot) || 0) - (+(b.p && b.p.slot) || 0));
+  const fmt = o => {
+    const p = o.pos || [0, 0, 0];
+    return (+p[0]).toFixed(1) + ', ' + (+p[1]).toFixed(1) + ', ' + (+p[2]).toFixed(1);
+  };
+  const row = (o, label) => `<div class="sp-item" data-sp-id="${o.id}">
+      <span class="sp-name">${esc(label)}</span>
+      <span class="mut small">${fmt(o)}</span>
+      <button type="button" data-sp-go="${o.id}">انتقل</button>
+      <button type="button" class="bad" data-sp-del="${o.id}">حذف</button>
+    </div>`;
+  offList.innerHTML = offs.length
+    ? offs.map(o => row(o, 'نقطة أوفلاين')).join('')
+    : '<div class="sp-empty">لم تُوضَع نقطة أوفلاين بعد</div>';
+  onList.innerHTML = ons.length
+    ? ons.map(o => row(o, 'أونلاين · سلوت ' + ((o.p && o.p.slot) || '?'))).join('')
+    : '<div class="sp-empty">لا نقاط أونلاين</div>';
+  const cnt = document.getElementById('spOnCount');
+  if (cnt) cnt.textContent = '(' + ons.length + '/3)';
+  const placeOn = document.getElementById('spOnPlace');
+  if (placeOn) {
     const offline = S.playNet === 'offline';
-    b.disabled = !!offline;
-    b.style.opacity = offline ? '.35' : '';
-    b.title = offline
-      ? 'نقاط الأونلاين غير متاحة — المشروع أوفلاين'
-      : 'نقطة بدء أونلاين (حد أقصى 3 لاعبين)';
+    placeOn.disabled = !!offline || ons.length >= 3;
+    placeOn.style.opacity = placeOn.disabled ? '.4' : '';
+    placeOn.title = offline ? 'المشروع أوفلاين' : (ons.length >= 3 ? 'الحد الأقصى 3' : 'ضع نقطة أونلاين');
+  }
+  const placeOff = document.getElementById('spOffPlace');
+  if (placeOff) {
+    placeOff.textContent = offs.length ? 'إعادة وضع نقطة أوفلاين' : 'وضع نقطة أوفلاين';
   }
 }
+function bindSpawnsPanelOnce() {
+  const m = document.getElementById('spawnsModal');
+  if (!m || m._bound) return;
+  m._bound = true;
+  const close = () => closeSpawnsPanel();
+  const cbtn = document.getElementById('spClose');
+  if (cbtn) cbtn.onclick = close;
+  m.addEventListener('click', e => { if (e.target === m) close(); });
+  const ai = document.getElementById('spAllowScript');
+  if (ai) ai.onchange = () => { S.allowScriptSpawn = !!ai.checked; chg(); tip(S.allowScriptSpawn ? '✔ السكربتات تقدر تحدد مكان اللاعب' : 'نقطة البداية ثابتة للسكربتات'); };
+  // النافذة بتغطّي الشاشة كلها — لازم تختفي أثناء الوضع عشان الضغطة توصل للعالم، وترجع بعد الوضع/الإلغاء
+  const hideKeepTool = () => {
+    m.hidden = true; m.setAttribute('hidden', ''); m.style.display = 'none'; m.classList.remove('open');
+    S._spReopen = true;
+  };
+  const po = document.getElementById('spOffPlace');
+  if (po) po.onclick = () => {
+    hideKeepTool();
+    setTool('respawn');
+    tipNow('📍 اضغط على الأرض لوضع نقطة الأوفلاين (Esc للإلغاء)', 6000);
+  };
+  const pn = document.getElementById('spOnPlace');
+  if (pn) pn.onclick = () => {
+    if (S.playNet === 'offline') { tip('⚠ المشروع أوفلاين'); return; }
+    if (countOnlineSpawns() >= 3) { tip('⚠ الحد 3 نقاط'); return; }
+    hideKeepTool();
+    setTool('online_spawn');
+    tipNow('📍 اضغط على الأرض لوضع نقطة أونلاين (Esc للإلغاء)', 6000);
+  };
+  m.addEventListener('click', e => {
+    const go = e.target.closest('[data-sp-go]');
+    if (go) {
+      const o = OBJ.get(+go.getAttribute('data-sp-go'));
+      if (!o) return;
+      try {
+        OB.t.set(o.pos[0], o.pos[1] + 1.2, o.pos[2]);
+        camUpdate();
+        sel(o.id);
+        tip('📍 عند النقطة');
+      } catch (_) {}
+      return;
+    }
+    const del = e.target.closest('[data-sp-del]');
+    if (del) {
+      const id = +del.getAttribute('data-sp-del');
+      delObj(id);
+      tip('تم الحذف');
+      refreshSpawnsPanel();
+      updSpawnBtn();
+    }
+  });
+}
+setTimeout(() => { try { bindSpawnsPanelOnce(); } catch (_) {} }, 0);
+
 function syncPlayNetUI() {
   const b = document.getElementById('bPlayNet');
   if (!b) return;
   const m = S.playNet;
   if (m === 'online') {
     b.innerHTML = '🌐<i>أونلاين</i>';
-    b.title = 'المشروع أونلاين (مزامنة لاعبين) — لا يمكن التغيير';
+    b.title = 'أونلاين';
     b.classList.add('on');
     b.classList.remove('playnet-ask');
   } else if (m === 'offline') {
     b.innerHTML = '📴<i>أوفلاين</i>';
-    b.title = 'المشروع أوفلاين (محلي فقط) — لا يمكن التغيير';
+    b.title = 'أوفلاين';
     b.classList.add('on');
     b.classList.remove('playnet-ask');
   } else {
     b.innerHTML = '❓<i>أونلاين / أوفلاين</i>';
-    b.title = 'اختر مرة واحدة: أونلاين أو أوفلاين لهذا المشروع';
+    b.title = 'أونلاين / أوفلاين';
     b.classList.remove('on');
     b.classList.add('playnet-ask');
   }
@@ -585,6 +747,61 @@ async function onPlayNetBtn() {
 }
 
 /* ---------- الكائنات ---------- */
+
+/** شبح نقطة بداية بنفس شكل شخصية المحرك — أخضر أوفلاين / أحمر أونلاين */
+function buildSpawnGhostMesh(o) {
+  const isOn = o.type === 'online_spawn';
+  const tint = isOn ? 0xef4444 : 0x22c55e;
+  let root;
+  try {
+    if (typeof makeRig === 'function') {
+      const rig = makeRig();
+      root = rig.root;
+      root.traverse(x => {
+        if (!x.isMesh || !x.material) return;
+        const mats = Array.isArray(x.material) ? x.material : [x.material];
+        const out = mats.map(mat0 => {
+          const m = mat0.clone();
+          if (m.color) m.color.setHex(tint);
+          m.transparent = true;
+          m.opacity = 0.42;
+          m.depthWrite = false;
+          if (m.emissive) { m.emissive.setHex(tint); m.emissiveIntensity = 0.35; }
+          m.needsUpdate = true;
+          return m;
+        });
+        x.material = out.length === 1 ? out[0] : out;
+        x.userData.base = x.material;
+        x.frustumCulled = false;
+      });
+      try { if (typeof hardenPlayerRig === 'function') hardenPlayerRig(rig); } catch (_) {}
+      // علامة السلوت فوق الرأس للأونلاين
+      if (isOn) {
+        const slot = (o.p && o.p.slot) || 1;
+        const canvas = document.createElement('canvas'); canvas.width = 64; canvas.height = 64;
+        const g = canvas.getContext('2d');
+        g.fillStyle = 'rgba(127,29,29,.9)'; g.beginPath(); g.arc(32, 32, 28, 0, Math.PI * 2); g.fill();
+        g.fillStyle = '#fff'; g.font = 'bold 32px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+        g.fillText(String(slot), 32, 34);
+        const sp = new T.Sprite(new T.SpriteMaterial({ map: new T.CanvasTexture(canvas), depthTest: false, transparent: true }));
+        sp.position.y = 2.15; sp.scale.set(0.55, 0.55, 1); root.add(sp);
+      }
+      // حلقة أرض خفيفة
+      const ring = new T.Mesh(
+        new T.RingGeometry(0.35, 0.48, 32),
+        new T.MeshBasicMaterial({ color: tint, transparent: true, opacity: 0.55, side: T.DoubleSide, depthWrite: false })
+      );
+      ring.rotation.x = -Math.PI / 2; ring.position.y = 0.02; root.add(ring);
+      return root;
+    }
+  } catch (e) { console.warn('spawn ghost', e); }
+  // احتياطي بسيط لو makeRig مش جاهز
+  const g = new T.Group();
+  const body = new T.Mesh(new T.CapsuleGeometry(0.28, 0.9, 4, 8), new T.MeshStandardMaterial({ color: tint, transparent: true, opacity: 0.45 }));
+  body.position.y = 0.9; g.add(body);
+  return g;
+}
+
 function mk(o) {
   const d = DEF[o.type]; let m;
   if (o.type === 'light') {
@@ -593,18 +810,7 @@ function mk(o) {
   } else if (o.type === 'sobj') {
     m = new T.Group(); const b = new T.Mesh(G.cube, mat(o.color, 'sobj')); m.add(b); m.userData.body = b;
   } else if (o.type === 'respawn' || o.type === 'online_spawn') {
-    m = new T.Group();
-    const c = new T.Mesh(G.cone, mat(o.color, o.type)); c.position.y = .6;
-    const r = new T.Mesh(G.ring, mat(o.color, o.type)); r.rotation.x = -Math.PI / 2; r.position.y = .03;
-    m.add(c, r);
-    if (o.type === 'online_spawn') {
-      const slot = (o.p && o.p.slot) || 1;
-      const canvas = document.createElement('canvas'); canvas.width = 64; canvas.height = 64;
-      const g = canvas.getContext('2d'); g.fillStyle = '#1e3a5f'; g.beginPath(); g.arc(32, 32, 28, 0, Math.PI * 2); g.fill();
-      g.fillStyle = '#fff'; g.font = 'bold 32px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(String(slot), 32, 34);
-      const sp = new T.Sprite(new T.SpriteMaterial({map: new T.CanvasTexture(canvas), depthTest: false, transparent: true}));
-      sp.position.y = 1.3; sp.scale.set(0.7, 0.7, 1); m.add(sp);
-    }
+    m = buildSpawnGhostMesh(o);
   } else m = new T.Mesh(G[d.g], mat(o.color, o.type));
   m.userData.id = o.id; m.matrixAutoUpdate = false; scene.add(m); MESH.set(o.id, m);
   tf(o); look(o);
@@ -613,7 +819,11 @@ function tf(o) {
   const m = MESH.get(o.id); if (!m) return;
   m.position.set(o.pos[0], o.pos[1], o.pos[2]);
   m.rotation.set(o.rot[0] * D2R, o.rot[1] * D2R, o.rot[2] * D2R, o.base ? 'YXZ' : 'XYZ');
-  if (o.base && m.userData.body) {   // كائن برمجي من المحرك الكبير: الجذر = الأرض، والمعاينة تأخذ الحجم
+  if (o.type === 'respawn' || o.type === 'online_spawn') {
+    // شكل الشخصية بحجمه الأصلي (makeRig + PSC) — متغيّرش الـ scale
+    m.updateMatrix(); S.dirty = 1; return;
+  }
+  if (o.base && m.userData.body) {
     m.scale.set(1, 1, 1);
     m.userData.body.scale.set(o.scl[0], o.scl[1], o.scl[2]); m.userData.body.position.set(0, o.scl[1] / 2, 0);
   } else m.scale.set(o.scl[0], o.scl[1], o.scl[2]);
@@ -634,7 +844,9 @@ function reg(o) { S.objs.push(o); OBJ.set(o.id, o); fillDefaults(o); mk(o); if (
 function fillDefaults(o) {
   if (o.type !== 'sobj') return;
   const d = defOf(o.def); if (!d) return;
-  for (const e of schemaOf(d.code)) if (o.p[e.key] === undefined) o.p[e.key] = e.value;
+  if (!o.p) o.p = {};
+  const defs = fileDefaultParams(d.code, d.p);
+  for (const k of Object.keys(defs)) if (o.p[k] === undefined) o.p[k] = defs[k];
 }
 function add(type, pos, ex) {
   const d = DEF[type], id = S.nid++;
@@ -645,20 +857,37 @@ function add(type, pos, ex) {
 function placeNow(info, pos) {
   if (info.bt === 'sobj') {
     const d = info.def; if (!d) { tip('⚠ الكائن البرمجي غير موجود'); return null; }
-    // بارامترات مستقلة للكائن الموضوع (نسخة) — الكود يبقى من الملف الأم
-    const p = {};
-    for (const e of schemaOf(d.code)) p[e.key] = e.value !== undefined ? JSON.parse(JSON.stringify(e.value)) : e.value;
-    const parsed = parseParams(d.code);
-    for (const k of Object.keys(parsed)) if (p[k] === undefined) p[k] = parsed[k];
+    // بارامترات مستقلة للكائن الموضوع (نسخة من افتراضي الملف) — الكود يبقى من الملف الأم
+    const p = fileDefaultParams(d.code, d.p);
     return add('sobj', pos, {def: d.id, name: d.name, p: JSON.parse(JSON.stringify(p)), base: !!info.base, scl: [...info.sc]});
+  }
+  if (info.bt === 'respawn') {
+    // أوفلاين: نقطة واحدة فقط — استبدل القديمة
+    const olds = S.objs.filter(x => x.type === 'respawn');
+    for (const x of olds) {
+      try {
+        removePreview(x.id);
+        const mm = MESH.get(x.id); if (mm) scene.remove(mm);
+        MESH.delete(x.id); OBJ.delete(x.id);
+      } catch (_) {}
+    }
+    S.objs = S.objs.filter(x => x.type !== 'respawn');
+    const o = add('respawn', pos, { name: 'بداية أوفلاين', color: '#22c55e', scl: [1, 1, 1] });
+    tip('✔ تم وضع نقطة الأوفلاين');
+    try { refreshSpawnsPanel(); updSpawnBtn(); } catch (_) {}
+    setTool('select');
+    return o;
   }
   if (info.bt === 'online_spawn') {
     if (S.playNet === 'offline') { tip('⚠ المشروع أوفلاين — نقاط الأونلاين غير متاحة'); return null; }
     if (countOnlineSpawns() >= 3) { tip('⚠ الحد الأقصى 3 نقاط أونلاين'); return null; }
     const slot = nextOnlineSlot();
     if (!slot) { tip('⚠ مفيش سلو متاح'); return null; }
-    const o = add('online_spawn', pos, {name: 'أونلاين ' + slot, color: '#60a5fa', p: {slot}});
-    updOnRsBtn(); return o;
+    const o = add('online_spawn', pos, { name: 'أونلاين ' + slot, color: '#ef4444', p: { slot }, scl: [1, 1, 1] });
+    tip('✔ تم وضع نقطة أونلاين · سلوت ' + slot);
+    try { refreshSpawnsPanel(); updSpawnBtn(); } catch (_) {}
+    setTool('select');
+    return o;
   }
   return add(info.bt, pos);
 }
@@ -682,8 +911,8 @@ const GH = new T.Group(); GH.visible = false; scene.add(GH);
 let ghKey = '';
 let ghSimple = null;           // Mesh بسيط للكائنات العادية
 const GH_CACHE = new Map();    // defId -> {root: Group, code: string}
-const GHOST_OK = new T.MeshStandardMaterial({color: 0x34d399, transparent: true, opacity: .32, depthWrite: false, emissive: 0x14532d, emissiveIntensity: .35, roughness: .7, metalness: .05, side: T.DoubleSide});
-const GHOST_BAD = new T.MeshStandardMaterial({color: 0xf43f5e, transparent: true, opacity: .38, depthWrite: false, emissive: 0x7f1d1d, emissiveIntensity: .3, roughness: .7, metalness: .05, side: T.DoubleSide});
+const GHOST_OK = new T.MeshStandardMaterial({color: 0x34d399, transparent: true, opacity: .5, depthWrite: false, emissive: 0x22c55e, emissiveIntensity: .55, roughness: .7, metalness: .05, side: T.DoubleSide});
+const GHOST_BAD = new T.MeshStandardMaterial({color: 0xf43f5e, transparent: true, opacity: .55, depthWrite: false, emissive: 0xf43f5e, emissiveIntensity: .5, roughness: .7, metalness: .05, side: T.DoubleSide});
 
 function clearGhChildren() {
   while (GH.children.length) {
@@ -715,7 +944,8 @@ function buildSobjGhost(def) {
     body.visible = false;
     root.userData.body = body;
     root.add(body);
-    new Function('Game', 'root', def.code)(bigGame(previewRt(), fakeO, root), root);
+    const gm = sandboxRun(root, true, () => new Function('Game', 'root', def.code)(bigGame(previewRt(), fakeO, root), root));
+    killMedia(gm); sweepScriptUI();
     root.traverse(x => {
       if (x.isLight) { x.intensity = 0; x.visible = false; }
     });
@@ -732,12 +962,29 @@ function invalidateGhostCache(defId) {
   else GH_CACHE.clear();
 }
 
+/* مصدر شعاع المعاينة: الماوس (hover) ← المركز لو الماوس مقفول (Ctrl) ← آخر لمسة/مركز الشاشة على الموبايل */
+function ghostRay() {
+  if (S.hr) return S.hr;
+  if (document.pointerLockElement === cv) return rayCenter().ray.clone();
+  if (typeof MOB !== 'undefined' && MOB.on) {
+    if (S.tr) return ray({clientX: S.tr.x, clientY: S.tr.y}).ray.clone();
+    const r = cv.getBoundingClientRect();
+    return ray({clientX: r.left + r.width / 2, clientY: r.top + r.height * 0.55}).ray.clone();
+  }
+  return null;
+}
+function tipNow(t, ms) {
+  const el = $('#tip'); if (!el) return;
+  el.textContent = t; clearTimeout(tipNow.t);
+  if (t) tipNow.t = setTimeout(() => { el.textContent = ''; }, ms || 2600);
+}
 function ghostUpdate() {
-  if (S.mode !== 'build' || (S.tool !== 'place' && S.tool !== 'respawn' && S.tool !== 'online_spawn') || !S.hr) {
+  const gr = ghostRay();
+  if (S.mode !== 'build' || (S.tool !== 'place' && S.tool !== 'respawn' && S.tool !== 'online_spawn') || !gr) {
     GH.visible = false;
     return;
   }
-  const info = phInfo(), h = castRay(S.hr);
+  const info = phInfo(), h = castRay(gr);
   if (!h) { GH.visible = false; return; }
   const sp = spotFor(info, h);
   const isR = info.bt === 'respawn' || info.bt === 'online_spawn';
@@ -771,6 +1018,10 @@ function ghostUpdate() {
       else if (DEF[info.bt] && DEF[info.bt].g && G[DEF[info.bt].g]) geo = G[DEF[info.bt].g];
       ghSimple = new T.Mesh(geo, ok ? GHOST_OK : GHOST_BAD);
       if (isR) ghSimple.rotation.x = -Math.PI / 2;
+      try {
+        const ed = new T.LineSegments(new T.EdgesGeometry(geo), new T.LineBasicMaterial({color: 0xb6ffd9, depthTest: false, transparent: true}));
+        ed.renderOrder = 999; ghSimple.add(ed);
+      } catch (_) {}
       GH.add(ghSimple);
       GH.userData.isFull = false;
     }
@@ -845,7 +1096,7 @@ function setGz(m) {
   S.gz = m;
   GZ.move.visible = m === 'move'; GZ.rot.visible = m === 'rotate'; GZ.scl.visible = m === 'scale';
   $$('#gz [data-g]').forEach(b => b.classList.toggle('on', b.dataset.g === m));
-  $('#gzHint').textContent = {move: 'اسحب السهم لتحريك الكائن على المحور', rotate: 'اسحب الحلقة لتدوير الكائن حول محورها', scale: 'اسحب المربع لتغيير الحجم'}[m];
+  $('#gzHint').textContent = '';
   S.dirty = 1;
 }
 function updGzParamsBtn() {
@@ -890,7 +1141,8 @@ function clickCenter() {
     const sp = spotFor(info, h);
     if (!sp.ok) return tip('⚠ المكان مشغول — اختار مكان فاضي');
     const o = placeNow(info, sp.p); if (!o) return;
-    sel(o.id); hier(); chg(); return;
+    // نقط البداية: ما نحددهاش بعد الوضع (الجيزمو بتاعها كان بيغطي الشاشة ويمنع وضع النقطة اللي بعدها)
+    sel((o.type === 'respawn' || o.type === 'online_spawn') ? null : o.id); hier(); chg(); return;
   }
   const h = pickObj(rc);
   if (S.tool === 'delete') { if (h != null) delObj(h); return; }
@@ -984,7 +1236,8 @@ function click(e) {
     const sp = spotFor(info, h);
     if (!sp.ok) return tip('⚠ المكان مشغول — اختار مكان فاضي');
     const o = placeNow(info, sp.p); if (!o) return;
-    sel(o.id); hier(); chg(); return;
+    // نقط البداية: ما نحددهاش بعد الوضع (الجيزمو بتاعها كان بيغطي الشاشة ويمنع وضع النقطة اللي بعدها)
+    sel((o.type === 'respawn' || o.type === 'online_spawn') ? null : o.id); hier(); chg(); return;
   }
   const h = pickObj(rc);
   if (S.tool === 'delete') { if (h != null) delObj(h); return; }
@@ -999,8 +1252,8 @@ function act(a) {
   if (a === 'del') return delObj(o.id);
   const f = aabbOf(o);
   if (a === 'up') { o.pos[1] += S.snap || 1; tip('⬆ طلوع'); }
-  else if (a === 'down') { o.pos[1] = supportY(f, f.y0 + E) + (o.pos[1] - f.y0); tip('⬇ نزول على أول سطح تحته'); }
-  else if (a === 'fly') { o.pos[1] = supportY(f, f.y0 + E) + (o.pos[1] - f.y0) + 3; tip('✈ طيران: 3 وحدات فوق السطح'); }
+  else if (a === 'down') { o.pos[1] = supportY(f, f.y0 + E) + (o.pos[1] - f.y0); tip('⬇ نزول'); }
+  else if (a === 'fly') { o.pos[1] = supportY(f, f.y0 + E) + (o.pos[1] - f.y0) + 3; tip('✈ طيران'); }
   else if (a === 'vis') { o.hidden = !o.hidden; look(o); refreshPreview(o); tip(o.hidden ? 'مخفي: لن يظهر في الاختبار' : 'ظاهر في الاختبار'); inspect(); }
   if (a !== 'vis') tf(o);
   refreshTf(); updVis(); hier(); chg();
@@ -1143,7 +1396,8 @@ cv.addEventListener('pointerup', e => {
 });
 cv.addEventListener('wheel', e => {
   e.preventDefault();
-  if (S.mode === 'play' && RT) { RT.dist = clamp(RT.dist * (1 + Math.sign(e.deltaY) * .1), 2, 25); return; }
+  /* وضع اللعب/الاختبار: لا تقريب بالسكرول — فقط عبر game.setCameraDist من السكربت إن صُرّح */
+  if (S.mode === 'play') return;
   OB.dist = clamp(OB.dist * (1 + Math.sign(e.deltaY) * .1), 1.5, 400); camUpdate();
 }, {passive: false});
 cv.addEventListener('contextmenu', e => e.preventDefault());
@@ -1164,7 +1418,7 @@ addEventListener('keydown', e => {
   if (e.key !== 'Control') ctrlPend = false;
   if (S.mode === 'play') {
     if (e.code === 'Space') e.preventDefault();
-    if (e.code === 'KeyR') respawnP();
+    /* KeyR لا يعيد للنقطة تلقائياً — فقط عبر game.respawn() من الملفات البرمجية */
     if (e.code === 'KeyP') playStop();
     if (e.code === 'KeyB' && !e.repeat) {
       e.preventDefault();
@@ -1199,13 +1453,23 @@ function tip(t) {
   clearTimeout(tip.t);
   tip.t = setTimeout(() => { $('#tip').textContent = ''; }, 2200);
 }
+function armedMobile() {   // موبايل: اقفل القائمة عشان المشهد يبان وتشوف المعاينة الشبحية
+  try { if (typeof MOB !== 'undefined' && MOB.on) { MOB.closeSheets(); S.dirty = 1;  } } catch (_) {}
+}
 function setTool(t) {
-  S.tool = t; $$('#tools [data-tool]').forEach(b => b.classList.toggle('on', b.dataset.tool === t));
-  $('#bRs').classList.toggle('on', t === 'respawn');
+  S.tool = t;
+  // خرجنا من وضع النقطة (تمّ الوضع أو إلغاء بـ Esc/أداة تانية) → رجّع نافذة نقط البداية
+  if (S._spReopen && t !== 'respawn' && t !== 'online_spawn') {
+    S._spReopen = false;
+    setTimeout(() => { try { openSpawnsPanel(); } catch (_) {} }, 0);
+  }
+  $$('#tools [data-tool]').forEach(b => b.classList.toggle('on', b.dataset.tool === t));
+  const brs = document.getElementById('bRs'); if (brs) brs.classList.toggle('on', t === 'respawn');
+  const bsp = document.getElementById('bSpawns'); if (bsp) bsp.classList.toggle('on', t === 'respawn' || t === 'online_spawn');
   updOnRsBtn();
   cv.style.cursor = t === 'select' ? 'default' : (t === 'boxdel' ? 'crosshair' : 'crosshair');
   if (t !== 'boxdel') { S.boxdel = null; _marqueeShow && _marqueeShow(null); }
-  $('#tip').textContent = HINT[t] || ''; S.hr = null; ghKey = ''; cats(); sList();
+  $('#tip').textContent = HINT[t] || ''; S.hr = null; S.tr = null; S.tapArm = null; ghKey = ''; cats(); sList();
 }
 function setSec(s) {
   S.section = s; $('#catP').hidden = s !== 'objects'; $('#progP').hidden = s !== 'prog'; $('#sobjP').hidden = s !== 'sobj';
@@ -1220,23 +1484,18 @@ function cats() {
   }
   $('#grid').innerHTML = h;
 }
-$('#grid').onclick = e => { const b = e.target.closest('[data-it]'); if (!b) return; S.item = b.dataset.it; setTool('place'); };
+$('#grid').onclick = e => { const b = e.target.closest('[data-it]'); if (!b) return; S.item = b.dataset.it; setTool('place'); armedMobile(); };
 $('#q').oninput = cats;
 $('#tools').onclick = e => { const b = e.target.closest('[data-tool]'); if (b) setTool(b.dataset.tool); };
 $('#secs').onclick = e => { const b = e.target.closest('[data-sec]'); if (b) setSec(b.dataset.sec); };
 if ($('#mSecs')) $('#mSecs').onclick = e => { const b = e.target.closest('[data-sec]'); if (b) setSec(b.dataset.sec); };
 $('#bFly').onclick = toggleFly;
 $('#bPar').onclick = () => { document.body.classList.toggle('noside'); $('#bPar').classList.toggle('on', !document.body.classList.contains('noside')); setTimeout(resize, 30); };
-$('#bRs').onclick = () => setTool(S.tool === 'respawn' ? 'select' : 'respawn');
-$('#bOnRs').onclick = () => {
-  if (S.playNet === 'offline') { tip('⚠ المشروع أوفلاين — نقاط الأونلاين غير متاحة'); return; }
-  if (S.tool === 'online_spawn') { setTool('select'); }
-  else {
-    if (countOnlineSpawns() >= 3) { tip('⚠ عندك بالفعل 3 نقاط أونلاين — احذف واحدة الأول'); return; }
-    setTool('online_spawn'); tip('ضع نقطة بدء أونلاين (حد أقصى 3 لاعبين)');
-  }
-  updOnRsBtn();
-};
+const _bSpawns = document.getElementById('bSpawns');
+if (_bSpawns) _bSpawns.onclick = () => openSpawnsPanel();
+// توافق قديم لو الأزرار لسه موجودة
+const _bRs = document.getElementById('bRs'); if (_bRs) _bRs.onclick = () => openSpawnsPanel();
+const _bOnRs = document.getElementById('bOnRs'); if (_bOnRs) _bOnRs.onclick = () => openSpawnsPanel();
 $('#bSnap').onclick = () => { const L = [0, .25, .5, 1]; S.snap = L[(L.indexOf(S.snap) + 1) % 4]; $('#bSnap .snap-l').textContent = S.snap ? String(S.snap) : 'حر'; };
 
 /* ---------- تحويل المشروع إلى لعبة + فتح اللعبة ---------- */
@@ -1255,19 +1514,61 @@ async function preloadGameAssets() {
 }
 setTimeout(() => { preloadGameAssets().catch(() => {}); }, 400);
 
+
+/** وضع اللعب في بيانات مشروع/لعبة */
+function detectPlayNet(data) {
+  if (!data) return null;
+  if (data.playNet === 'online' || data.playNet === 'offline') return data.playNet;
+  if (data.meta && (data.meta.playNet === 'online' || data.meta.playNet === 'offline')) return data.meta.playNet;
+  const objs = data.objs || [];
+  if (objs.some(o => o && o.type === 'online_spawn')) return 'online';
+  if ((data.onlineSpawns || []).length > 0) return 'online';
+  return 'offline';
+}
+/** قبل تحميل مشروع: لو الوضع مختلف عن الجهاز الحالي اسأل (تحذير وليس رفض) */
+async function confirmPlayNetMismatch(data, targetMode) {
+  const fileMode = detectPlayNet(data);
+  if (!fileMode) return true;
+  // targetMode: الوضع الحالي للمحرر
+  const cur = (targetMode === 'online' || targetMode === 'offline')
+    ? targetMode
+    : ((S.playNet === 'online' || S.playNet === 'offline') ? S.playNet : null);
+  // لو الجهاز لسه ما اختارش وضع، أو نفس الوضع → كمل من غير سؤال
+  if (!cur || cur === fileMode) return true;
+  const fromL = cur === 'online' ? 'أونلاين' : 'أوفلاين';
+  const toL = fileMode === 'online' ? 'أونلاين' : 'أوفلاين';
+  const warnExtra = (fileMode === 'online')
+    ? '\nبعد التأكيد هيتحوّل المشروع الحالي لوضع الأونلاين (نقاط الأونلاين من الملف هتُحمَّل).'
+    : '\nبعد التأكيد هيتحوّل المشروع الحالي لوضع الأوفلاين (نقاط الأونلاين الحالية هتتشال).';
+  return await uiConfirm(
+    '⚠ المشروع الحالي «' + fromL + '» والملف المرفوع «' + toL + '».\n\n'
+    + 'هل أنت متأكد من التحويل من «' + fromL + '» إلى «' + toL + '»؟'
+    + warnExtra
+  );
+}
+
 function packGameData(name) {
   const objs = JSON.parse(JSON.stringify(S.objs));
   const scripts = JSON.parse(JSON.stringify(S.scripts));
   const sdefs = JSON.parse(JSON.stringify(S.sdefs));
+  // وضع اللعب من المشروع: أوفلاين = ممنوع أونلاين، أونلاين = يحتاج نقاط أونلاين
+  const netMode = (S.playNet === 'online' || S.playNet === 'offline')
+    ? S.playNet
+    : (objs.some(o => o.type === 'online_spawn') ? 'online' : 'offline');
   return {
     version: '2.3',
     engine: 'Hawa Engine',
     name: name || '',
+    playNet: netMode,
+    allowScriptSpawn: !!S.allowScriptSpawn,
     objs,
     scripts,
     sdefs,
     media: JSON.parse(JSON.stringify(S.media || {})),
+    mediaOrder: Array.isArray(S.mediaOrder) ? S.mediaOrder.slice() : Object.keys(S.media || {}),
     mid: S.mid || 1,
+    nid: S.nid, sid: S.sid, did: S.did,
+    player: (typeof PCFG !== 'undefined') ? JSON.parse(JSON.stringify(PCFG)) : null,
     objectCodes: objs.filter(o => o.type === 'sobj').map(o => {
       const d = sdefs.find(x => x.id === o.def);
       return { id: o.id, name: o.name, defId: o.def, defName: d && d.name, code: d && d.code, params: o.p, scripts: o.scripts };
@@ -1285,7 +1586,8 @@ function packGameData(name) {
       scriptCount: scripts.length,
       sdefCount: sdefs.length,
       onlineSlots: objs.filter(o => o.type === 'online_spawn').length,
-      offlineSpawns: objs.filter(o => o.type === 'respawn').length
+      offlineSpawns: objs.filter(o => o.type === 'respawn').length,
+      playNet: netMode
     },
     exportedAt: new Date().toISOString()
   };
@@ -1304,135 +1606,332 @@ async function getAssetBuf(name) {
   return null;
 }
 
-async function convertToGame() {
-  if (typeof JSZip === 'undefined') {
-    tip('⚠ JSZip غير محمّل — حدّث الصفحة');
-    return;
+/* ---------- نافذة تقدّم التحويل ---------- */
+const ConvUI = {
+  el: null, steps: new Map(), url: null, fname: '',
+  open(title) {
+    this.close();
+    const el = document.createElement('div');
+    el.id = 'convOv';
+    el.innerHTML =
+      '<div class="cv-box" role="dialog" aria-modal="true">' +
+      '<div class="cv-h"><span class="cv-spin" id="cvSpin"></span><b id="cvTitle"></b></div>' +
+      '<div class="cv-bar"><i id="cvBar"></i></div>' +
+      '<div class="cv-pct" id="cvPct">0%</div>' +
+      '<ul class="cv-steps" id="cvSteps"></ul>' +
+      '<div class="cv-rep" id="cvRep" hidden></div>' +
+      '<div class="cv-btns" id="cvBtns"></div>' +
+      '</div>';
+    document.body.appendChild(el);
+    this.el = el; this.steps = new Map();
+    el.querySelector('#cvTitle').textContent = title;
+    return this;
+  },
+  close() {
+    if (this.el) { this.el.remove(); this.el = null; }
+    if (this.url) { try { URL.revokeObjectURL(this.url); } catch (_) {} this.url = null; }
+  },
+  pct(p) {
+    if (!this.el) return;
+    p = Math.max(0, Math.min(100, Math.round(p)));
+    this.el.querySelector('#cvBar').style.width = p + '%';
+    this.el.querySelector('#cvPct').textContent = p + '%';
+  },
+  step(id, label, state) { // state: run | ok | warn | err | wait
+    if (!this.el) return;
+    let li = this.steps.get(id);
+    if (!li) {
+      li = document.createElement('li');
+      li.innerHTML = '<span class="cv-i"></span><span class="cv-t"></span>';
+      this.el.querySelector('#cvSteps').appendChild(li);
+      this.steps.set(id, li);
+    }
+    li.className = 's-' + (state || 'wait');
+    li.querySelector('.cv-i').textContent = ({run: '⏳', ok: '✔', warn: '⚠', err: '✖', wait: '•'})[state || 'wait'];
+    li.querySelector('.cv-t').textContent = label;
+  },
+  report(lines, cls) {
+    if (!this.el) return;
+    const r = this.el.querySelector('#cvRep');
+    r.hidden = false; r.className = 'cv-rep ' + (cls || '');
+    r.innerHTML = '';
+    for (const l of lines) { const d = document.createElement('div'); d.textContent = l; r.appendChild(d); }
+  },
+  finish(title, ok, buttons) {
+    if (!this.el) return;
+    this.el.querySelector('#cvTitle').textContent = title;
+    const sp = this.el.querySelector('#cvSpin'); sp.className = 'cv-spin ' + (ok ? 'done' : 'fail'); sp.textContent = ok ? '✔' : '✖';
+    const b = this.el.querySelector('#cvBtns'); b.innerHTML = '';
+    for (const x of buttons) {
+      const bt = document.createElement('button'); bt.type = 'button'; bt.textContent = x.t;
+      if (x.pri) bt.className = 'pri';
+      bt.onclick = x.fn; b.appendChild(bt);
+    }
   }
+};
+const cvTick = () => new Promise(r => setTimeout(r, 25));
+function dataUrlToU8(dataUrl) {
+  const s = String(dataUrl), c = s.indexOf(',');
+  const bin = atob(c > 0 ? s.slice(c + 1) : s);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return arr;
+}
+const cvSafeName = s => String(s || '').replace(/[^\w\u0600-\u06FF.\-]+/g, '_');
+
+/** فحص محتوى اللعبة قبل التصدير */
+function auditGameData(data) {
+  const errors = [], warnings = [];
+  const objs = data.objs || [], scripts = data.scripts || [], sdefs = data.sdefs || [];
+  const media = data.media || {};
+  if (!objs.length) errors.push('المشروع فاضي — مفيش ولا كائن.');
+  // كائنات برمجية لها تعريف؟
+  for (const o of objs) {
+    if (o.type === 'sobj' && !sdefs.some(d => +d.id === +o.def)) errors.push('الكائن «' + (o.name || o.id) + '» كائن برمجي بدون ملف تعريف (def=' + o.def + ').');
+    for (const sid of (o.scripts || [])) if (!scripts.some(s => +s.id === +sid)) warnings.push('الكائن «' + (o.name || o.id) + '» مربوط بسكربت ' + sid + ' مش موجود.');
+  }
+  // وسائط مُشار إليها
+  const refs = collectMediaRefs(data);
+  const lost = [];
+  for (const id of refs) if (!media[id] || !media[id].data) lost.push(id);
+  if (lost.length) errors.push('وسائط مُشار إليها في البارامترات ومش موجودة/فاضية: ' + lost.join(', '));
+  for (const id of Object.keys(media)) if (!media[id] || !media[id].data) warnings.push('ملف «' + ((media[id] && media[id].name) || id) + '» في «ملفاتي» بدون بيانات.');
+  // أخطاء صياغة الكود (تجميع بدون تشغيل)
+  const chk = (kind, x) => {
+    try { new Function('Game', 'root', 'game', String(x.code || '')); }
+    catch (e) { warnings.push('خطأ صياغة في ' + kind + ' «' + (x.name || x.id) + '»: ' + (e.message || e)); }
+  };
+  scripts.forEach(s => chk('سكربت', s));
+  sdefs.forEach(d => chk('كائن برمجي', d));
+  // نقاط البداية
+  if (data.playNet === 'online') {
+    if (!(data.onlineSpawns || []).length) errors.push('وضع أونلاين بدون نقاط أونلاين.');
+  } else if (!(data.offlineSpawns || []).length) {
+    warnings.push('مفيش نقطة بدء أوفلاين — اللاعب هيبدأ من الموضع الافتراضي.');
+  }
+  return {errors, warnings, refs: refs.size};
+}
+
+let convBusy = false;
+async function convertToGame() {
+  if (convBusy || ConvUI.el) return;      // منع التنفيذ المزدوج (ضغطة مكررة من زر القائمة/الـ proxy)
+  convBusy = true;
+  try { await convertToGameImpl(); } finally { convBusy = false; }
+}
+async function convertToGameImpl() {
+  if (typeof JSZip === 'undefined') { tip('⚠ JSZip غير محمّل — حدّث الصفحة'); return; }
+  if (ConvUI.el) return;
+  try { await ensurePlayNetChosen(false); } catch (_) {}
   const nOn = countOnlineSpawns();
-  if (nOn < 1) {
-    if (!await uiConfirm('مفيش نقاط أونلاين. هيتصدر اللعبة للأوفلاين فقط. تكمل؟')) return;
-  } else if (nOn < 3) {
-    if (!await uiConfirm('عندك ' + nOn + ' نقطة أونلاين من 3. تكمل التحويل؟')) return;
+  const mode = (S.playNet === 'online' || S.playNet === 'offline') ? S.playNet : (nOn > 0 ? 'online' : 'offline');
+  if (mode === 'offline') {
+    if (nOn > 0) {
+      if (!await uiConfirm('المشروع أوفلاين وفيه نقاط أونلاين. التحويل هيصدرها كأوفلاين فقط (النقاط مش هتُستخدم في الأونلاين). تكمل؟')) return;
+    } else {
+      if (!await uiConfirm('هيتصدر اللعبة كـ «أوفلاين» فقط — مش هتشتغل في وضع الأونلاين. تكمل؟')) return;
+    }
+  } else {
+    if (nOn < 1) { await uiAlert('المشروع أونلاين ومفيش نقاط أونلاين.\nحط على الأقل نقطة أونلاين واحدة قبل التحويل.'); return; }
+    if (nOn < 3 && !await uiConfirm('عندك ' + nOn + ' نقطة أونلاين من 3. هيتصدر اللعبة للأونلاين. تكمل؟')) return;
   }
   const name = await uiPrompt('اسم اللعبة؟', 'لعبتي');
   if (!name || !name.trim()) return tip('تم الإلغاء');
-  tip('⏳ جاري تجهيز اللعبة الكاملة...');
 
-  const data = packGameData(name.trim());
+  const ui = ConvUI.open('جاري تحويل «' + name.trim() + '» إلى لعبة…');
+  ui.step('pack', 'تجميع بيانات المشروع', 'wait');
+  ui.step('audit', 'فحص الكائنات والسكربتات والوسائط', 'wait');
+  ui.step('rt', 'جلب ملفات التشغيل (المحرك + الأنماط + الشبكة)', 'wait');
+  ui.step('inj', 'حقن الملفات والوسائط داخل اللعبة', 'wait');
+  ui.step('zip', 'ضغط الحزمة', 'wait');
+  ui.step('ver', 'التحقق من سلامة الحزمة', 'wait');
+  ui.step('dl', 'التحميل', 'wait');
+  ui.pct(0);
+  let cancelled = false;
+  ui.finish('جاري تحويل «' + name.trim() + '» إلى لعبة…', true, []);
+  { const sp = ui.el.querySelector('#cvSpin'); sp.className = 'cv-spin'; sp.textContent = ''; }
+  ui.el.querySelector('#cvBtns').innerHTML = '';
+  const cb = document.createElement('button'); cb.type = 'button'; cb.textContent = 'إلغاء';
+  cb.onclick = () => { cancelled = true; ui.close(); };
+  ui.el.querySelector('#cvBtns').appendChild(cb);
+  const alive = () => !cancelled && ConvUI.el;
 
   try {
-    await preloadGameAssets();
-    const zip = new JSZip();
-
-    const jsonStr = JSON.stringify(data, null, 2);
-    zip.file('game.json', jsonStr);
-    zip.file('game-data.js', 'window.HAWA_EMBEDDED_GAME = ' + jsonStr + ';\n');
-
-    const required = [
-      ['three.min.js', 'three.min.js'],
-      ['engine.js', 'engine.js'],
-      ['style.css', 'style.css'],
-      ['play.html', 'play.html'],
-      ['index.html', 'play.html'],
-      ['game.html', 'game.html'],
-      ['peerjs.min.js', 'peerjs.min.js'],
-      ['jszip.min.js', 'jszip.min.js'],
-      ['play-runtime.js', 'play-runtime.js']
-    ];
-    const included = ['game.json', 'game-data.js'];
-    const missing = [];
-    for (const [zipName, srcName] of required) {
-      const buf = await getAssetBuf(srcName);
-      if (buf) {
-        zip.file(zipName, buf);
-        if (!included.includes(zipName)) included.push(zipName);
-      } else if (!missing.includes(srcName)) {
-        missing.push(srcName);
-      }
-    }
-
-    zip.file('README.txt',
-      'Hawa Game: ' + data.name + '\n' +
-      '========================\n' +
-      'شغّل index.html أو game.html في Chrome/Edge.\n' +
-      'أو ارفع الملف من «فتح اللعبة» في المحرك.\n\n' +
-      'المحتويات:\n' + included.map(x => ' - ' + x).join('\n') + '\n\n' +
-      'كائنات: ' + data.meta.objectCount + '\n' +
-      'سكربتات: ' + data.meta.scriptCount + '\n' +
-      'كائنات برمجية: ' + data.meta.sdefCount + '\n' +
-      'نقاط أونلاين: ' + data.meta.onlineSlots + '\n' +
-      'نقاط أوفلاين: ' + data.meta.offlineSpawns + '\n' +
-      'تاريخ التصدير: ' + data.exportedAt + '\n'
-    );
-
-    if (missing.length) {
-      console.warn('ملفات ناقصة في الـ ZIP:', missing);
-      if (!await uiConfirm('بعض ملفات التشغيل مش اتلقطت (' + missing.join(', ') + ').\nهيتصدر الـ ZIP برضو. تكمل؟\n\nنصيحة: افتح المحرك عن طريق سيرفر محلي (مش file://) عشان كل الملفات تتحط.')) {
-        tip('تم الإلغاء');
-        return;
-      }
-    }
-
-    
-    // تضمين كل الوسائط المرفوعة في البارامترات
+    /* 1) تجميع */
+    ui.step('pack', 'تجميع بيانات المشروع', 'run'); await cvTick();
+    const data = packGameData(name.trim());
+    data.playNet = mode;
+    if (data.meta) data.meta.playNet = mode;
     const mediaMap = Object.assign({}, S.media || {}, data.media || {});
-    const used = collectMediaRefs(data);
-    let mediaCount = 0;
-    for (const id of used) {
-      const m = mediaMap[id];
-      if (!m || !m.data) continue;
-      try {
-        const dataUrl = String(m.data);
-        const comma = dataUrl.indexOf(',');
-        const meta = comma > 0 ? dataUrl.slice(0, comma) : '';
-        const b64 = comma > 0 ? dataUrl.slice(comma + 1) : dataUrl;
-        const bin = atob(b64);
-        const arr = new Uint8Array(bin.length);
-        for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-        const safe = String(m.name || id).replace(/[^\w\u0600-\u06FF.\-]+/g, '_');
-        const path = 'assets/' + id + '_' + safe;
-        zip.file(path, arr);
-        if (!included.includes(path)) included.push(path);
-        mediaCount++;
-      } catch (err) { console.warn('media pack', id, err); }
+    data.media = JSON.parse(JSON.stringify(mediaMap));
+    data.mediaOrder = Array.isArray(S.mediaOrder) ? S.mediaOrder.slice() : Object.keys(mediaMap);
+    data.meta.mediaCount = Object.keys(mediaMap).length;
+    ui.step('pack', 'تجميع بيانات المشروع — ' + data.objs.length + ' كائن · ' + data.scripts.length + ' سكربت · ' + data.sdefs.length + ' كائن برمجي · ' + data.meta.mediaCount + ' ملف', 'ok');
+    ui.pct(8);
+    if (!alive()) return;
+
+    /* 2) فحص */
+    ui.step('audit', 'فحص الكائنات والسكربتات والوسائط', 'run'); await cvTick();
+    const au = auditGameData(data);
+    if (au.errors.length) {
+      ui.step('audit', 'الفحص: ' + au.errors.length + ' خطأ يمنع التصدير', 'err');
+      ui.report(au.errors.concat(au.warnings.map(w => '⚠ ' + w)), 'err');
+      ui.finish('التحويل اتوقف — صلّح الأخطاء دي', false, [{t: 'إغلاق', pri: true, fn: () => ui.close()}]);
+      return;
     }
-    // أي data: مباشرة في البارامترات
-    for (const o of (data.objs || [])) {
+    ui.step('audit', au.warnings.length ? 'الفحص تمام (مع ' + au.warnings.length + ' تحذير)' : 'الفحص تمام — مفيش مشاكل', au.warnings.length ? 'warn' : 'ok');
+    ui.pct(16);
+    if (!alive()) return;
+
+    /* 3) ملفات التشغيل */
+    ui.step('rt', 'جلب ملفات التشغيل', 'run');
+    const required = [
+      ['three.min.js', 'three.min.js'], ['engine.js', 'engine.js'], ['style.css', 'style.css'],
+      ['play.html', 'play.html'], ['index.html', 'play.html'], ['game.html', 'game.html'],
+      ['peerjs.min.js', 'peerjs.min.js'], ['jszip.min.js', 'jszip.min.js'], ['play-runtime.js', 'play-runtime.js']
+    ];
+    const bufs = new Map(), missing = [];
+    let k = 0;
+    for (const [, src] of required) {
+      if (!bufs.has(src)) {
+        const b = await getAssetBuf(src);
+        if (b) bufs.set(src, b); else missing.push(src);
+      }
+      k++; ui.pct(16 + 24 * k / required.length);
+      if (!alive()) return;
+    }
+    if (missing.length) {
+      ui.step('rt', 'ملفات التشغيل ناقصة: ' + missing.join(', '), 'err');
+      ui.report(['مش قادر أجيب: ' + missing.join(', '), 'افتح المحرك عن طريق START_SERVER.bat (مش file://) وحدّث الصفحة (Ctrl+F5) وجرّب تاني.'], 'err');
+      ui.finish('التحويل اتوقف — ملفات التشغيل ناقصة', false, [{t: 'إغلاق', pri: true, fn: () => ui.close()}]);
+      return;
+    }
+    ui.step('rt', 'ملفات التشغيل جاهزة (' + bufs.size + ' ملف)', 'ok');
+
+    /* 4) حقن */
+    ui.step('inj', 'حقن الملفات والوسائط', 'run'); await cvTick();
+    const zip = new JSZip();
+    const included = [];
+    const addF = (path, content) => { zip.file(path, content); included.push(path); };
+    const sizes = {};
+    for (const [zipName, src] of required) { addF(zipName, bufs.get(src)); sizes[zipName] = bufs.get(src).byteLength; }
+
+    // الوسائط: ملفات مستقلة + مضمّنة في game.json
+    const assetMap = {};
+    const mids = Object.keys(mediaMap).filter(id => mediaMap[id] && mediaMap[id].data);
+    let mi = 0;
+    for (const id of mids) {
+      const m = mediaMap[id];
+      try {
+        const arr = dataUrlToU8(m.data);
+        const path = 'assets/' + id + '_' + cvSafeName(m.name || id);
+        addF(path, arr); assetMap[id] = {path, size: arr.length};
+      } catch (err) { ui.step('inj', 'فشل حقن ملف «' + (m.name || id) + '»: ' + err.message, 'err'); throw err; }
+      mi++; ui.pct(40 + 20 * mi / Math.max(1, mids.length));
+      if (mi % 3 === 0) await cvTick();
+      if (!alive()) return;
+    }
+    // data: مباشرة في بارامترات الكائنات
+    let inl = 0;
+    for (const o of data.objs) {
       if (!o.p) continue;
-      for (const [k, v] of Object.entries(o.p)) {
+      for (const [kk, v] of Object.entries(o.p)) {
         if (typeof v === 'string' && v.startsWith('data:') && v.length > 32) {
-          try {
-            const comma = v.indexOf(',');
-            const b64 = v.slice(comma + 1);
-            const bin = atob(b64);
-            const arr = new Uint8Array(bin.length);
-            for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-            const path = 'assets/inline_' + o.id + '_' + k + '.bin';
-            zip.file(path, arr);
-            if (!included.includes(path)) included.push(path);
-            mediaCount++;
-          } catch (_) {}
+          try { addF('assets/inline_' + o.id + '_' + cvSafeName(kk) + '.bin', dataUrlToU8(v)); inl++; } catch (_) {}
         }
       }
     }
+    data.meta.assetFiles = mids.length + inl;
 
-    const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = (data.name.replace(/[^\w\u0600-\u06FF\-]+/g, '_') || 'hawa-game') + '.zip';
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    // نهائي: الشخصية + الإحداثيات مضمّنة، ثم التسلسل مرة واحدة بعد اكتمال البيانات
+    data.player = JSON.parse(JSON.stringify(PCFG));
+    const jsonStr = JSON.stringify(data);
+    addF('game.json', jsonStr);
+    addF('game-data.js', 'window.HAWA_EMBEDDED_GAME = ' + jsonStr + ';\n');
+    addF('player_config.json', JSON.stringify(data.player, null, 2));
+    const manifest = {
+      name: data.name, exportedAt: data.exportedAt, playNet: mode,
+      counts: {objects: data.objs.length, scripts: data.scripts.length, sdefs: data.sdefs.length,
+        media: mids.length, inlineAssets: inl, onlineSpawns: data.onlineSpawns.length, offlineSpawns: data.offlineSpawns.length},
+      mediaFiles: assetMap, warnings: au.warnings
+    };
+    addF('manifest.json', JSON.stringify(manifest, null, 2));
+    addF('README.txt',
+      'Hawa Game: ' + data.name + '\n========================\n' +
+      'شغّل index.html أو game.html في Chrome/Edge (مباشرة أو من سيرفر).\n\nالمحتويات:\n' +
+      included.map(x => ' - ' + x).join('\n') + '\n\n' +
+      'كائنات: ' + data.meta.objectCount + '\nسكربتات: ' + data.meta.scriptCount + '\nكائنات برمجية: ' + data.meta.sdefCount +
+      '\nملفات ووسائط: ' + data.meta.assetFiles + '\nنقاط أونلاين: ' + data.meta.onlineSlots + '\nنقاط أوفلاين: ' + data.meta.offlineSpawns +
+      '\nتاريخ التصدير: ' + data.exportedAt + '\n');
+    ui.step('inj', 'تم الحقن — ' + mids.length + ' ملف وسائط + ' + inl + ' بارامتر مضمّن + الشخصية + الكود', 'ok');
+    ui.pct(62);
+    if (!alive()) return;
 
-    const sizeMB = (blob.size / 1024 / 1024).toFixed(2);
-    tip('✔ لعبة كاملة: «' + data.name + '» · ' + sizeMB + ' MB · ' + included.length + ' ملف · ' + data.meta.objectCount + ' كائن');
+    /* 5) ضغط */
+    ui.step('zip', 'ضغط الحزمة', 'run'); await cvTick();
+    const blob = await zip.generateAsync({type: 'blob', compression: 'DEFLATE', compressionOptions: {level: 6}},
+      meta => { ui.pct(62 + 24 * (meta.percent || 0) / 100); ui.step('zip', 'ضغط الحزمة — ' + Math.round(meta.percent || 0) + '%', 'run'); });
+    ui.step('zip', 'تم الضغط — ' + (blob.size / 1024 / 1024).toFixed(2) + ' MB', 'ok');
+    ui.pct(88);
+    if (!alive()) return;
+
+    /* 6) تحقق */
+    ui.step('ver', 'التحقق من سلامة الحزمة', 'run'); await cvTick();
+    const vz = await JSZip.loadAsync(blob);
+    const bad = [];
+    for (const p of included) if (!vz.file(p)) bad.push('ناقص: ' + p);
+    const gj = JSON.parse(await vz.file('game.json').async('string'));
+    const gd = await vz.file('game-data.js').async('string');
+    const gdj = JSON.parse(gd.slice(gd.indexOf('=') + 1).trim().replace(/;$/, ''));
+    for (const [lbl, g] of [['game.json', gj], ['game-data.js', gdj]]) {
+      if ((g.objs || []).length !== data.objs.length) bad.push(lbl + ': عدد الكائنات مختلف');
+      if ((g.scripts || []).length !== data.scripts.length) bad.push(lbl + ': عدد السكربتات مختلف');
+      if ((g.sdefs || []).length !== data.sdefs.length) bad.push(lbl + ': عدد الكائنات البرمجية مختلف');
+      if (Object.keys(g.media || {}).length !== Object.keys(data.media).length) bad.push(lbl + ': عدد الوسائط مختلف');
+      if (!g.player) bad.push(lbl + ': بيانات الشخصية ناقصة');
+      if (g.playNet !== mode) bad.push(lbl + ': وضع اللعب مختلف');
+    }
+    for (const id of Object.keys(assetMap)) {
+      const f = vz.file(assetMap[id].path);
+      if (!f) { bad.push('وسيط ناقص: ' + id); continue; }
+      const u = await f.async('uint8array');
+      if (u.length !== assetMap[id].size) bad.push('وسيط تالف: ' + id);
+    }
+    for (const [n, sz] of Object.entries(sizes)) {
+      const f = vz.file(n); if (!f) continue;
+      const u = await f.async('uint8array'); if (u.length !== sz) bad.push('ملف تشغيل تالف: ' + n);
+    }
+    if (bad.length) {
+      ui.step('ver', 'التحقق فشل (' + bad.length + ')', 'err');
+      ui.report(bad, 'err');
+      ui.finish('الحزمة فيها مشكلة — ما اتحمّلتش', false, [{t: 'إغلاق', pri: true, fn: () => ui.close()}]);
+      return;
+    }
+    ui.step('ver', 'الحزمة سليمة — كل الملفات والبيانات متطابقة مع المشروع', 'ok');
+    ui.pct(96);
+
+    /* 7) تحميل */
+    ui.step('dl', 'التحميل', 'run'); await cvTick();
+    ui.fname = (data.name.replace(/[^\w\u0600-\u06FF\-]+/g, '_') || 'hawa-game') + '.zip';
+    ui.url = URL.createObjectURL(blob);
+    const dl = () => { const a = document.createElement('a'); a.href = ui.url; a.download = ui.fname; document.body.appendChild(a); a.click(); a.remove(); };
+    dl();
+    ui.step('dl', 'اتحمّل: ' + ui.fname, 'ok');
+    ui.pct(100);
+    const rep = ['«' + data.name + '» · ' + (blob.size / 1024 / 1024).toFixed(2) + ' MB · ' + included.length + ' ملف',
+      'كائنات ' + data.objs.length + ' · سكربتات ' + data.scripts.length + ' · كائنات برمجية ' + data.sdefs.length + ' · وسائط ' + mids.length,
+      'وضع اللعب: ' + (mode === 'online' ? 'أونلاين' : 'أوفلاين')]
+      .concat(au.warnings.map(w => '⚠ ' + w));
+    ui.report(rep, au.warnings.length ? 'warn' : 'ok');
+    ui.finish('اللعبة جاهزة واتحمّلت', true, [
+      {t: 'تحميل تاني', fn: dl}, {t: 'إغلاق', pri: true, fn: () => ui.close()}]);
+    tip('✔ لعبة كاملة: «' + data.name + '» · ' + (blob.size / 1024 / 1024).toFixed(2) + ' MB');
   } catch (e) {
     console.error(e);
-    tip('⚠ فشل التصدير: ' + (e.message || e));
-    await uiAlert('فشل تحويل اللعبة:\n' + (e.message || e));
+    ui.report(['فشل التحويل: ' + (e && e.message || e)], 'err');
+    ui.finish('فشل التحويل', false, [{t: 'إغلاق', pri: true, fn: () => ui.close()}]);
   }
 }
-$('#bConvert').onclick = convertToGame;
+{ const _bc = document.getElementById('bConvert'); if (_bc) _bc.onclick = convertToGame; }
 (function bindParamsGear() {
   const b = document.getElementById('gParams');
   if (b) b.onclick = e => {
@@ -1444,7 +1943,7 @@ $('#bConvert').onclick = convertToGame;
   };
   try { bindParamPanel(); } catch (_) {}
 })();
-$('#bOpenGame').onclick = () => { window.open('game.html', '_blank'); };
+{ const _bo = document.getElementById('bOpenGame'); if (_bo) _bo.onclick = () => { window.open('game.html', '_blank'); }; }
 S.showCoord = false; S.pick = false;
 S.boxdel = null; // {x0,y0,x1,y1} أثناء سحب الحذف المحيطي
 function ensureCoordUI() {
@@ -1510,10 +2009,17 @@ function updCoord() {
 function hier() {
   refNames = null;
   const q = $('#hq').value.trim(), L = [];
-  for (const o of S.objs) { if (q && !o.name.includes(q)) continue; L.push(o); if (L.length >= 300) break; }
+  for (const o of S.objs) {
+    if (o.type === 'respawn' || o.type === 'online_spawn') continue; // نقط البداية حالة خاصة — مش في قائمة الكائنات
+    if (q && !o.name.includes(q)) continue;
+    L.push(o);
+    if (L.length >= 300) break;
+  }
   $('#hier').innerHTML = L.map(o => `<div data-id="${o.id}" class="${o.id === S.sel ? 'on' : ''}${o.hidden ? ' dim' : ''}">${DEF[o.type].i} ${esc(o.name)}${isProg(o) ? ' <span class="pbadge">⚙ مبرمج</span>' : ''}${o.hidden ? ' <span class="mut">· مخفي</span>' : ''}</div>`).join('')
     || '<div class="mut">المشهد فاضي</div>';
-  $('#objCount').textContent = S.objs.length + ' كائن';
+  const worldN = S.objs.filter(o => o.type !== 'respawn' && o.type !== 'online_spawn').length;
+  $('#objCount').textContent = worldN + ' كائن';
+  try { updSpawnBtn(); } catch (_) {}
 }
 function hierMark() { $$('#hier [data-id]').forEach(d => d.classList.toggle('on', +d.dataset.id === S.sel)); }
 $('#hier').onclick = e => { const d = e.target.closest('[data-id]'); if (d) sel(+d.dataset.id); };
@@ -1530,26 +2036,100 @@ function mediaLabel(v) {
   if (s.length > 40) return s.slice(0, 28) + '…';
   return s;
 }
+function mediaKindFrom(mime, name) {
+  const m = String(mime || '').toLowerCase();
+  const n = String(name || '').toLowerCase();
+  if (m.startsWith('image/') || /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(n)) return 'image';
+  if (m.startsWith('audio/') || /\.(mp3|wav|ogg|m4a|aac|flac)$/i.test(n)) return 'audio';
+  if (m.startsWith('video/') || /\.(mp4|webm|mov|mkv)$/i.test(n)) return 'video';
+  if (m === 'application/pdf' || m.includes('pdf') || /\.pdf$/i.test(n)) return 'pdf';
+  return 'file';
+}
+function mediaKindIcon(kind) {
+  return ({ image: '🖼', audio: '🔊', video: '🎬', pdf: '📄', file: '📎' })[kind] || '📎';
+}
+function mediaMatchesAccept(entry, accept) {
+  if (!accept || accept === '*/*') return true;
+  const mime = String(entry.mime || '');
+  const name = String(entry.name || '');
+  const kind = entry.kind || mediaKindFrom(mime, name);
+  const parts = String(accept).split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+  for (const p of parts) {
+    if (p === '*/*') return true;
+    if (p.endsWith('/*')) {
+      const head = p.slice(0, -1);
+      if (mime.toLowerCase().startsWith(head)) return true;
+      if (p.startsWith('image') && kind === 'image') return true;
+      if (p.startsWith('audio') && kind === 'audio') return true;
+      if (p.startsWith('video') && kind === 'video') return true;
+    } else if (p.startsWith('.')) {
+      if (name.toLowerCase().endsWith(p)) return true;
+    } else if (mime.toLowerCase() === p || (p.includes('pdf') && kind === 'pdf')) return true;
+  }
+  // schema type shortcuts
+  const t = String(accept).toLowerCase();
+  if (t === 'audio' || t === 'sound') return kind === 'audio';
+  if (t === 'image' || t === 'img' || t === 'texture') return kind === 'image';
+  if (t === 'video') return kind === 'video';
+  if (t === 'pdf') return kind === 'pdf';
+  return false;
+}
+function ensureMediaOrder() {
+  if (!S.media) S.media = {}; S.mediaOrder = [];
+  if (!Array.isArray(S.mediaOrder)) S.mediaOrder = [];
+  const ids = Object.keys(S.media);
+  // أضف أي ملفات جديدة في النهاية
+  for (const id of ids) if (!S.mediaOrder.includes(id)) S.mediaOrder.push(id);
+  // احذف ids مش موجودة
+  S.mediaOrder = S.mediaOrder.filter(id => S.media[id]);
+}
 function paramAccept(t) {
   t = String(t || '').toLowerCase();
   if (t === 'audio' || t === 'sound') return 'audio/*';
   if (t === 'image' || t === 'img' || t === 'texture') return 'image/*';
   if (t === 'video') return 'video/*';
+  if (t === 'pdf') return '.pdf,application/pdf';
   if (t === 'file') return '*/*';
   return '';
 }
 function isMediaType(t) {
   t = String(t || '').toLowerCase();
-  return t === 'audio' || t === 'sound' || t === 'image' || t === 'img' || t === 'texture' || t === 'video' || t === 'file' || t === 'media';
+  return t === 'audio' || t === 'sound' || t === 'image' || t === 'img' || t === 'texture' || t === 'video' || t === 'file' || t === 'media' || t === 'pdf';
+}
+function isVec3Param(ty, v) {
+  const t = String(ty || '').toLowerCase();
+  if (t === 'vec3' || t === 'vector3' || t === 'xyz' || t === 'position' || t === 'pos' || t === 'coord' || t === 'coords' || t === 'location') return true;
+  if (Array.isArray(v) && v.length >= 3 && v.slice(0, 3).every(n => typeof n === 'number' || (n !== '' && isFinite(+n)))) return true;
+  return false;
+}
+function parseVec3(v) {
+  if (Array.isArray(v) && v.length >= 3) return [+v[0] || 0, +v[1] || 0, +v[2] || 0];
+  if (v && typeof v === 'object' && ('x' in v || 'y' in v || 'z' in v)) return [+v.x || 0, +v.y || 0, +v.z || 0];
+  if (typeof v === 'string') {
+    const parts = v.replace(/\[|\]/g, '').split(/[\s,]+/).map(Number).filter(n => !isNaN(n));
+    if (parts.length >= 3) return parts.slice(0, 3);
+  }
+  return [0, 0, 0];
 }
 function paramRow(o, k, label, e) {
   const v = o.p[k], ty = (e && e.type) || '';
   let inp;
-  if (isMediaType(ty) || (typeof v === 'string' && (String(v).startsWith('media:') || String(v).startsWith('data:')))) {
+  if (isVec3Param(ty, v)) {
+    const arr = parseVec3(v);
+    inp = `<span class="param-xyz">`
+      + `<label>X<input type="number" step="0.1" data-p="${k}" data-p-axis="0" value="${arr[0]}"></label>`
+      + `<label>Y<input type="number" step="0.1" data-p="${k}" data-p-axis="1" value="${arr[1]}"></label>`
+      + `<label>Z<input type="number" step="0.1" data-p="${k}" data-p-axis="2" value="${arr[2]}"></label>`
+      + `</span>`;
+  } else if (isMediaType(ty) || (typeof v === 'string' && (String(v).startsWith('media:') || String(v).startsWith('data:')))) {
     const acc = paramAccept(ty) || '*/*';
+    const has = !!(v && String(v).length);
     inp = `<span class="media-name" title="${esc(mediaLabel(v))}">${esc(mediaLabel(v))}</span>`
-      + `<label class="media-btn">رفع<input type="file" accept="${acc}" data-p-file="${k}" hidden></label>`
-      + (v ? `<button type="button" class="media-clr" data-p-clr="${k}" title="مسح">✕</button>` : '');
+      + `<span class="media-actions">`
+      + `<button type="button" class="media-btn mf-pick" data-p-from-files="${k}" data-p-accept="${esc(acc)}" data-p-type="${esc(ty)}" title="اختيار من ملفاتي">رفع من ملفاتي</button>`
+      + (has ? `<button type="button" class="media-btn" data-p-from-files="${k}" data-p-accept="${esc(acc)}" data-p-type="${esc(ty)}" title="استبدال">استبدال</button>` : '')
+      + (has ? `<button type="button" class="media-clr" data-p-clr="${k}" title="حذف من البارامتر">حذف</button>` : '')
+      + `</span>`;
   } else if (ty === 'boolean' || typeof v === 'boolean') {
     inp = `<input type="checkbox" data-p="${k}" ${v ? 'checked' : ''}>`;
   } else if (ty === 'color' || (typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v))) {
@@ -1561,19 +2141,24 @@ function paramRow(o, k, label, e) {
   }
   return `<div class="r param-row"><b class="pl">${esc(label || (e && e.label) || PL[k] || k)}</b>${inp}</div>`;
 }
-function applyParamValue(o, key, raw, schemaEntry) {
+function applyParamValue(o, key, raw, schemaEntry, axis) {
   if (!o.p) o.p = {};
   const e = schemaEntry || null;
   const ty = e && e.type;
-  if (ty === 'boolean' || typeof o.p[key] === 'boolean') o.p[key] = !!raw;
+  if (axis != null && axis !== '' && isVec3Param(ty, o.p[key])) {
+    const arr = parseVec3(o.p[key]);
+    arr[+axis] = isNaN(+raw) ? 0 : +raw;
+    o.p[key] = arr;
+  } else if (ty === 'boolean' || typeof o.p[key] === 'boolean') o.p[key] = !!raw;
   else if (ty === 'color') o.p[key] = String(raw);
   else if (ty === 'text' || ty === 'string' || isMediaType(ty)) o.p[key] = raw;
-  else if (typeof o.p[key] === 'string') o.p[key] = String(raw);
-  else {
+  else if (typeof o.p[key] === 'string' && !isVec3Param(ty, o.p[key])) o.p[key] = String(raw);
+  else if (isVec3Param(ty, o.p[key])) {
+    // ignore non-axis
+  } else {
     const n = +raw;
     o.p[key] = isNaN(n) ? raw : n;
   }
-  // تحديث فوري للمعاينة / الضوء
   if (o.type === 'light') {
     const l = MESH.get(o.id) && MESH.get(o.id).children[0];
     if (l) { l.intensity = o.p.intensity; l.distance = o.p.range; }
@@ -1588,13 +2173,258 @@ function storeMediaFile(file, cb) {
   const reader = new FileReader();
   reader.onload = () => {
     const id = 'm' + (S.mid++);
-    if (!S.media) S.media = {};
-    S.media[id] = { name: file.name || id, mime: file.type || 'application/octet-stream', data: reader.result };
+    if (!S.media) S.media = {}; S.mediaOrder = [];
+    if (!Array.isArray(S.mediaOrder)) S.mediaOrder = [];
+    const kind = mediaKindFrom(file.type, file.name);
+    S.media[id] = {
+      name: file.name || id,
+      mime: file.type || 'application/octet-stream',
+      data: reader.result,
+      kind,
+      size: file.size || 0,
+      addedAt: Date.now()
+    };
+    if (!S.mediaOrder.includes(id)) S.mediaOrder.push(id);
+    try { chg(); } catch (_) {}
     cb('media:' + id);
   };
   reader.onerror = () => cb(null);
   reader.readAsDataURL(file);
 }
+/** حذف ملف من المشروع + محاولة حذفه من مجلد التخزين على الجهاز */
+async function deleteMediaFile(id, opts) {
+  id = String(id || '');
+  if (!id || !S.media || !S.media[id]) return false;
+  const soft = opts && opts.skipConfirm;
+  if (!soft) {
+    const nm = (S.media[id] && S.media[id].name) || id;
+    if (!await uiConfirm('حذف الملف «' + nm + '» من المشروع نهائياً؟\nأي بارامتر يستخدمه هيصير فاضي.')) return false;
+  }
+  // فك ارتباط البارامترات
+  const ref = 'media:' + id;
+  const clearRef = (p) => {
+    if (!p || typeof p !== 'object') return;
+    for (const k of Object.keys(p)) if (p[k] === ref) p[k] = '';
+  };
+  for (const o of (S.objs || [])) clearRef(o.p);
+  for (const s of (S.scripts || [])) clearRef(s.p);
+  for (const d of (S.sdefs || [])) clearRef(d.p);
+  delete S.media[id];
+  if (Array.isArray(S.mediaOrder)) S.mediaOrder = S.mediaOrder.filter(x => x !== id);
+  // حذف من مجلد الجهاز إن أمكن
+  try {
+    if (StoreFS && StoreFS.handle && StoreFS.mode === 'folder') {
+      const root = StoreFS.handle;
+      try {
+        const mediaDir = await root.getDirectoryHandle('media', { create: false });
+        // امسح أي ملف يبدأ بالـ id_
+        for await (const [name, ent] of mediaDir.entries()) {
+          if (ent.kind === 'file' && (name === id || name.startsWith(id + '_'))) {
+            try { await mediaDir.removeEntry(name); } catch (_) {}
+          }
+        }
+      } catch (_) {}
+    }
+  } catch (e) { console.warn('delete media disk', e); }
+  try { chg(); } catch (_) {}
+  try { save(); } catch (_) {}
+  return true;
+}
+
+/* ---------- واجهة ملفاتي ---------- */
+const MyFilesUI = {
+  pickCb: null,
+  accept: '*/*',
+  mode: 'manage', // manage | pick
+  dragId: null,
+  open(opts) {
+    opts = opts || {};
+    this.mode = opts.mode === 'pick' ? 'pick' : 'manage';
+    this.accept = opts.accept || '*/*';
+    this.pickCb = typeof opts.onPick === 'function' ? opts.onPick : null;
+    try { ensureMediaOrder(); } catch (_) {}
+    const m = document.getElementById('myFilesModal');
+    if (!m) {
+      try { tip('⚠ نافذة ملفاتي غير موجودة'); } catch (_) {}
+      console.warn('[ملفاتي] #myFilesModal missing');
+      return;
+    }
+    m.hidden = false;
+    m.removeAttribute('hidden');
+    m.style.display = 'flex';
+    m.classList.add('open');
+    const title = document.getElementById('mfTitle');
+    if (title) title.textContent = this.mode === 'pick' ? 'اختر من ملفاتي' : 'ملفاتي';
+    const hint = document.getElementById('mfHint');
+    if (hint) {
+      hint.textContent = '';
+    }
+    const cancel = document.getElementById('mfCancelPick');
+    if (cancel) cancel.hidden = this.mode !== 'pick';
+    const q = document.getElementById('mfSearch');
+    if (q) q.value = '';
+    this.render();
+  },
+  close() {
+    const m = document.getElementById('myFilesModal');
+    if (m) {
+      m.hidden = true;
+      m.setAttribute('hidden', '');
+      m.style.display = 'none';
+      m.classList.remove('open');
+    }
+    this.pickCb = null;
+    this.mode = 'manage';
+  },
+  render() {
+    ensureMediaOrder();
+    const list = document.getElementById('mfList');
+    const count = document.getElementById('mfCount');
+    if (!list) return;
+    const q = ((document.getElementById('mfSearch') || {}).value || '').trim().toLowerCase();
+    let ids = S.mediaOrder.slice();
+    if (this.mode === 'pick') {
+      ids = ids.filter(id => {
+        const e = S.media[id];
+        return e && mediaMatchesAccept(e, this.accept);
+      });
+    }
+    if (q) {
+      ids = ids.filter(id => {
+        const e = S.media[id];
+        return e && String(e.name || id).toLowerCase().includes(q);
+      });
+    }
+    if (count) count.textContent = ids.length + ' ملف' + (Object.keys(S.media).length !== ids.length ? ' (عرض مفلتر)' : '');
+    if (!ids.length) {
+      list.innerHTML = '<div class="mf-empty">' + (Object.keys(S.media).length ? '—' : '—') + '</div>';
+      return;
+    }
+    list.innerHTML = ids.map(id => {
+      const e = S.media[id];
+      const kind = e.kind || mediaKindFrom(e.mime, e.name);
+      const size = e.size ? (e.size > 1048576 ? (e.size / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(e.size / 1024)) + ' KB') : '';
+      return `<div class="mf-item" draggable="true" data-mf-id="${id}">
+        <span class="mf-ico">${mediaKindIcon(kind)}</span>
+        <div class="mf-meta">
+          <div class="mf-name" title="${esc(e.name || id)}">${esc(e.name || id)}</div>
+          <div class="mf-sub">${kind}${size ? ' · ' + size : ''}</div>
+        </div>
+        ${this.mode === 'manage' ? `<button type="button" class="mf-del" data-mf-del="${id}">حذف</button>` : ''}
+      </div>`;
+    }).join('');
+    this.bindList();
+  },
+  bindList() {
+    const list = document.getElementById('mfList');
+    if (!list || list._mfBound) {
+      // rebind each render - clear flag
+    }
+    list._mfBound = true;
+    list.querySelectorAll('.mf-item').forEach(el => {
+      const id = el.getAttribute('data-mf-id');
+      el.ondblclick = () => {
+        if (this.mode === 'pick' && this.pickCb) {
+          this.pickCb('media:' + id);
+          this.close();
+        }
+      };
+      el.ondragstart = ev => {
+        this.dragId = id;
+        el.classList.add('dragging');
+        try { ev.dataTransfer.setData('text/plain', id); ev.dataTransfer.effectAllowed = 'move'; } catch (_) {}
+      };
+      el.ondragend = () => { this.dragId = null; el.classList.remove('dragging'); list.querySelectorAll('.drag-over').forEach(x => x.classList.remove('drag-over')); };
+      el.ondragover = ev => { ev.preventDefault(); el.classList.add('drag-over'); };
+      el.ondragleave = () => el.classList.remove('drag-over');
+      el.ondrop = ev => {
+        ev.preventDefault();
+        el.classList.remove('drag-over');
+        const from = this.dragId || (ev.dataTransfer && ev.dataTransfer.getData('text/plain'));
+        const to = id;
+        if (!from || !to || from === to) return;
+        ensureMediaOrder();
+        const a = S.mediaOrder.indexOf(from);
+        const b = S.mediaOrder.indexOf(to);
+        if (a < 0 || b < 0) return;
+        S.mediaOrder.splice(a, 1);
+        S.mediaOrder.splice(b, 0, from);
+        try { chg(); } catch (_) {}
+        this.render();
+      };
+    });
+    list.querySelectorAll('[data-mf-del]').forEach(btn => {
+      btn.onclick = async ev => {
+        ev.stopPropagation();
+        const id = btn.getAttribute('data-mf-del');
+        if (await deleteMediaFile(id)) this.render();
+      };
+    });
+  },
+  async uploadFiles(fileList) {
+    const files = Array.from(fileList || []);
+    if (!files.length) return;
+    for (const f of files) {
+      await new Promise(res => storeMediaFile(f, () => res()));
+    }
+    tip('✔ تم رفع ' + files.length + ' ملف');
+    this.render();
+  }
+};
+
+function openMyFilesManager() {
+  MyFilesUI.open({ mode: 'manage' });
+}
+function openMyFilesPicker(accept, onPick) {
+  MyFilesUI.open({ mode: 'pick', accept: accept || '*/*', onPick });
+}
+function bindMyFilesUI() {
+  const modal = document.getElementById('myFilesModal');
+  if (modal && !modal._bound) {
+    modal._bound = true;
+    const close = () => MyFilesUI.close();
+    const cbtn = document.getElementById('mfClose');
+    if (cbtn) cbtn.onclick = close;
+    modal.addEventListener('click', e => { if (e.target === modal) close(); });
+    const cancel = document.getElementById('mfCancelPick');
+    if (cancel) cancel.onclick = close;
+    const search = document.getElementById('mfSearch');
+    if (search) search.oninput = () => MyFilesUI.render();
+    const up = document.getElementById('mfUpload');
+    if (up) up.onchange = async () => {
+      await MyFilesUI.uploadFiles(up.files);
+      up.value = '';
+    };
+  }
+  // ربط الزر دائماً (حتى لو النافذة اتأخرت)
+  const b = document.getElementById('bMyFiles');
+  if (b && !b._mfClick) {
+    b._mfClick = true;
+    b.addEventListener('click', e => {
+      e.preventDefault();
+      e.stopPropagation();
+      try { openMyFilesManager(); } catch (err) { console.error(err); tip('⚠ فشل فتح ملفاتي'); }
+    });
+  }
+}
+// ربط فوري + بعد تحميل الصفحة
+try { bindMyFilesUI(); } catch (e) { console.warn(e); }
+setTimeout(() => { try { bindMyFilesUI(); } catch (e) { console.warn(e); } }, 0);
+if (typeof document !== 'undefined') {
+  document.addEventListener('DOMContentLoaded', () => { try { bindMyFilesUI(); } catch (e) {} });
+  window.addEventListener('load', () => { try { bindMyFilesUI(); } catch (e) {} });
+}
+// تفويض نقر احتياطي من الشريط
+document.addEventListener('click', e => {
+  const t = e.target && e.target.closest && e.target.closest('#bMyFiles, [data-proxy="bMyFiles"]');
+  if (!t) return;
+  if (t.id === 'bMyFiles' || t.getAttribute('data-proxy') === 'bMyFiles') {
+    // proxy path: mobile menu already triggers .click on #bMyFiles
+    if (t.getAttribute('data-proxy') === 'bMyFiles') return;
+    try { openMyFilesManager(); } catch (_) {}
+  }
+}, true);
+
 function resolveParamValue(v) {
   if (typeof v === 'string' && v.startsWith('media:')) {
     const m = S.media && S.media[v.slice(6)];
@@ -1687,11 +2517,21 @@ function syncParamPanel() {
   if (title) title.textContent = (o.name || d.name || 'كائن') + ' · بارامترات';
   const sch = schemaOf(d.code);
   if (!sch.length) {
-    body.innerHTML = '<p class="mut small">لا يوجد defineParams في الملف الأم. الكود مشترك من الأم؛ البارامترات تظهر هنا لما تُعرَّف.</p>';
+    body.innerHTML = '<p class=\"mut small\">—</p>';
     return;
   }
   body.innerHTML = sch.map(e => paramRow(o, e.key, e.label || e.key, e)).join('')
-    + '<p class="mut small" style="margin-top:8px">التغيير هنا على هذا الكائن فقط. الملف الأم لا يتأثر. تعديل كود الأم يطبّق على كل الكائنات التابعة.</p>';
+    + '<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">'
+    + '<button type="button" id="paramFromFile" class="ok" title="من الملف">من الملف</button>'
+    + '</div>'
+;
+  const btn = document.getElementById('paramFromFile');
+  if (btn) btn.onclick = () => {
+    applyFileParamsToObject(o);
+    syncParamPanel();
+    try { inspect(); } catch (_) {}
+    tip('تم تطبيق بارامترات الملف على هذا الكائن');
+  };
 }
 function bindParamPanel() {
   const panel = document.getElementById('paramPanel');
@@ -1705,25 +2545,28 @@ function bindParamPanel() {
     const t = e.target, o = OBJ.get(S.sel); if (!o || !t.dataset.p) return;
     const d = defOf(o.def);
     const sch = d ? schemaOf(d.code).find(x => x.key === t.dataset.p) : null;
-    applyParamValue(o, t.dataset.p, t.type === 'checkbox' ? t.checked : t.value, sch);
-  });
-  body.addEventListener('change', e => {
-    const t = e.target, o = OBJ.get(S.sel); if (!o || !t) return;
-    const key = t.dataset.pFile || t.getAttribute('data-p-file');
-    if (key == null) return;
-    const file = t.files && t.files[0]; if (!file) return;
-    storeMediaFile(file, ref => {
-      if (!ref) return;
-      const d = defOf(o.def);
-      const sch = d ? schemaOf(d.code).find(x => x.key === key) : null;
-      applyParamValue(o, key, ref, sch);
-      syncParamPanel();
-      try { inspect(); } catch (_) {}
-    });
+    const axis = t.dataset.pAxis != null ? t.dataset.pAxis : t.getAttribute('data-p-axis');
+    applyParamValue(o, t.dataset.p, t.type === 'checkbox' ? t.checked : t.value, sch, axis);
   });
   body.addEventListener('click', e => {
-    const b = e.target.closest('[data-p-clr]'); if (!b) return;
     const o = OBJ.get(S.sel); if (!o) return;
+    const pick = e.target.closest('[data-p-from-files]');
+    if (pick) {
+      const key = pick.getAttribute('data-p-from-files');
+      const acc = pick.getAttribute('data-p-accept') || '*/*';
+      const ty = pick.getAttribute('data-p-type') || '';
+      openMyFilesPicker(acc || paramAccept(ty) || '*/*', ref => {
+        if (!ref) return;
+        const d = defOf(o.def);
+        const sch = d ? schemaOf(d.code).find(x => x.key === key) : null;
+        applyParamValue(o, key, ref, sch);
+        syncParamPanel();
+        try { inspect(); } catch (_) {}
+        tip('✔ تم اختيار: ' + mediaLabel(ref));
+      });
+      return;
+    }
+    const b = e.target.closest('[data-p-clr]'); if (!b) return;
     const key = b.getAttribute('data-p-clr');
     o.p[key] = '';
     applyParamValue(o, key, '', null);
@@ -1735,26 +2578,35 @@ function bindParamPanel() {
 function inspect() {
   const o = OBJ.get(S.sel), el = $('#ins');
   if (o && o.type === 'sobj') { const d = defOf(o.def); if (d && !isBig(d.code)) { const df = parseParams(d.code); for (const k in df) if (!(k in o.p)) o.p[k] = df[k]; } }
-  if (!o) { el.innerHTML = '<div class="empty"><span>🎯</span><p>لم يتم تحديد كائن</p><small>اختر كائناً من المشهد أو من الشاشة</small></div>'; updVis(); return; }
+  if (!o) { el.innerHTML = '<div class="empty"><span>◈</span><p>لا يوجد تحديد</p></div>'; updVis(); return; }
   const big = o.type === 'sobj' && !!defOf(o.def) && isBig(defOf(o.def).code);
   const v3 = (k, l, st) => `<div class="r"><b>${l}</b>` + [0, 1, 2].map(i => `<label>${'XYZ'[i]}<input type="number" step="${st}" data-k="${k}" data-i="${i}" value="${+o[k][i].toFixed(3)}"></label>`).join('') + '</div>';
   let h = `<div class="ih"><span>${DEF[o.type].i}</span><input data-k="name" value="${esc(o.name)}"></div>`;
   if (isProg(o)) {
     const af = affFiles(o), op = S.ffOpen === o.id;
     h += `<div class="prog-b"><span>⚙ كائن مبرمج</span><button data-ff="1">${op ? 'إخفاء' : 'عرض'} الملفات المتأثرة (${af.length})</button></div>`;
-    if (op) h += '<div class="ff-list">' + (af.map(f => `<div class="ff" data-fk="${f.k}" data-fid="${f.id}" title="اضغط لفتح الملف"><span>${f.k === 'sobj' ? '🎮' : f.on === false ? '🔴' : '🟢'} ${esc(f.name)}</span><em>${f.role}</em></div>`).join('') || '<p class="mut small">مفيش ملفات مرتبطة</p>') + '</div>';
+    if (op) h += '<div class="ff-list">' + (af.map(f => `<div class="ff" data-fk="${f.k}" data-fid="${f.id}"><span>${f.k === 'sobj' ? '🎮' : f.on === false ? '🔴' : '🟢'} ${esc(f.name)}</span><em>${f.role}</em></div>`).join('') || '<p class="mut small">مفيش ملفات مرتبطة</p>') + '</div>';
   }
-  h += `<div class="cp"><h4>Transform</h4>${v3('pos', 'الموضع', .1)}${v3('rot', 'الدوران', 5)}${big ? '' : v3('scl', 'الحجم', .1)}${big ? '<p class="mut small">كائن برمجي: الجذر على الأرض، الحجم للمعاينة فقط.</p>' : ''}</div>`;
+  h += `<div class="cp"><h4>Transform</h4>${v3('pos', 'الموضع', .1)}${v3('rot', 'الدوران', 5)}${big ? '' : v3('scl', 'الحجم', .1)}</div>`;
   h += `<div class="cp"><h4>Renderer</h4><div class="r"><b>اللون</b><input type="color" data-k="color" value="${o.color}"></div></div>`;
   h += `<div class="cp"><h4>الحالة</h4>`
-    + (DEF[o.type].solid || o.type === 'sobj' ? `<label class="r"><input type="checkbox" data-k="solid" ${o.solid ? 'checked' : ''}> صلب (يُلمس ويُقف عليه ويعترض الوضع)</label>` : '')
-    + `<label class="r"><input type="checkbox" data-k="hidden" ${o.hidden ? 'checked' : ''}> مخفي (لا يظهر في الاختبار)</label></div>`;
+    + (DEF[o.type].solid || o.type === 'sobj' ? `<label class="r"><input type="checkbox" data-k="solid" ${o.solid ? 'checked' : ''}> صلب</label>` : '')
+    + `<label class="r"><input type="checkbox" data-k="hidden" ${o.hidden ? 'checked' : ''}> مخفي</label></div>`;
   if (big) {
     const sch = schemaOf(defOf(o.def).code);
-    h += `<div class="cp"><h4>${esc(o.name)} · البارامترات</h4>` + (sch.length ? sch.map(e => paramRow(o, e.key, e.label, e)).join('') : '<p class="mut small">مفيش defineParams</p>') + '</div>';
+    h += `<div class="cp"><h4>${esc(o.name)} · البارامترات</h4>`
+      + (sch.length ? sch.map(e => paramRow(o, e.key, e.label, e)).join('') : '<p class="mut small">—</p>')
+      + `<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap"><button type="button" data-from-file="1" class="ok">من الملف</button>`
+      + `<button type="button" class="unit-viewer-btn" data-unit-view title="عارض الوحدة الافتراضية">عارض الوحده الافتراضيه</button></div>`
+      + '</div>';
   } else {
     const pk = Object.keys(o.p);
-    if (pk.length) h += `<div class="cp"><h4>${esc(o.type === 'sobj' ? o.name : DEF[o.type].n)} · البارامترات</h4>` + pk.map(k => paramRow(o, k, PL[k], null)).join('') + '</div>';
+    if (pk.length || o.type === 'sobj') {
+      h += `<div class="cp"><h4>${esc(o.type === 'sobj' ? o.name : DEF[o.type].n)} · البارامترات</h4>`
+        + (pk.length ? pk.map(k => paramRow(o, k, PL[k], null)).join('') : '<p class="mut small">—</p>')
+        + (o.type === 'sobj' ? `<div style="margin-top:8px"><button type="button" class="unit-viewer-btn" data-unit-view title="عارض الوحدة الافتراضية">عارض الوحده الافتراضيه</button></div>` : '')
+        + '</div>';
+    }
   }
   if (o.type !== 'respawn' && o.type !== 'light') {
     const sc = o.scripts.map(id => { const s = S.scripts.find(x => x.id === id); return s ? `<div class="sr"><span>${s.enabled ? '🟢' : '🔴'} ${esc(s.name)}</span><button data-rm="${id}">✕</button></div>` : ''; }).join('');
@@ -1775,7 +2627,8 @@ $('#ins').addEventListener('input', e => {
   if (p) {
     const d = o.type === 'sobj' ? defOf(o.def) : null;
     const sch = d ? schemaOf(d.code).find(x => x.key === p) : null;
-    applyParamValue(o, p, t.type === 'checkbox' ? t.checked : t.value, sch);
+    const axis = t.dataset.pAxis != null ? t.dataset.pAxis : t.getAttribute('data-p-axis');
+    applyParamValue(o, p, t.type === 'checkbox' ? t.checked : t.value, sch, axis);
     try { syncParamPanel(); } catch (_) {}
   }
   else if (k === 'pos' || k === 'rot' || k === 'scl') { const v = parseFloat(t.value); if (!isNaN(v)) { o[k][+t.dataset.i] = v; tf(o); selHelper(); } }
@@ -1786,19 +2639,8 @@ $('#ins').addEventListener('input', e => {
 });
 $('#ins').addEventListener('change', e => {
   const t = e.target, o = OBJ.get(S.sel); if (!o || !t) return;
-  if (t.dataset.pFile != null || t.getAttribute('data-p-file') != null) {
-    const key = t.dataset.pFile || t.getAttribute('data-p-file');
-    const file = t.files && t.files[0]; if (!file) return;
-    storeMediaFile(file, ref => {
-      if (!ref) return;
-      const d = o.type === 'sobj' ? defOf(o.def) : null;
-      const sch = d ? schemaOf(d.code).find(x => x.key === key) : null;
-      applyParamValue(o, key, ref, sch);
-      inspect();
-      try { syncParamPanel(); } catch (_) {}
-    });
-    return;
-  }
+  /* رفع مباشر من الجهاز استُبدل بـ «رفع من ملفاتي» */
+  if (false && (t.dataset.pFile != null || t.getAttribute('data-p-file') != null)) { return; }
   if (t.dataset.k === 'hidden') { o.hidden = t.checked; look(o); refreshPreview(o); hier(); updVis(); selHelper(); chg(); }
   if (t.id === 'addsc' && t.value) { o.scripts.push(+t.value); inspect(); chg(); }
 });
@@ -1806,12 +2648,34 @@ $('#ins').addEventListener('click', e => {
   const ff = e.target.closest('.ff'); if (ff) { openEd(+ff.dataset.fid, ff.dataset.fk === 'sobj' ? 'sobj' : 'script'); return; }
   const o = OBJ.get(S.sel), b = e.target.closest('button'); if (!o || !b) return;
   if (b.dataset.ff) { S.ffOpen = S.ffOpen === o.id ? null : o.id; inspect(); return; }
+  if (b.dataset.pFromFiles || b.getAttribute('data-p-from-files')) {
+    const key = b.dataset.pFromFiles || b.getAttribute('data-p-from-files');
+    const acc = b.getAttribute('data-p-accept') || '*/*';
+    const ty = b.getAttribute('data-p-type') || '';
+    openMyFilesPicker(acc || paramAccept(ty) || '*/*', ref => {
+      if (!ref) return;
+      const d = o.type === 'sobj' ? defOf(o.def) : null;
+      const sch = d ? schemaOf(d.code).find(x => x.key === key) : null;
+      applyParamValue(o, key, ref, sch);
+      inspect();
+      try { syncParamPanel(); } catch (_) {}
+      tip('✔ تم اختيار: ' + mediaLabel(ref));
+    });
+    return;
+  }
   if (b.dataset.pClr || b.getAttribute('data-p-clr')) {
     const key = b.dataset.pClr || b.getAttribute('data-p-clr');
     o.p[key] = '';
     applyParamValue(o, key, '', null);
     inspect();
     try { syncParamPanel(); } catch (_) {}
+    return;
+  }
+  if (b.dataset.fromFile || b.getAttribute('data-from-file')) {
+    applyFileParamsToObject(o);
+    inspect();
+    try { syncParamPanel(); } catch (_) {}
+    tip('تم تطبيق بارامترات الملف على هذا الكائن');
     return;
   }
   if (b.dataset.rm) { o.scripts = o.scripts.filter(i => i !== +b.dataset.rm); inspect(); chg(); }
@@ -1829,6 +2693,8 @@ function openScriptParams(id) {
   const sch = schemaOf(s.code);
   if (!s.p) s.p = {};
   for (const e of sch) if (s.p[e.key] === undefined) s.p[e.key] = e.value;
+  const parsed = parseParams(s.code);
+  for (const k of Object.keys(parsed)) if (s.p[k] === undefined) s.p[k] = parsed[k];
   let m = document.getElementById('scrParamModal');
   if (!m) {
     m = document.createElement('div'); m.id = 'scrParamModal';
@@ -1837,16 +2703,102 @@ function openScriptParams(id) {
     document.body.appendChild(m);
   }
   const holder = {p: s.p};
+  const keys = sch.length ? sch : Object.keys(s.p).map(k => ({ key: k, label: k, value: s.p[k] }));
   m.innerHTML = `<div style="background:#14161c;color:#eee;border-radius:12px;padding:16px;min-width:300px;max-width:90vw;max-height:80vh;overflow:auto;direction:rtl">`
-    + `<h4 style="margin:0 0 10px">${esc(s.name)} · البارامترات</h4>`
-    + (sch.length ? sch.map(e => paramRow(holder, e.key, e.label, e)).join('') : '<p>مفيش defineParams في الملف ده</p>')
-    + `<div style="text-align:left;margin-top:10px"><button data-close>إغلاق</button></div></div>`;
+    + `<h4 style="margin:0 0 10px">${esc(s.name)} · بارامترات الملف</h4>`
+    + (keys.length ? keys.map(e => paramRow(holder, e.key, e.label || e.key, e)).join('') : '<p class=\"mut small\">—</p>')
+    + `<div style="display:flex;gap:8px;justify-content:space-between;align-items:center;margin-top:12px;flex-wrap:wrap">`
+    + `<button type="button" class="unit-viewer-btn" data-unit-view title="عارض الوحدة الافتراضية">عارض الوحده الافتراضيه</button>`
+    + `<button data-close>إغلاق</button></div></div>`;
   m.hidden = false;
   m.querySelector('[data-close]').onclick = () => { m.hidden = true; };
   m.querySelectorAll('[data-p]').forEach(inp => {
     const k = inp.dataset.p, e = sch.find(x => x.key === k);
-    const h = () => applyParamValue(holder, k, inp.type === 'checkbox' ? inp.checked : inp.value, e);
+    const h = () => {
+      const axis = inp.dataset.pAxis != null ? inp.dataset.pAxis : inp.getAttribute('data-p-axis');
+      applyParamValue(holder, k, inp.type === 'checkbox' ? inp.checked : inp.value, e, axis);
+      chg();
+    };
     inp.addEventListener('input', h); inp.addEventListener('change', h);
+  });
+  m.querySelectorAll('[data-p-from-files]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const key = btn.getAttribute('data-p-from-files');
+      const acc = btn.getAttribute('data-p-accept') || '*/*';
+      const ty = btn.getAttribute('data-p-type') || '';
+      openMyFilesPicker(acc || paramAccept(ty) || '*/*', ref => {
+        if (!ref) return;
+        applyParamValue(holder, key, ref, sch.find(x => x.key === key));
+        openScriptParams(id);
+        chg();
+        tip('✔ تم اختيار: ' + mediaLabel(ref));
+      });
+    });
+  });
+  m.querySelectorAll('[data-p-clr]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const key = btn.getAttribute('data-p-clr') || btn.dataset.pClr;
+      applyParamValue(holder, key, '', null);
+      openScriptParams(id);
+      chg();
+    });
+  });
+}
+/** شجرة بارامترات افتراضية لملف كائن برمجي (sdef) — مستقلة عن النُسخ الموضوعة */
+function openSdefParams(id) {
+  const d = S.sdefs.find(x => +x.id === +id); if (!d) return;
+  const sch = schemaOf(d.code);
+  if (!d.p) d.p = {};
+  for (const e of sch) if (d.p[e.key] === undefined) d.p[e.key] = e.value;
+  const parsed = parseParams(d.code);
+  for (const k of Object.keys(parsed)) if (d.p[k] === undefined) d.p[k] = parsed[k];
+  let m = document.getElementById('scrParamModal');
+  if (!m) {
+    m = document.createElement('div'); m.id = 'scrParamModal';
+    m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:200;display:flex;align-items:center;justify-content:center;';
+    m.addEventListener('click', ev => { if (ev.target === m) m.hidden = true; });
+    document.body.appendChild(m);
+  }
+  const holder = {p: d.p};
+  const keys = sch.length ? sch : Object.keys(d.p).map(k => ({ key: k, label: k, value: d.p[k] }));
+  m.innerHTML = `<div style="background:#14161c;color:#eee;border-radius:12px;padding:16px;min-width:300px;max-width:90vw;max-height:80vh;overflow:auto;direction:rtl">`
+    + `<h4 style="margin:0 0 10px">${esc(d.name)} · بارامترات الملف</h4>`
+    + (keys.length ? keys.map(e => paramRow(holder, e.key, e.label || e.key, e)).join('') : '<p class=\"mut small\">—</p>')
+    + `<div style="display:flex;gap:8px;justify-content:space-between;align-items:center;margin-top:12px;flex-wrap:wrap">`
+    + `<button type="button" class="unit-viewer-btn" data-unit-view title="عارض الوحدة الافتراضية">عارض الوحده الافتراضيه</button>`
+    + `<button data-close>إغلاق</button></div></div>`;
+  m.hidden = false;
+  m.querySelector('[data-close]').onclick = () => { m.hidden = true; };
+  m.querySelectorAll('[data-p]').forEach(inp => {
+    const k = inp.dataset.p, e = sch.find(x => x.key === k);
+    const h = () => {
+      const axis = inp.dataset.pAxis != null ? inp.dataset.pAxis : inp.getAttribute('data-p-axis');
+      applyParamValue(holder, k, inp.type === 'checkbox' ? inp.checked : inp.value, e, axis);
+      chg();
+    };
+    inp.addEventListener('input', h); inp.addEventListener('change', h);
+  });
+  m.querySelectorAll('[data-p-from-files]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const key = btn.getAttribute('data-p-from-files');
+      const acc = btn.getAttribute('data-p-accept') || '*/*';
+      const ty = btn.getAttribute('data-p-type') || '';
+      openMyFilesPicker(acc || paramAccept(ty) || '*/*', ref => {
+        if (!ref) return;
+        applyParamValue(holder, key, ref, sch.find(x => x.key === key));
+        openSdefParams(id);
+        chg();
+        tip('✔ تم اختيار: ' + mediaLabel(ref));
+      });
+    });
+  });
+  m.querySelectorAll('[data-p-clr]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const key = btn.getAttribute('data-p-clr') || btn.dataset.pClr;
+      applyParamValue(holder, key, '', null);
+      openSdefParams(id);
+      chg();
+    });
   });
 }
 function pList() {
@@ -1865,7 +2817,7 @@ function pList() {
         <button data-ed="${s.id}" title="تعديل">${ic('pen')}</button>
         <button data-dl="${s.id}" class="red" title="حذف">${ic('trash')}</button>
       </div></div>`;
-  }).join('') || '<p class="mut small" style="grid-column:1/-1">مفيش ملفات برمجة. اضغط ＋ ملف أو ⬆ رفع.</p>';
+  }).join('') || '<p class="mut small" style="grid-column:1/-1">—</p>';
 }
 $('#pList').onclick = async e => {
   const t = e.target.closest('button');
@@ -1893,7 +2845,7 @@ $('#pList').onclick = async e => {
 };
 const _pNew = $('#pNew'), _pUp = $('#pUp');
 if (_pNew) _pNew.onclick = () => {
-  const s = {id: S.sid++, name: 'script_' + S.sid + '.js', code: TPL, enabled: true};
+  const s = {id: S.sid++, name: 'script_' + S.sid + '.js', code: TPL, enabled: true, p: {}};
   S.scripts.push(s); pList(); openEd(s.id, 'script'); chg();
 };
 if (_pUp) _pUp.onclick = () => { const fl = $('#fl'); if (fl) { fl.dataset.m = 'js'; fl.click(); } };
@@ -1957,7 +2909,7 @@ async function saveEd() {
     const newCode = ta ? String(ta.value || '') : (s.code || '');
     s.name = newName;
     s.code = newCode;
-    try { if (edK === 'sobj') SCH.clear(); } catch (_) {}
+    try { SCH.clear(); } catch (_) {}  // أي تعديل كود (برمجة أو كائن) يبطل كاش defineParams
     if (edK === 'sobj') {
       for (const o of S.objs) {
         if (o.type === 'sobj' && +o.def === +s.id) {
@@ -2062,6 +3014,428 @@ addEventListener('keydown', e => {
 }, true);
 
 
+
+/* ---------- عارض العالم 3D للكائنات البرمجية + عارض الوحدة الافتراضية ---------- */
+const HawaWorldView = (() => {
+  let active = null; // { kind, raf, dispose }
+
+  function closeActive() {
+    if (!active) return;
+    try { cancelAnimationFrame(active.raf); } catch (_) {}
+    try { active.dispose && active.dispose(); } catch (_) {}
+    active = null;
+  }
+
+  function shell(title, extraBarHtml) {
+    closeActive();
+    const ov = document.createElement('div');
+    ov.className = 'hwv-overlay';
+    ov.innerHTML = `
+      <div class="hwv-modal" role="dialog" aria-modal="true">
+        <div class="hwv-head">
+          <b class="hwv-title">${title}</b>
+          <div class="hwv-actions">${extraBarHtml || ''}
+            <button type="button" class="hwv-close" title="إغلاق">✕</button>
+          </div>
+        </div>
+        <div class="hwv-body"><canvas class="hwv-cv"></canvas>
+          <div class="hwv-hint">اسحب للنظر · WASD / الأسهم للحركة · مسافة للقفز · F للطيران</div>
+        </div>
+      </div>`;
+    document.body.appendChild(ov);
+    const close = () => { closeActive(); try { ov.remove(); } catch (_) {} };
+    ov.querySelector('.hwv-close').onclick = close;
+    ov.addEventListener('click', e => { if (e.target === ov) close(); });
+    return { ov, canvas: ov.querySelector('.hwv-cv'), close, bar: ov.querySelector('.hwv-actions') };
+  }
+
+  function makeMiniScene(canvas) {
+    const renderer = new T.WebGLRenderer({
+      canvas, antialias: true, alpha: false, powerPreference: 'high-performance'
+    });
+    const isMob = !!(typeof MOB !== 'undefined' && MOB.on);
+    renderer.setPixelRatio(Math.min(devicePixelRatio || 1, isMob ? 1.5 : 2));
+    const scene = new T.Scene();
+    scene.background = new T.Color(0x0b1220);
+    scene.fog = new T.Fog(0x0b1220, 18, 55);
+    const camera = new T.PerspectiveCamera(60, 1, 0.1, 200);
+    scene.add(new T.HemisphereLight(0xd6e6ff, 0x2a3040, 0.95));
+    const sun = new T.DirectionalLight(0xffffff, 1.05);
+    sun.position.set(12, 22, 10);
+    scene.add(sun);
+    const grid = new T.GridHelper(40, 40, 0x3d5678, 0x1a2a40);
+    grid.position.y = 0.005;
+    scene.add(grid);
+    // floor
+    const floor = new T.Mesh(
+      new T.PlaneGeometry(40, 40),
+      new T.MeshStandardMaterial({ color: 0x152033, roughness: 0.95, metalness: 0.05 })
+    );
+    floor.rotation.x = -Math.PI / 2;
+    floor.receiveShadow = false;
+    scene.add(floor);
+    return { renderer, scene, camera };
+  }
+
+  function fit(renderer, camera, host) {
+    const w = host.clientWidth || 1, h = host.clientHeight || 1;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+  }
+
+  function simpleChar() {
+    // شخصية بسيطة إن تعذّر makeRig
+    const g = new T.Group();
+    const skin = new T.MeshStandardMaterial({ color: 0xf5c08f, roughness: 0.7 });
+    const cloth = new T.MeshStandardMaterial({ color: 0x34415e, roughness: 0.65 });
+    const head = new T.Mesh(new T.SphereGeometry(0.18, 16, 12), skin);
+    head.position.y = 1.55;
+    const body = new T.Mesh(new T.BoxGeometry(0.42, 0.55, 0.24), cloth);
+    body.position.y = 1.1;
+    const legL = new T.Mesh(new T.BoxGeometry(0.14, 0.55, 0.16), cloth);
+    legL.position.set(-0.1, 0.35, 0);
+    const legR = legL.clone(); legR.position.x = 0.1;
+    const armL = new T.Mesh(new T.BoxGeometry(0.1, 0.45, 0.1), skin);
+    armL.position.set(-0.3, 1.15, 0);
+    const armR = armL.clone(); armR.position.x = 0.3;
+    g.add(head, body, legL, legR, armL, armR);
+    g.userData.height = 1.7;
+    return g;
+  }
+
+  function makeChar() {
+    try {
+      if (typeof makeRig === 'function') {
+        const rig = makeRig();
+        if (rig && rig.root) {
+          rig.root.userData.height = 1.7;
+          return rig.root;
+        }
+      }
+    } catch (e) { console.warn('makeRig in viewer', e); }
+    return simpleChar();
+  }
+
+  function buildSobjModel(def) {
+    const root = new T.Group();
+    try {
+      const fakeO = {
+        id: -1, name: def.name, type: 'sobj', def: def.id,
+        p: parseParams(def.code), pos: [0, 0, 0], rot: [0, 0, 0], scl: [1, 1, 1],
+        base: isBig(def.code)
+      };
+      const body = new T.Mesh(G.cube, mat('#888', 'sobj'));
+      body.visible = false;
+      root.userData.body = body;
+      root.add(body);
+      const gm = sandboxRun(root, true, () => new Function('Game', 'root', def.code)(bigGame(previewRt(), fakeO, root), root));
+      killMedia(gm); sweepScriptUI();
+      root.traverse(x => { if (x.isLight) { x.intensity = 0; x.visible = false; } });
+    } catch (e) {
+      console.warn('sobj viewer build', e);
+      const fallback = new T.Mesh(
+        G.cube,
+        new T.MeshStandardMaterial({ color: 0xa78bfa, emissive: 0x6d28d9, emissiveIntensity: 0.35 })
+      );
+      fallback.position.y = 0.5;
+      root.add(fallback);
+    }
+    return root;
+  }
+
+  function runPlayerLoop(api, opts) {
+    const { renderer, scene, camera, canvas, close } = api;
+    const keys = Object.create(null);
+    let yaw = 0, pitch = 0.12, fly = !!(opts && opts.flyDefault);
+    const pos = new T.Vector3(0, (opts && opts.forceFly) ? 3.2 : 1.6, 7);
+    let dragging = false, lx = 0, ly = 0, lookPid = null;
+    const speed = 6, flySpeed = 9;
+    // جويستيك افتراضي (موبايل): حركة + نظر في نفس الوقت
+    const joy = { x: 0, y: 0, active: false };
+    const isMob = !!(typeof MOB !== 'undefined' && MOB.on)
+      || ('ontouchstart' in window) || (navigator.maxTouchPoints > 1);
+    let joyEl = null, knobEl = null, lookZone = null;
+
+    if (isMob && api.ov) {
+      const body = api.ov.querySelector('.hwv-body');
+      if (body) {
+        joyEl = document.createElement('div');
+        joyEl.className = 'hwv-joy';
+        knobEl = document.createElement('div');
+        knobEl.className = 'hwv-joy-knob';
+        joyEl.appendChild(knobEl);
+        body.appendChild(joyEl);
+        lookZone = document.createElement('div');
+        lookZone.className = 'hwv-look-zone';
+        body.appendChild(lookZone);
+        const hint = body.querySelector('.hwv-hint');
+        if (hint) {
+          hint.classList.add('hwv-hint-mobile');
+          hint.textContent = (opts && opts.forceFly)
+            ? 'جويستيك يسار = حركة · يمين = نظر · Space صعود · Shift نزول'
+            : 'جويستيك يسار = حركة · يمين = نظر بالكاميرا';
+        }
+        const Rmax = 36;
+        const setKnob = (dx, dy) => {
+          const len = Math.hypot(dx, dy) || 1;
+          const cl = Math.min(len, Rmax);
+          const nx = dx / len * cl, ny = dy / len * cl;
+          knobEl.style.transform = 'translate(' + nx + 'px,' + ny + 'px)';
+          joy.x = len < 6 ? 0 : nx / Rmax;
+          joy.y = len < 6 ? 0 : ny / Rmax;
+        };
+        let jPid = null, jox = 0, joy_y0 = 0;
+        const jDown = e => {
+          e.preventDefault(); e.stopPropagation();
+          jPid = e.pointerId; joy.active = true;
+          const r = joyEl.getBoundingClientRect();
+          jox = r.left + r.width / 2; joy_y0 = r.top + r.height / 2;
+          setKnob(e.clientX - jox, e.clientY - joy_y0);
+          try { joyEl.setPointerCapture(e.pointerId); } catch (_) {}
+        };
+        const jMove = e => {
+          if (jPid == null || e.pointerId !== jPid) return;
+          e.preventDefault(); e.stopPropagation();
+          setKnob(e.clientX - jox, e.clientY - joy_y0);
+        };
+        const jUp = e => {
+          if (jPid != null && e.pointerId !== jPid) return;
+          jPid = null; joy.active = false; joy.x = 0; joy.y = 0;
+          knobEl.style.transform = 'translate(0,0)';
+        };
+        joyEl.addEventListener('pointerdown', jDown);
+        joyEl.addEventListener('pointermove', jMove);
+        joyEl.addEventListener('pointerup', jUp);
+        joyEl.addEventListener('pointercancel', jUp);
+
+        // منطقة النظر على اليمين — تعمل مع الجويستيك في نفس الوقت
+        const lDown = e => {
+          e.preventDefault(); e.stopPropagation();
+          lookPid = e.pointerId; dragging = true; lx = e.clientX; ly = e.clientY;
+          try { lookZone.setPointerCapture(e.pointerId); } catch (_) {}
+        };
+        const lMove = e => {
+          if (lookPid == null || e.pointerId !== lookPid) return;
+          e.preventDefault();
+          const dx = e.clientX - lx, dy = e.clientY - ly;
+          lx = e.clientX; ly = e.clientY;
+          yaw -= dx * 0.005; pitch = Math.max(-1.2, Math.min(1.2, pitch + dy * 0.005));
+        };
+        const lUp = e => {
+          if (lookPid != null && e.pointerId !== lookPid) return;
+          lookPid = null; dragging = false;
+        };
+        lookZone.addEventListener('pointerdown', lDown);
+        lookZone.addEventListener('pointermove', lMove);
+        lookZone.addEventListener('pointerup', lUp);
+        lookZone.addEventListener('pointercancel', lUp);
+      }
+    }
+
+    const onKey = e => {
+      const k = e.code;
+      if (k === 'Escape') { e.preventDefault(); close(); return; }
+      if (k === 'KeyF' && !(opts && opts.forceFly)) {
+        fly = !fly;
+        const flyBtn = api.ov && api.ov.querySelector('[data-hwv-fly]');
+        if (flyBtn) { flyBtn.classList.toggle('on', fly); flyBtn.textContent = fly ? 'طيران ✓' : 'طيران'; }
+        try { tip(fly ? 'وضع الطيران' : 'وضع المشي'); } catch (_) {}
+      }
+      if (fly && (k === 'Space' || k === 'ShiftLeft' || k === 'ShiftRight')) e.preventDefault();
+      keys[k] = e.type === 'keydown';
+    };
+    const onDown = e => {
+      if (isMob) return; // الموبايل يستخدم الجويستيك + look-zone
+      if (e.button !== 0 && e.pointerType !== 'touch') return;
+      dragging = true; lx = e.clientX; ly = e.clientY;
+      try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
+    };
+    const onMove = e => {
+      if (isMob || !dragging) return;
+      const dx = e.clientX - lx, dy = e.clientY - ly;
+      lx = e.clientX; ly = e.clientY;
+      yaw -= dx * 0.0045;
+      pitch = Math.max(-1.2, Math.min(1.2, pitch + dy * 0.0045));
+    };
+    const onUp = () => { if (!isMob) dragging = false; };
+    addEventListener('keydown', onKey);
+    addEventListener('keyup', onKey);
+    canvas.addEventListener('pointerdown', onDown);
+    canvas.addEventListener('pointermove', onMove);
+    canvas.addEventListener('pointerup', onUp);
+    canvas.addEventListener('pointercancel', onUp);
+
+    let last = performance.now();
+    function tick(now) {
+      const dt = Math.min(0.05, (now - last) / 1000); last = now;
+      let f = (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0);
+      let r = (keys.KeyD || keys.ArrowRight ? 1 : 0) - (keys.KeyA || keys.ArrowLeft ? 1 : 0);
+      // دمج الجويستيك: y سالب = أمام (W)
+      if (joy.active || joy.x || joy.y) {
+        f += -joy.y;
+        r += joy.x;
+        const ml = Math.hypot(f, r);
+        if (ml > 1) { f /= ml; r /= ml; }
+      }
+      const sp = fly ? flySpeed : speed;
+      const fx = -Math.sin(yaw), fz = -Math.cos(yaw);
+      const rx = Math.cos(yaw), rz = -Math.sin(yaw);
+      pos.x += (fx * f + rx * r) * sp * dt;
+      pos.z += (fz * f + rz * r) * sp * dt;
+      if (fly) {
+        // اضغط مطوّلاً Space = صعود · Shift = نزول (مثل البناء)
+        if (keys.Space || keys.KeyE) pos.y += sp * dt;
+        if (keys.ShiftLeft || keys.ShiftRight || keys.KeyQ) pos.y -= sp * dt;
+        if (pos.y < 0.3) pos.y = 0.3;
+      } else {
+        pos.y = 1.6;
+        if (keys.Space) pos.y = 2.2;
+      }
+      const look = new T.Vector3(
+        pos.x + Math.sin(yaw) * Math.cos(pitch) * -1,
+        pos.y + Math.sin(pitch) * -1 + 0.0,
+        pos.z + Math.cos(yaw) * Math.cos(pitch) * -1
+      );
+      // correct look direction
+      const dir = new T.Vector3(
+        -Math.sin(yaw) * Math.cos(pitch),
+        -Math.sin(pitch),
+        -Math.cos(yaw) * Math.cos(pitch)
+      );
+      camera.position.copy(pos);
+      camera.lookAt(pos.x + dir.x, pos.y + dir.y, pos.z + dir.z);
+      renderer.render(scene, camera);
+      active.raf = requestAnimationFrame(tick);
+    }
+    active = {
+      kind: opts && opts.kind || 'world',
+      raf: requestAnimationFrame(tick),
+      dispose() {
+        removeEventListener('keydown', onKey);
+        removeEventListener('keyup', onKey);
+        canvas.removeEventListener('pointerdown', onDown);
+        canvas.removeEventListener('pointermove', onMove);
+        canvas.removeEventListener('pointerup', onUp);
+        canvas.removeEventListener('pointercancel', onUp);
+        try { if (joyEl && joyEl.parentNode) joyEl.parentNode.removeChild(joyEl); } catch (_) {}
+        try { if (lookZone && lookZone.parentNode) lookZone.parentNode.removeChild(lookZone); } catch (_) {}
+        try { renderer.dispose(); } catch (_) {}
+      }
+    };
+    // fly toggle button if present
+    const flyBtn = api.ov.querySelector('[data-hwv-fly]');
+    if (flyBtn) {
+      if (fly) { flyBtn.classList.add('on'); flyBtn.textContent = 'طيران ✓'; }
+      if (opts && opts.forceFly) {
+        flyBtn.style.display = 'none'; // طيران دائم في عارض الكائن
+      } else {
+        flyBtn.onclick = () => {
+          fly = !fly;
+          flyBtn.classList.toggle('on', fly);
+          flyBtn.textContent = fly ? 'طيران ✓' : 'طيران';
+        };
+      }
+    }
+    return { get fly() { return fly; }, set fly(v) { fly = !!v; } };
+  }
+
+  function openSobj(defId) {
+    const def = (S.sdefs || []).find(x => +x.id === +defId);
+    if (!def) { tip('الملف غير موجود'); return; }
+    const ui = shell('عرض: ' + (def.name || 'كائن برمجي'),
+      '<button type="button" class="hwv-fly on" data-hwv-fly title="طيران دائم">طيران ✓</button>');
+    const host = ui.ov.querySelector('.hwv-body');
+    const hint = host.querySelector('.hwv-hint');
+    if (hint) hint.textContent = 'طيران · WASD حركة · Space (مطوّل) صعود · Shift (مطوّل) نزول · اسحب للنظر';
+    const mini = makeMiniScene(ui.canvas);
+    fit(mini.renderer, mini.camera, host);
+    const ro = new ResizeObserver(() => fit(mini.renderer, mini.camera, host));
+    ro.observe(host);
+
+    // بدون شخصية — الكائن البرمجي فقط
+    const model = buildSobjModel(def);
+    model.position.set(0, 0, 0);
+    mini.scene.add(model);
+
+    // علامة تحت الكائن
+    const ring = new T.Mesh(
+      new T.RingGeometry(0.55, 0.72, 32),
+      new T.MeshBasicMaterial({ color: 0x2de2c4, transparent: true, opacity: 0.55, side: T.DoubleSide })
+    );
+    ring.rotation.x = -Math.PI / 2; ring.position.y = 0.02;
+    mini.scene.add(ring);
+
+    const prevClose = ui.close;
+    ui.close = () => { try { ro.disconnect(); } catch (_) {} prevClose(); };
+    ui.ov.querySelector('.hwv-close').onclick = ui.close;
+    runPlayerLoop({ ...mini, canvas: ui.canvas, close: ui.close, ov: ui.ov }, { kind: 'sobj', flyDefault: true, forceFly: true });
+  }
+
+  function openUnit() {
+    let dist = 1;
+    const ui = shell('عارض الوحدة الافتراضية',
+      `<label class="hwv-unit-lab">المسافة (وحدة)
+        <input type="number" class="hwv-unit-inp" min="0.1" max="50" step="0.1" value="1">
+      </label>
+      <button type="button" class="hwv-fly" data-hwv-fly>طيران</button>`);
+    const host = ui.ov.querySelector('.hwv-body');
+    const mini = makeMiniScene(ui.canvas);
+    fit(mini.renderer, mini.camera, host);
+    const ro = new ResizeObserver(() => fit(mini.renderer, mini.camera, host));
+    ro.observe(host);
+
+    const char = makeChar();
+    char.position.set(0, 0, 0);
+    mini.scene.add(char);
+
+    // wall
+    const wallMat = new T.MeshStandardMaterial({ color: 0x3b82f6, roughness: 0.55, metalness: 0.1, emissive: 0x1d4ed8, emissiveIntensity: 0.15 });
+    const wall = new T.Mesh(new T.BoxGeometry(2.4, 2.2, 0.12), wallMat);
+    wall.position.set(0, 1.1, -dist);
+    mini.scene.add(wall);
+
+    // distance label sprite-like via DOM
+    const label = document.createElement('div');
+    label.className = 'hwv-dist-label';
+    label.innerHTML = `<b>1 وحدة</b><span>= 1 متر في المحرك</span><em>البُعد الحالي: <strong>1.00</strong> وحدة</em>`;
+    host.appendChild(label);
+
+    const measureLine = new T.Group();
+    const lineGeo = new T.BufferGeometry().setFromPoints([new T.Vector3(0, 0.05, 0), new T.Vector3(0, 0.05, -dist)]);
+    const line = new T.Line(lineGeo, new T.LineBasicMaterial({ color: 0x60a5fa }));
+    measureLine.add(line);
+    mini.scene.add(measureLine);
+
+    function applyDist(v) {
+      dist = Math.max(0.1, Math.min(50, +v || 1));
+      wall.position.z = -dist;
+      line.geometry.dispose();
+      line.geometry = new T.BufferGeometry().setFromPoints([
+        new T.Vector3(0, 0.05, 0),
+        new T.Vector3(0, 0.05, -dist)
+      ]);
+      const pretty = dist.toFixed(2);
+      label.innerHTML = `<b>${pretty} وحدة</b><span>الوحدة الموحّدة في المحرك: <strong>1 وحدة = 1 متر</strong></span><em>البُعد بين اللاعب والحائط: <strong>${pretty}</strong> وحدة</em>`;
+    }
+
+    const inp = ui.ov.querySelector('.hwv-unit-inp');
+    inp.addEventListener('input', () => applyDist(inp.value));
+    inp.addEventListener('change', () => applyDist(inp.value));
+    applyDist(1);
+
+    const prevClose = ui.close;
+    ui.close = () => { try { ro.disconnect(); } catch (_) {} prevClose(); };
+    ui.ov.querySelector('.hwv-close').onclick = ui.close;
+    runPlayerLoop({ ...mini, canvas: ui.canvas, close: ui.close, ov: ui.ov }, { kind: 'unit', flyDefault: false });
+  }
+
+  return { openSobj, openUnit, close: closeActive };
+})();
+
+function openSobjWorldViewer(id) { HawaWorldView.openSobj(id); }
+function openUnitViewer() { HawaWorldView.openUnit(); }
+
 /* ---------- قسم الكائنات البرمجية ---------- */
 function sList() {
   $('#sCount').textContent = S.sdefs.length + ' ملف';
@@ -2069,16 +3443,18 @@ function sList() {
     const big = isBig(d.code), cnt = S.objs.filter(o => o.def === d.id).length;
     const armed = S.item === 's:' + d.id && S.tool === 'place';
     const nm = d.name || '';
-    return `<div class="pcard ${armed ? 'is-on' : ''}" data-d="${d.id}">
-      <div class="pc-top"><span class="pc-ico">🎮</span>${big ? '<span class="tag">كبير</span>' : ''}</div>
+    return `<div class="pcard sobj-card ${armed ? 'is-on' : ''}" data-d="${d.id}">
+      <div class="pc-top"><span class="pc-ico sobj-ico">🎮</span>${big ? '<span class="tag">كبير</span>' : ''}</div>
       <div class="pc-name" style="${fitNameStyle(nm)}" title="${esc(nm)}">${esc(nm)}</div>
       <div class="pc-meta"><em>${cnt ? cnt + ' في المشهد' : 'غير موضوع'}</em></div>
-      <div class="pc-btns">
+      <div class="pc-btns sobj-btns">
+        <button type="button" data-sv="${d.id}" class="sobj-view" title="عرض في عالم 3D">عرض</button>
         <button data-pl="${d.id}" class="${armed ? 'on' : 'ok'}" title="${armed ? 'جاهز للوضع' : 'وضع'}">${ic('plus')}</button>
+        <button data-sdp="${d.id}" title="بارامترات الملف">⚙</button>
         <button data-ed="${d.id}" data-k="sobj" title="تعديل">${ic('pen')}</button>
         <button data-dd="${d.id}" class="red" title="حذف">${ic('trash')}</button>
       </div></div>`;
-  }).join('') || '<p class="mut small" style="grid-column:1/-1">مفيش كائنات برمجية. اضغط ＋ كائن أو ⬆ رفع.</p>';
+  }).join('') || '<p class="mut small" style="grid-column:1/-1">— لا توجد كائنات برمجية بعد</p>';
 }
 $('#sList').onclick = async e => {
   const t = e.target.closest('button');
@@ -2087,10 +3463,19 @@ $('#sList').onclick = async e => {
     if (c) openEd(+c.dataset.d, 'sobj');
     return;
   }
+  if (t.dataset.sv != null) {
+    try { openSobjWorldViewer(+t.dataset.sv); } catch (err) { console.warn(err); tip('تعذّر فتح العارض'); }
+    return;
+  }
   if (t.dataset.pl != null) {
     S.item = 's:' + t.dataset.pl;
     setTool('place');
     sList();
+    armedMobile();
+    return;
+  }
+  if (t.dataset.sdp != null) {
+    openSdefParams(+t.dataset.sdp);
     return;
   }
   if (t.dataset.ed != null) {
@@ -2108,8 +3493,9 @@ $('#sList').onclick = async e => {
   }
 };
 const _sNew = $('#sNew'), _sUp = $('#sUp');
+const _sUnit = $('#sUnitView');
 if (_sNew) _sNew.onclick = () => {
-  const d = {id: S.did++, name: 'كائن_' + S.did, code: STPL};
+  const d = {id: S.did++, name: 'كائن_' + S.did, code: STPL, p: {}};
   S.sdefs.push(d); sList(); openEd(d.id, 'sobj'); chg();
 };
 if (_sUp) _sUp.onclick = () => { const fl = $('#fl'); if (fl) { fl.dataset.m = 'sobj'; fl.click(); } };
@@ -2319,7 +3705,7 @@ const StoreFS = {
     return {
       format: 'hawa-project-v3',
       objs: S.objs, scripts: S.scripts, sdefs: S.sdefs,
-      media: S.media || {}, nid: S.nid, sid: S.sid, did: S.did, mid: S.mid || 1
+      media: S.media || {}, mediaOrder: Array.isArray(S.mediaOrder) ? S.mediaOrder.slice() : Object.keys(S.media || {}), nid: S.nid, sid: S.sid, did: S.did, mid: S.mid || 1
     };
   },
   _safeName(name, id) {
@@ -2432,8 +3818,11 @@ const StoreFS = {
       sid: (data && data.sid) || S.sid,
       did: (data && data.did) || S.did,
       mid: (data && data.mid) || S.mid || 1,
+      mediaOrder: (data && Array.isArray(data.mediaOrder)) ? data.mediaOrder.slice()
+        : (Array.isArray(S.mediaOrder) ? S.mediaOrder.slice() : Object.keys((data && data.media) || S.media || {})),
       playNet: (data && (data.playNet === 'online' || data.playNet === 'offline')) ? data.playNet
         : (S.playNet === 'online' || S.playNet === 'offline' ? S.playNet : null),
+      allowScriptSpawn: !!(data && data.allowScriptSpawn != null ? data.allowScriptSpawn : S.allowScriptSpawn),
       player: (data && data.player) || null,
       exportedAt: new Date().toISOString()
     };
@@ -2505,6 +3894,7 @@ const StoreFS = {
       scripts: lean.scripts || [],
       sdefs: lean.sdefs || [],
       media,
+      mediaOrder: Array.isArray(lean.mediaOrder) ? lean.mediaOrder.slice() : Object.keys(media),
       nid: lean.nid, sid: lean.sid, did: lean.did, mid: lean.mid,
       playNet: lean.playNet === 'online' || lean.playNet === 'offline' ? lean.playNet : null,
       player: lean.player || null
@@ -2649,16 +4039,39 @@ function loadData(d, append) {
   if (d && d.media && typeof d.media === 'object') {
     S.media = append ? Object.assign({}, S.media || {}, d.media) : Object.assign({}, d.media);
   } else if (!append) {
-    S.media = {};
+    S.media = {}; S.mediaOrder = [];
   }
+  // ترتيب ملفاتي
+  if (d && Array.isArray(d.mediaOrder)) {
+    S.mediaOrder = append
+      ? (Array.isArray(S.mediaOrder) ? S.mediaOrder : []).concat(d.mediaOrder.filter(id => !(S.mediaOrder || []).includes(id)))
+      : d.mediaOrder.slice();
+  } else if (!append) {
+    S.mediaOrder = Object.keys(S.media || {});
+  }
+  try { ensureMediaOrder(); } catch (_) {}
+  // تطبيع kind للملفات القديمة
+  try {
+    for (const id of Object.keys(S.media || {})) {
+      const m = S.media[id];
+      if (m && !m.kind) m.kind = mediaKindFrom(m.mime, m.name);
+    }
+  } catch (_) {}
   if (d && d.mid) S.mid = Math.max(S.mid || 1, +d.mid || 1);
 
   if (S.mode === 'play') try { playStop(); } catch (_) {}
   if (Array.isArray(d)) { d = {objs: d}; append = true; }
   if (!append) {
     clearAll();
-    S.scripts = (d.scripts || []).map(s => ({id: +s.id, name: s.name, code: s.code || '', enabled: s.enabled != null ? !!s.enabled : !!s.global}));
-    S.sdefs = (d.sdefs || []).map(x => ({id: +x.id, name: x.name, code: x.code || ''}));
+    S.scripts = (d.scripts || []).map(s => ({
+      id: +s.id, name: s.name, code: s.code || '',
+      enabled: s.enabled != null ? !!s.enabled : !!s.global,
+      p: (s.p && typeof s.p === 'object') ? JSON.parse(JSON.stringify(s.p)) : {}
+    }));
+    S.sdefs = (d.sdefs || []).map(x => ({
+      id: +x.id, name: x.name, code: x.code || '',
+      p: (x.p && typeof x.p === 'object') ? JSON.parse(JSON.stringify(x.p)) : {}
+    }));
     const maxSid = S.scripts.reduce((m, s) => Math.max(m, +s.id || 0), 0);
     const maxDid = S.sdefs.reduce((m, s) => Math.max(m, +s.id || 0), 0);
     S.sid = Math.max(1, (d.sid || 0), maxSid + 1);
@@ -2690,6 +4103,11 @@ function loadData(d, append) {
     } else {
       S.playNet = null;
     }
+    S.allowScriptSpawn = !!(d.allowScriptSpawn);
+    try {
+      const ai = document.getElementById('spAllowScript');
+      if (ai) ai.checked = !!S.allowScriptSpawn;
+    } catch (_) {}
     try { syncPlayNetUI(); } catch (_) {}
   }
   try { SCH.clear(); } catch (_) {}
@@ -2712,8 +4130,10 @@ function packProjectSnapshot(name) {
     scripts: JSON.parse(JSON.stringify(S.scripts)),
     sdefs: JSON.parse(JSON.stringify(S.sdefs)),
     media: JSON.parse(JSON.stringify(S.media || {})),
+    mediaOrder: Array.isArray(S.mediaOrder) ? S.mediaOrder.slice() : Object.keys(S.media || {}),
     nid: S.nid, sid: S.sid, did: S.did, mid: S.mid || 1,
     playNet: S.playNet === 'online' || S.playNet === 'offline' ? S.playNet : null,
+    allowScriptSpawn: !!S.allowScriptSpawn,
     player: (typeof PCFG !== 'undefined') ? JSON.parse(JSON.stringify(PCFG)) : null,
     builderCam: getBuilderCam(),
     exportedAt: new Date().toISOString()
@@ -2769,6 +4189,13 @@ async function uploadProjectZip(file) {
       await uiAlert('ملف مشروع غير صالح');
       return;
     }
+    // تحذير عند رفع مشروع بوضع مختلف عن الجهاز الحالي
+    try {
+      if (S.playNet === 'online' || S.playNet === 'offline') {
+        const ok = await confirmPlayNetMismatch(data, S.playNet);
+        if (!ok) { tip('تم إلغاء الرفع'); return; }
+      }
+    } catch (_) {}
     // دمج وسائط من مجلد media/ لو ناقصة في JSON
     if (!data.media) data.media = {};
     const mediaFiles = Object.keys(zip.files).filter(n => n.startsWith('media/') && !zip.files[n].dir);
@@ -2789,7 +4216,13 @@ async function uploadProjectZip(file) {
         };
       } catch (_) {}
     }
-    loadData(data, false);
+        loadData(data, false);
+    try {
+      const pn = detectPlayNet(data);
+      if (pn === 'online' || pn === 'offline') {
+        tip('✔ تم رفع المشروع · الوضع: ' + (pn === 'online' ? 'أونلاين' : 'أوفلاين'));
+      }
+    } catch (_) {}
     try { tip('✔ تم رفع المشروع — تقدر تكمّل'); } catch (_) {}
   } catch (e) {
     console.error(e);
@@ -2805,7 +4238,7 @@ async function wipeProjectTotal() {
   clearAll();
   S.scripts = [];
   S.sdefs = [];
-  S.media = {};
+  S.media = {}; S.mediaOrder = [];
   S.nid = 1; S.sid = 1; S.did = 1; S.mid = 1;
   S.sel = null; S.paramOpen = false;
   S.playNet = null; // مشروع جديد → لازم يختار أونلاين/أوفلاين من جديد
@@ -2872,12 +4305,7 @@ function showStorageInfo() {
       <button type="button" id="stReveal" style="flex:1;min-height:40px" ${hasFolder ? '' : 'disabled'}>عرض مجلد التخزين</button>
     </div>
     <div id="stListing" class="mut small" style="margin-top:10px;max-height:180px;overflow:auto;line-height:1.65"></div>
-    <p class="mut small" style="margin-top:8px;line-height:1.75">
-      <b>لا يوجد تخزين في المتصفح.</b> كل شيء يُحفظ في مجلد الجهاز فقط (ملفات + وسائط).
-      ${isSrv ? '<br>التخزين تلقائي وخارج مجلد المحرك، فلو حدّثت المحرك أو بعته لحد مشروعه يفضل موجود.' : ''}
-      «عرض مجلد التخزين» يعرض محتويات المجلد الحالي من الجهاز.
-      ${folderOk ? '' : '<br><b>ملاحظة:</b> اختيار المجلد يحتاج متصفح يدعم File System Access (Chrome/Edge).'}
-    </p>`;
+    `;
   modal.hidden = false;
   const act = document.getElementById('stActivate');
   if (act) act.onclick = async () => {
@@ -2970,11 +4398,21 @@ $('#fl').onchange = async e => {
     const name = (f.name || '').toLowerCase();
     if (name.endsWith('.zip')) { await uploadProjectZip(f); continue; }
     const text = await f.text();
-    if (m === 'js') { S.scripts.push({id: S.sid++, name: f.name, code: text, enabled: true}); pList(); }
-    else if (m === 'sobj') { const d = {id: S.did++, name: f.name.replace(/\.[^.]+$/, ''), code: text}; S.sdefs.push(d); sList(); }
+    if (m === 'js') { S.scripts.push({id: S.sid++, name: f.name, code: text, enabled: true, p: {}}); pList(); }
+    else if (m === 'sobj') { const d = {id: S.did++, name: f.name.replace(/\.[^.]+$/, ''), code: text, p: {}}; S.sdefs.push(d); sList(); }
     else {
-      try { loadData(JSON.parse(text), false); }
-      catch (x) { await uiAlert('ملف غير صالح'); }
+      try {
+        const data = JSON.parse(text);
+        if (S.playNet === 'online' || S.playNet === 'offline') {
+          const ok = await confirmPlayNetMismatch(data, S.playNet);
+          if (!ok) { tip('تم إلغاء الرفع'); continue; }
+        }
+        loadData(data, false);
+        const pn = detectPlayNet(data);
+        if (pn === 'online' || pn === 'offline') {
+          tip('✔ تم تحميل المشروع · الوضع: ' + (pn === 'online' ? 'أونلاين' : 'أوفلاين'));
+        }
+      } catch (x) { await uiAlert('ملف غير صالح'); }
     }
   }
   e.target.value = ''; chg();
@@ -3286,7 +4724,7 @@ function loadPlayerCfg() {
   try {
     fetch('player_config.json', {cache: 'no-store'})
       .then(r => r.ok ? r.json() : null)
-      .then(j => { if (j && typeof j === 'object') { Object.assign(PCFG, j); if (RT && RT.rig) rebuildLocalRig(); } })
+      .then(j => { if (window.__HAWA_PLAYER_LOCKED) return; if (j && typeof j === 'object') { Object.assign(PCFG, j); if (RT && RT.rig) rebuildLocalRig(); } })
       .catch(() => {});
   } catch (e) {}
 }
@@ -3428,17 +4866,17 @@ function onlinePlayMeta() {
 }
 /* ---------- صوت / مايك (B) + اهتزاز الفم/الرأس عند وجود صوت فعلي ---------- */
 const VOICE_DEF = {
-  enabled: true,           // السماح باهتزاز الوجه من الصوت (أونلاين فقط يظهر الزر)
-  sensitivity: 0.012,      // عتبة الضوضاء (أقل = أكثر حساسية للصوت)
-  maxMouth: 0.72,          // أقصى فتح فم من الصوت
-  headShake: 0.045,        // سعة اهتزاز الرأس
-  headShakeEnabled: true,  // تفعيل/إيقاف اهتزاز الرأس
-  smoothing: 0.32,         // تنعيم المستوى (0–1)
-  highpass: 85,            // تردد عالي-تمرير (يزيل همهمة)
-  lowpass: 7500,           // تردد منخفض-تمرير
-  noiseGate: 0.008,        // بوابة ضوضاء إضافية
-  shape: 'natural',        // natural | cartoon (شكل فتح الفم)
-  gain: 1.35               // تضخيم المستوى قبل التطبيق
+  enabled: true,
+  sensitivity: 0.008,      // حساسية أعلى للصوت
+  maxMouth: 1.35,          // فتح فم قوي جداً من المايك
+  headShake: 0.22,         // اهتزاز رأس واضح جداً
+  headShakeEnabled: true,
+  smoothing: 0.42,         // استجابة أسرع للفم
+  highpass: 85,
+  lowpass: 7500,
+  noiseGate: 0.005,
+  shape: 'cartoon',        // منحنى أقوى لفتح الفم
+  gain: 2.1                // تضخيم أعلى
 };
 const VOICE_CFG = Object.assign({}, VOICE_DEF);
 
@@ -3607,7 +5045,8 @@ const VoiceChat = {
   },
   mouthAmount() {
     if (!VOICE_CFG.enabled || !this.on) return 0;
-    let m = this.level * (+VOICE_CFG.maxMouth || 0.65);
+    let m = this.level * (+VOICE_CFG.maxMouth || 1.2);
+    m = Math.min(1.5, m);
     if (VOICE_CFG.shape === 'cartoon') m = Math.pow(m, 0.65) * 1.05;
     return Math.min(1, m);
   },
@@ -3708,15 +5147,63 @@ function localFace(rig) {
 }
 function applyFace(rig, f, dt) {
   if (!rig || !rig.lipU || !f) return;
-  const k = Math.min(1, dt * 12);
+  // تنعيم أسرع شوية عشان الشفايف تتابع الصوت بوضوح من غير قفز حاد
+  const k = Math.min(1, dt * 16);
   const s = rig.fs || (rig.fs = {mo: 0, sm: 0, su: 0, br: 0});
   s.mo = _lerp(s.mo, f.mo || 0, k); s.sm = _lerp(s.sm, f.sm || 0, k); s.su = _lerp(s.su, f.su || 0, k); s.br = _lerp(s.br, f.br || 0, k);
-  rig.lipD.position.y = .04 - s.mo * .02; rig.lipU.position.y = .052 + s.mo * .008;
-  rig.lipU.scale.x = rig.lipD.scale.x = 1 + s.sm * .45;
-  rig.lipD.scale.y = 1 + s.mo * 2.5;
-  for (const b of rig.brows) b.position.y = .165 + s.br * .014 + s.su * .01;
-  for (const e of rig.eyes) e.scale.y = 1 + s.su * .22;
-  if (f.bl != null) for (const l of rig.lids) l.scale.y = .0001 + f.bl * .95;
+  // فتح فم قوي جداً وعمودي من المايك
+  const mo = s.mo;
+  rig.lipD.position.y = .04 - mo * .095;
+  rig.lipU.position.y = .052 + mo * .045;
+  rig.lipU.scale.x = rig.lipD.scale.x = 1 + s.sm * .45 + mo * .22;
+  rig.lipD.scale.y = 1 + mo * 6.8;
+  rig.lipU.scale.y = 1 + mo * 2.2;
+  // فك + رأس عمودي واضح مع الكلام
+  if (rig.jaw) {
+    try { rig.jaw.rotation.x = mo * 0.55; } catch (_) {}
+  }
+  try {
+    if (rig.head && mo > 0.02) {
+      rig.head.rotation.x += mo * 0.12;
+      if (rig.neck) rig.neck.rotation.x += mo * 0.08;
+    }
+  } catch (_) {}
+  for (const b of (rig.brows || [])) b.position.y = .165 + s.br * .014 + s.su * .01;
+  for (const e of (rig.eyes || [])) e.scale.y = 1 + s.su * .22;
+  if (f.bl != null) for (const l of (rig.lids || [])) l.scale.y = .0001 + f.bl * .95;
+}
+
+
+/** يمنع اختفاء النصف السفلي / أجزاء الجسم في الأونلاين (culling + visibility) */
+function hardenPlayerRig(rig) {
+  if (!rig || !rig.root) return;
+  const fix = (o) => {
+    if (!o) return;
+    try {
+      o.frustumCulled = false;
+      o.visible = true;
+      if (o.isMesh) {
+        o.castShadow = !!o.castShadow;
+        if (o.material) {
+          const mats = Array.isArray(o.material) ? o.material : [o.material];
+          for (const m of mats) {
+            if (!m) continue;
+            if (m.opacity != null && m.opacity < 0.05) m.opacity = 1;
+            if (m.transparent && m.opacity >= 0.99) m.transparent = false;
+            m.needsUpdate = true;
+          }
+        }
+      }
+    } catch (_) {}
+  };
+  fix(rig.root);
+  try { rig.root.traverse(fix); } catch (_) {}
+  // تأكيد مفاصل الرجلين ظاهرة
+  for (const side of [rig.L, rig.R]) {
+    if (!side) continue;
+    for (const k of ['hip', 'knee', 'ankle', 'toe']) fix(side[k]);
+  }
+  fix(rig.pelvis); fix(rig.waist); fix(rig.chest);
 }
 
 function makeRigWith(app) {
@@ -3806,9 +5293,10 @@ function makeGuyRig() {
   spring(tie, {m: .7, sg: 1, k: 120, d: 7, lo: -.9, hi: .04});
 
   const neck = jt(chest, 0, .3, 0);
-  cy(neck, .085, .095, .08, C.skinD, 0, .02, 0, 10);
-  cy(neck, .1, .115, .05, C.shirt, 0, .005, 0, 8);                                     // ياقة القميص
-  for (const sd of [-1, 1]) bx(neck, .05, .05, .02, C.shirtD, sd * .035, -.01, .105, [.2, sd * .35, sd * .2]);
+  cy(neck, .078, .09, .12, C.skin, 0, .045, 0, 10);
+  cy(neck, .08, .092, .04, C.skinD, 0, .01, 0, 10);
+  cy(neck, .1, .11, .028, C.shirt, 0, -.02, 0, 10);
+  for (const sd of [-1, 1]) bx(neck, .04, .035, .018, C.shirtD, sd * .04, -.025, .1, [.15, sd * .3, sd * .15]);
 
   const head = jt(neck, 0, .05, 0);
   const aTop = .184, aBot = .162, hy0 = -.02, hy1 = .30;
@@ -3817,7 +5305,7 @@ function makeGuyRig() {
   const fz = y => zAt(y) * .96;                                                        // سطح الوش الفعلي عند ارتفاع
   for (const sd of [-1, 1]) {
     rbx(head, .036, .1, .07, C.skinD, sd * (aTop + .004), .1, -.005, null, .016);                 // ودان (ملزوقة)
-    bx(head, .04, .03, .012, C.cheek, sd * .112, .072, fz(.072) + .004);
+    /* خدود وردية تحت العين: مُزالة */
   }
   const NS = +P.noseSize > 0 ? +P.noseSize : 1.7;                                      // حجم المنخار (فاني)
   rbx(head, .046 * NS * .8, .044 * NS, .05 * NS, C.skinD, 0, .092, fz(.092) + .012 + .008 * NS, null, .02);
@@ -3991,9 +5479,12 @@ function makeManRig() {
   spring(tie, {m: .7, sg: 1, k: 120, d: 7, lo: -.9, hi: .04});
 
   const neck = jt(chest, 0, .28, 0);
-  cy(neck, .065, .075, .08, C.skinD, 0, .02, 0, 6);
-  cy(neck, .1, .115, .05, C.shirt, 0, .005, 0, 8);                                     // ياقة القميص
-  for (const sd of [-1, 1]) bx(neck, .05, .05, .02, C.shirtD, sd * .035, -.01, .105, [.2, sd * .35, sd * .2]);
+  /* الرقبة بلون الجلد — واضحة مش بيضاء */
+  cy(neck, .07, .08, .11, C.skin, 0, .04, 0, 10);
+  cy(neck, .072, .082, .04, C.skinD, 0, .01, 0, 10);
+  /* ياقة قميص رفيعة عند القاعدة فقط */
+  cy(neck, .095, .105, .028, C.shirt, 0, -.02, 0, 10);
+  for (const sd of [-1, 1]) bx(neck, .04, .035, .018, C.shirtD, sd * .04, -.025, .1, [.15, sd * .3, sd * .15]);
 
   const head = jt(neck, 0, .05, 0);
   const aTop = .184, aBot = .148, hy0 = -.02, hy1 = .30;
@@ -4002,7 +5493,7 @@ function makeManRig() {
   const fz = y => zAt(y) * .96;                                                        // سطح الوش الفعلي عند ارتفاع
   for (const sd of [-1, 1]) {
     rbx(head, .03, .075, .055, C.skinD, sd * (aTop + .002), .1, -.005, null, .013);                 // ودان (ملزوقة)
-    bx(head, .04, .03, .012, C.cheek, sd * .112, .072, fz(.072) + .004);
+    /* خدود وردية تحت العين: مُزالة */
   }
   rbx(head, .04, .045, .035, C.skinD, 0, .09, fz(.09) + .012, null, .014);                          // الأنف
   const brows = [];
@@ -4172,9 +5663,10 @@ function makeSuitRig() {
   spring(tie, {m: .7, sg: 1, k: 120, d: 7, lo: -.9, hi: .04});
 
   const neck = jt(chest, 0, .3, 0);
-  cy(neck, .065, .075, .08, C.skinD, 0, .02, 0, 6);
-  cy(neck, .1, .115, .05, C.shirt, 0, .005, 0, 8);                                     // ياقة القميص
-  for (const sd of [-1, 1]) bx(neck, .05, .05, .02, C.shirtD, sd * .035, -.01, .105, [.2, sd * .35, sd * .2]);
+  cy(neck, .07, .08, .11, C.skin, 0, .04, 0, 10);
+  cy(neck, .072, .082, .04, C.skinD, 0, .01, 0, 10);
+  cy(neck, .095, .105, .028, C.shirt, 0, -.02, 0, 10);
+  for (const sd of [-1, 1]) bx(neck, .04, .035, .018, C.shirtD, sd * .04, -.025, .1, [.15, sd * .3, sd * .15]);
 
   const head = jt(neck, 0, .05, 0);
   const aTop = .184, aBot = .148, hy0 = -.02, hy1 = .30;
@@ -4183,7 +5675,7 @@ function makeSuitRig() {
   const fz = y => zAt(y) * .96;                                                        // سطح الوش الفعلي عند ارتفاع
   for (const sd of [-1, 1]) {
     rbx(head, .03, .075, .055, C.skinD, sd * (aTop + .002), .1, -.005, null, .013);                 // ودان (ملزوقة)
-    bx(head, .04, .03, .012, C.cheek, sd * .112, .072, fz(.072) + .004);
+    /* خدود وردية تحت العين: مُزالة */
   }
   rbx(head, .04, .045, .035, C.skinD, 0, .09, fz(.09) + .012, null, .014);                          // الأنف
   const brows = [];
@@ -4689,8 +6181,7 @@ function makeRig() {
   if (PCFG.style === 'lowpoly') {
     const bun = new T.Mesh(new T.OctahedronGeometry(.085, 0), C.hair); bun.position.set(0, .215, -.02); head.add(bun);
     const bunB = new T.Mesh(new T.OctahedronGeometry(.06, 0), C.hair); bunB.position.set(0, .275, -.03); head.add(bunB);
-    const cheekM = new T.MeshStandardMaterial({color: 0xff7f9c, roughness: .9, flatShading: true});
-    for (const sd of [-1, 1]) { const ch = new T.Mesh(new T.OctahedronGeometry(.032, 0), cheekM); ch.position.set(sd * .088, -.02, .105); ch.scale.set(1.2, .7, .4); head.add(ch); }
+    /* خدود وردية lowpoly: مُزالة */
     head.scale.setScalar(1.22);
   }
   if (PCFG.style === 'abaya') {
@@ -4794,9 +6285,19 @@ function animRig(rig, dt, s, locks) {
     VoiceChat.tick();
     const sh = VoiceChat.headShakeAmount();
     if (sh > 0.0005) {
-      const tt = performance.now() * 0.045;
-      rig.head.rotation.y += Math.sin(tt * 1.7) * sh;
-      rig.head.rotation.x += Math.sin(tt * 2.3) * sh * 0.7;
+      // اهتزاز رأس واضح جداً أثناء الكلام
+      const tt = performance.now() * 0.001;
+      const n1 = Math.sin(tt * 11.5) * 0.7 + Math.sin(tt * 17.2) * 0.4 + Math.sin(tt * 24.0) * 0.25;
+      const n2 = Math.sin(tt * 9.0 + 1.3) * 0.65 + Math.sin(tt * 19.0) * 0.45 + Math.sin(tt * 28.0) * 0.2;
+      const n3 = Math.sin(tt * 13.0 + 0.7) * 0.75 + Math.sin(tt * 21.0) * 0.5;
+      rig.head.rotation.y += n1 * sh * 1.35;
+      rig.head.rotation.x += n2 * sh * 1.25;
+      rig.head.rotation.z += n3 * sh * 0.7;
+      if (rig.neck) {
+        rig.neck.rotation.y += n1 * sh * 0.45;
+        rig.neck.rotation.x += n2 * sh * 0.4;
+        rig.neck.rotation.z += n3 * sh * 0.25;
+      }
     }
   }
   rig.neck.rotation.x = _lerp(rig.neck.rotation.x, -lean * .15, k); rig.neck.rotation.y = _lerp(rig.neck.rotation.y, tgt * .25, kS);
@@ -4881,8 +6382,14 @@ function animRig(rig, dt, s, locks) {
 
 function respawnP() {
   const rt = RT; if (!rt) return;
-  const o = rt.cur || rt.rs[0];
-  if (o) rt.p.set(o.pos[0], o.pos[1] + .02, o.pos[2]); else rt.p.set(0, .02, 0);
+  // لو مصرّح للسكربت/التلقائي يحدّد مكان البداية
+  if (S.allowScriptSpawn && rt.scriptSpawn) {
+    const s = rt.scriptSpawn;
+    rt.p.set(+s.x || 0, (+s.y || 0) + .02, +s.z || 0);
+  } else {
+    const o = rt.cur || rt.rs[0];
+    if (o) rt.p.set(o.pos[0], o.pos[1] + .02, o.pos[2]); else rt.p.set(0, .02, 0);
+  }
   rt.v.set(0, 0, 0); rt.gnd = null; rt.gr = false; rt.hold = false;
 }
 function say(t, ms) { if (RT) { RT.msg = t; RT.msgT = (ms || 2500) / 1000; } }
@@ -4905,6 +6412,95 @@ function hadd(b) {
 }
 
 /* ---------- واجهة Game للمحرك الكبير ---------- */
+/* ---------- عزل الكائنات البرمجية ----------
+   1) أثناء تشغيل كود الكائن لأول مرة: أي scene.add(x) بيتحط جوه root الكائن (يعني في مكانه الفعلي، مش في أصل الإحداثيات).
+   2) في وضع البناء (معاينة / شبح): أي صوت/فيديو/AudioContext بيتصنع بيتمنع من التشغيل، وأي واجهة (data-script-ui) بتتشال. */
+const NOPLAY = new WeakSet();
+let sbxDepth = 0, sbxMedia = [];
+(function patchMediaOnce() {
+  try {
+    if (window.__hawaMediaPatched) return; window.__hawaMediaPatched = true;
+    const _play = HTMLMediaElement.prototype.play;
+    HTMLMediaElement.prototype.play = function () {
+      if (NOPLAY.has(this) || (S.mode !== 'play' && this.hasAttribute && this.hasAttribute('data-script-ui'))) { try { this.pause(); } catch (_) {} return Promise.resolve(); }
+      return _play.apply(this, arguments);
+    };
+    const _ce = document.createElement;
+    document.createElement = function (tag) {
+      const el = _ce.apply(document, arguments);
+      try {
+        if (sbxDepth > 0) {
+          if (/^(audio|video)$/i.test(String(tag))) { NOPLAY.add(el); sbxMedia.push(el); }
+          // أي عنصر DOM يُنشأ أثناء معاينة البناء يُعلَّم كواجهة سكربت ليُمسَح فوراً
+          if (/^(div|span|canvas|p|button|img|video|audio|iframe|ul|ol|li|section|aside|header|footer)$/i.test(String(tag))) {
+            try { el.setAttribute('data-script-ui', '1'); } catch (_) {}
+          }
+        }
+      } catch (_) {}
+      return el;
+    };
+    const _A = window.Audio;
+    if (_A) {
+      const W = function (src) { const a = new _A(src); try { if (sbxDepth > 0) { NOPLAY.add(a); sbxMedia.push(a); } } catch (_) {} return a; };
+      W.prototype = _A.prototype; window.Audio = W;
+    }
+    ['AudioContext', 'webkitAudioContext'].forEach(n => {
+      const C = window[n]; if (!C) return;
+      const W = function () {
+        const c = new C(...arguments);
+        try { if (sbxDepth > 0) { NOPLAY.add(c); c.suspend(); } } catch (_) {}
+        return c;
+      };
+      W.prototype = C.prototype; window[n] = W;
+    });
+    const AC = window.AudioContext && window.AudioContext.prototype;
+    if (AC && AC.resume) { const _r = AC.resume; AC.resume = function () { if (NOPLAY.has(this)) return Promise.resolve(); return _r.apply(this, arguments); }; }
+  } catch (e) { console.warn('media patch', e); }
+})();
+function sandboxRun(root, preview, fn) {
+  const hadOwn = Object.prototype.hasOwnProperty.call(scene, 'add'), origAdd = scene.add;
+  const mark = sbxMedia.length;
+  if (preview) sbxDepth++;
+  scene.add = function () { for (let i = 0; i < arguments.length; i++) root.add(arguments[i]); return this; };
+  try { fn(); }
+  finally {
+    if (hadOwn) scene.add = origAdd; else delete scene.add;
+    if (preview) sbxDepth--;
+  }
+  return preview ? sbxMedia.splice(mark) : [];
+}
+function killMedia(list) {
+  for (const m of (list || [])) { try { m.pause(); m.removeAttribute('src'); m.load && m.load(); } catch (_) {} try { m.remove && m.remove(); } catch (_) {} }
+}
+function sweepScriptUI() {   // وضع البناء: ممنوع أي HUD/عنصر سكربت يفضل على الشاشة
+  if (S.mode === 'play') return;
+  try {
+    document.querySelectorAll('[data-script-ui],[data-hawa-ctrl-ui],[data-hawa-combat-ui]').forEach(el => {
+      // عنصر HUD الموحّد للمحرك: نفرّغه ونخفيه فقط (مش بنمسحه عشان setHud يلاقيه)
+      if (el.id === 'hawaScriptHud') {
+        if (el.innerHTML) el.innerHTML = '';
+        el.style.display = 'none';
+        return;
+      }
+      try { if (el.pause) el.pause(); } catch (_) {}
+      try { el.remove(); } catch (_) {}
+    });
+    // أي عنصر بـ id يبدأ بـ hawa- من السكربتات (زي hawa-cmb-ui) لازم يتشال برضو في البناء
+    document.querySelectorAll('[id^="hawa-"],[id^="Hawa-"]').forEach(el => {
+      if (el.id === 'hawaScriptHud') return;
+      // عناصر واجهة المحرر الأصلية (مش سكربت) — لو ليها id معروف من المحرك نسيبها
+      if (el.closest && (el.closest('#app') || el.closest('#play') || el.closest('#ed') || el.closest('#paramPanel'))) return;
+      if (el.getAttribute('data-script-ui') == null && el.getAttribute('data-hawa-ctrl-ui') == null && el.getAttribute('data-hawa-combat-ui') == null) {
+        // لو مش معلّم كـ script-ui لكن ظاهر كـ HUD ثابت على body من سكربت
+        if (el.parentElement === document.body && /fixed|absolute/i.test((el.style && el.style.position) || '')) {
+          try { el.remove(); } catch (_) {}
+        }
+        return;
+      }
+      try { el.remove(); } catch (_) {}
+    });
+  } catch (_) {}
+}
 function bigGame(rt, o, root) {
   const G2 = {
     THREE: T, scene,
@@ -4928,6 +6524,14 @@ function bigGame(rt, o, root) {
       if (i != null && i !== 0 && NetMP.on && +i !== NetMP.slot) return;
       rt.p.set(x, y, z); rt.v.set(0, 0, 0); if (opt && opt.hold) rt.hold = true;
     },
+    // يتطلب تفعيل «السماح للسكربت بتحديد مكان اللاعب» من نافذة نقط البداية
+    get allowScriptSpawn() { return !!S.allowScriptSpawn; },
+    setScriptSpawn(x, y, z) {
+      if (!S.allowScriptSpawn) return false;
+      rt.scriptSpawn = { x: +x || 0, y: +y || 0, z: +z || 0 };
+      return true;
+    },
+    clearScriptSpawn() { rt.scriptSpawn = null; },
     teleportPlayer: (i, x, y, z, opt) => { rt.p.set(x, y, z); rt.v.set(0, 0, 0); if (opt && opt.yaw != null) rt.ang = opt.yaw; },
     setPlayerYaw: (i, yaw) => { rt.ang = yaw; },
     holdPlayerPosition: (i, b) => { rt.hold = !!b; if (!b) rt.v.set(0, 0, 0); },
@@ -4944,6 +6548,8 @@ function bigGame(rt, o, root) {
     clearCamera: () => { rt.cam = null; },
     subtitle: t => { if (t) say(String(t), 4000); else rt.msgT = 0; },
     setHud(html) {
+      // فصل تام: لا واجهة HUD في وضع البناء / معاينة الكائن
+      if (S.mode !== 'play') return;
       let el = document.getElementById('hawaScriptHud');
       if (!el) {
         el = document.createElement('div');
@@ -4964,7 +6570,11 @@ function bigGame(rt, o, root) {
       isOn: () => VoiceChat.isOn(),
       level: () => VoiceChat.level01()
     },
-    clearHud() { const el = document.getElementById('hawaScriptHud'); if (el) { el.innerHTML = ''; el.style.display = 'none'; } },
+    clearHud() {
+      if (S.mode !== 'play') return;
+      const el = document.getElementById('hawaScriptHud');
+      if (el) { el.innerHTML = ''; el.style.display = 'none'; }
+    },
     getCoords: () => RT ? ({ x: +RT.p.x.toFixed(3), y: +RT.p.y.toFixed(3), z: +RT.p.z.toFixed(3) }) : ({x:0,y:0,z:0}),
     registerInteractAction: (r, cfg) => { if (cfg) rt.inter.push({root: r, cfg}); },
     // مزامنة كائن برمجي (موتسيكل وغيره) لكل اللاعبين
@@ -5013,7 +6623,7 @@ function runBig(rt, o, root, code) {
   if (root.userData && root.userData.body) root.userData.body.visible = false;
   const body = root.userData.body;
   rt.bigs.push({o, m: root, base, body});
-  try { const G = bigGame(rt, o, root); try { window.Game = G; } catch (_) {} new Function('Game', 'root', code)(G, root); }
+  try { const G = bigGame(rt, o, root); try { window.Game = G; } catch (_) {} sandboxRun(root, false, () => new Function('Game', 'root', code)(G, root)); }
   catch (e) { fail(o.name || 'script', e); }
 }
 function runScene(rt, s) {
@@ -5041,9 +6651,16 @@ function previewRt() { return {ups: [], inter: [], shared: new Map(), locks: new
 function removePreview(id) {
   const pv = PREV.get(id); if (!pv) return;
   PREV.delete(id);
+  killMedia(pv.media);
   try { if (pv.m.userData.__tukCleanup) pv.m.userData.__tukCleanup(); } catch (e) {}
   for (const c of pv.m.children.slice()) if (!pv.base.includes(c)) pv.m.remove(c);
   if (pv.body) pv.body.visible = true;
+  // تأكد من عدم بقاء HUD من معاينة البناء
+  if (S.mode !== 'play') {
+    try {
+      document.querySelectorAll('[data-script-ui]').forEach(el => { try { el.remove(); } catch (_) {} });
+    } catch (_) {}
+  }
   S.dirty = 1;
 }
 function refreshPreview(o) {
@@ -5053,9 +6670,11 @@ function refreshPreview(o) {
   const m = MESH.get(o.id); if (!m) return;
   const base = m.children.slice(), body = m.userData.body;
   if (body) body.visible = false;
-  PREV.set(o.id, {m, base, body});
-  try { new Function('Game', 'root', d.code)(bigGame(previewRt(), o, m), m); }
+  const pvRec = {m, base, body, media: []};
+  PREV.set(o.id, pvRec);
+  try { pvRec.media = sandboxRun(m, true, () => new Function('Game', 'root', d.code)(bigGame(previewRt(), o, m), m)); }
   catch (e) { tip('⚠ ' + o.name + ': ' + (e && e.message || e)); }
+  killMedia(pvRec.media); sweepScriptUI();
   S.dirty = 1;
 }
 function refreshPreviewsOf(defId) { invalidateGhostCache(defId); for (const o of S.objs) if (o.type === 'sobj' && o.def === defId) refreshPreview(o); GH.userData.contentKey = ''; }
@@ -5321,6 +6940,7 @@ const NetMP = {
     let r = this.remotes.get(slot);
     if (r) { if (name) r.name = name; r.peerId = peerId || r.peerId; return r; }
     const rig = makeRigWith(app);
+    try { hardenPlayerRig(rig); } catch (_) {}
     scene.add(rig.root);
     r = {
       slot, name: name || ('لاعب ' + slot), peerId, rig,
@@ -5349,7 +6969,9 @@ const NetMP = {
       if (r.appKey !== key) {
         r.appKey = key;
         try { scene.remove(r.rig.root); } catch (e) {}
-        r.rig = makeRigWith(msg.app); scene.add(r.rig.root);
+        r.rig = makeRigWith(msg.app);
+        try { hardenPlayerRig(r.rig); } catch (_) {}
+        scene.add(r.rig.root);
         if (r.cl) applyMats(r.rig.root, r.cl);
       }
     }
@@ -5436,6 +7058,18 @@ const NetMP = {
       }
       const a = r.anim || {};
       try {
+        // كل فترة: تأكيد إن الجسم مش مختفي (culling / scale)
+        if (!r._bodyChk || (performance.now() - r._bodyChk) > 2000) {
+          r._bodyChk = performance.now();
+          try {
+            if (r.rig && r.rig.root) {
+              r.rig.root.visible = true;
+              if (r.rig.pelvis) r.rig.pelvis.visible = true;
+              if (r.rig.L && r.rig.L.hip) r.rig.L.hip.visible = true;
+              if (r.rig.R && r.rig.R.hip) r.rig.R.hip.visible = true;
+            }
+          } catch (_) {}
+        }
         if (r.ride) {
           rigNeutral(r.rig);
           // اركب فوق المركبة
@@ -5458,13 +7092,15 @@ const NetMP = {
       } catch (e) {}
       // وجه اللاعب البعيد متزامن: ميلان الرأس والعين والرمش والتعبيرات
       if (!r.ride && a.face && r.rig.head) {
-        const f = a.face, kk = Math.min(1, dt * 12);
+        const f = a.face, kk = Math.min(1, dt * 14);
         const vo = (f.vo || 0);
-        const sh = (VOICE_CFG.headShakeEnabled !== false && VOICE_CFG.enabled !== false) ? vo * (+VOICE_CFG.headShake || 0.045) : 0;
-        const t = performance.now() * 0.045;
-        r.rig.head.rotation.y = _lerp(r.rig.head.rotation.y, (f.hy || 0) + Math.sin(t * 1.7) * sh, kk);
-        r.rig.head.rotation.x = _lerp(r.rig.head.rotation.x, (f.hx || 0) + Math.sin(t * 2.3) * sh * 0.7, kk);
-        for (const e of r.rig.eyes) { e.rotation.y = _lerp(e.rotation.y, f.ey || 0, kk); e.rotation.x = _lerp(e.rotation.x, f.ex || 0, kk); }
+        const sh = (VOICE_CFG.headShakeEnabled !== false && VOICE_CFG.enabled !== false) ? vo * (+VOICE_CFG.headShake || 0.085) : 0;
+        const tt = performance.now() * 0.001;
+        const n1 = Math.sin(tt * 9.2) * 0.55 + Math.sin(tt * 14.7) * 0.28 + Math.sin(tt * 21.3) * 0.17;
+        const n2 = Math.sin(tt * 7.1 + 1.3) * 0.5 + Math.sin(tt * 16.4) * 0.35 + Math.sin(tt * 25.1) * 0.15;
+        r.rig.head.rotation.y = _lerp(r.rig.head.rotation.y, (f.hy || 0) + n1 * sh, kk);
+        r.rig.head.rotation.x = _lerp(r.rig.head.rotation.x, (f.hx || 0) + n2 * sh * 0.85, kk);
+        for (const e of (r.rig.eyes || [])) { e.rotation.y = _lerp(e.rotation.y, f.ey || 0, kk); e.rotation.x = _lerp(e.rotation.x, f.ex || 0, kk); }
         applyFace(r.rig, f, dt);
       }
       // عباءة من الشبكة
@@ -5768,8 +7404,10 @@ function playStart() {
     const top = document.getElementById('pTop');
     if (top) top.style.display = (online || purePlay) ? 'none' : '';
     const help = document.getElementById('pHelp');
-    if (help && online) {
-      help.innerHTML = '<kbd>W A S D</kbd>حركة<kbd>Space</kbd>قفز<kbd>Shift</kbd>جري<kbd>الماوس</kbd>كاميرا<kbd>F</kbd>تفاعل' + (voiceOn ? '<kbd>B</kbd>مايك' : '');
+    // شريط اختصارات الحركة لا يظهر تلقائياً — فقط لو السكربت/الواجهة صرّحت به
+    if (help) {
+      help.hidden = true;
+      help.innerHTML = '';
     }
     try {
       if (online && voiceOn) {
@@ -5788,7 +7426,7 @@ function playStart() {
   grid.visible = false; gizmo.visible = false; GH.visible = false; selHelper();
   const rt = RT = {t: 0, score: 0, msg: '', msgT: 0, inst: [], dyn: [], trig: [], coins: [], plats: [], hooks: [], rs: [], hash: new Map(),
     stamp: 0, p: new T.Vector3(), v: new T.Vector3(), gnd: null, gr: false, yaw: Math.PI, pitch: .35, dist: 8, ang: 0, walk: 0, cd: 0, cur: null,
-    byName: new Map(), hud: '', rig: null, pl: null, ups: [], bigs: [], sceneRoots: [], inter: [], shared: new Map(), locks: new Set(),
+    byName: new Map(), hud: '', rig: null, pl: null, ups: [], bigs: [], scriptSpawn: null, sceneRoots: [], inter: [], shared: new Map(), locks: new Set(),
     hold: false, locked: false, animLock: false, cam: null, camS: null, fPrev: false, prompt: ''};
   const groups = {};
   for (const o of S.objs) {
@@ -5814,7 +7452,7 @@ function playStart() {
     im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true;
     scene.add(im); rt.inst.push(im);
   }
-  rt.rig = makeRig(); scene.add(rt.rig.root);
+  rt.rig = makeRig(); try { hardenPlayerRig(rt.rig); } catch(_){} scene.add(rt.rig.root);
   rt.pl = {position: rt.p, velocity: rt.v, get grounded() { return rt.gr; }, mesh: rt.rig.root};
   rt.cur = rt.rs[0] || null; respawnP();
   // أونلاين: ريسبون على سلو اللاعب + تشغيل الشبكة
@@ -5852,6 +7490,7 @@ function playStart() {
     },
     // HUD موحّد — أي سكربت (برمجة عادية أو كائن برمجي) يقدر يعرض واجهة
     setHud(html) {
+      if (S.mode !== 'play') return;
       let el = document.getElementById('hawaScriptHud');
       if (!el) {
         el = document.createElement('div');
@@ -5873,6 +7512,13 @@ function playStart() {
       level: () => VoiceChat.level01()
     },
     clearHud() { const el = document.getElementById('hawaScriptHud'); if (el) { el.innerHTML = ''; el.style.display = 'none'; } },
+    get allowScriptSpawn() { return !!S.allowScriptSpawn; },
+    setScriptSpawn(x, y, z) {
+      if (!S.allowScriptSpawn || !RT) return false;
+      RT.scriptSpawn = { x: +x || 0, y: +y || 0, z: +z || 0 };
+      return true;
+    },
+    clearScriptSpawn() { if (RT) RT.scriptSpawn = null; },
     // تحكم الكاميرا والجرافيكس والسماء
     setCameraDist(d) { if (RT) RT.dist = clamp(+d || 5, 2, 25); },
     setCameraOffset(x, y, z) { if (RT) { RT.off = RT.off || new T.Vector3(); RT.off.set(x || 0, y || 0, z || 0); } },
@@ -6015,7 +7661,23 @@ function playStop() {
   setTool(S.tool); sel(null); camUpdate(); updModes(); refNames = null; syncMarks();
   try { endDrag(false); mv = null; MOB.resetBuildTouch(); MOB.detect(); MOB.syncPads(); setTimeout(() => { try { MOB.detect(); MOB.syncPads(); resize(); } catch (_) {} }, 120); } catch (_) {}
 }
-function togglePlay() { S.mode === 'play' ? playStop() : playStart(); }
+/* الاختبار بأنيميشن «لقطة شاشة» احترافي (HawaFX) — لو مش متاح يشتغل عادي */
+function playStartFX() {
+  if (S.mode === 'play') return;
+  const FX = window.HawaFX;
+  if (!FX) { playStart(); return; }
+  if (FX.busy) return;
+  let snap = null;
+  try {
+    if (R && R.render) R.render(scene, cam);
+    const r = vp.getBoundingClientRect(), o = document.createElement('canvas');
+    o.width = cv.width; o.height = cv.height;
+    o.getContext('2d').drawImage(cv, 0, 0);
+    snap = {img: o, rect: {x: r.left, y: r.top, w: r.width, h: r.height}};
+  } catch (_) { snap = null; }
+  if (!FX.play('test', () => { try { playStart(); } catch (e) { console.error(e); } }, {snap})) playStart();
+}
+function togglePlay() { S.mode === 'play' ? playStop() : playStartFX(); }
 $('#bTest').onclick = togglePlay;
 const _pExit = $('#pExit'); if (_pExit) _pExit.onclick = playStop;
 
@@ -6078,7 +7740,7 @@ function play(dt) {
     if (!(p.x + r <= b.x0 || p.x - r >= b.x1 || p.z + r <= b.z0 || p.z - r >= b.z1 || p.y + h <= b.y0 || p.y >= b.y1)) try { k.onTouch(k.self, rt.game, dt); } catch (e) { k.onTouch = null; fail(k.name, e); }
   }
   for (const o of rt.rs) { const ex = o.pos[0] - p.x, ez = o.pos[2] - p.z; if (ex * ex + ez * ez < 2 && Math.abs(o.pos[1] - p.y) < 2) rt.cur = o; }
-  if (p.y < -40) respawnP();
+  // السقوط تحت العالم: لا رجوع تلقائي — الملفات البرمجية تتحكم عبر game.respawn()
 
   const fd = !!K.KeyF, fEdge = fd && !rt.fPrev; rt.fPrev = fd;
   let prompt = '';
@@ -6126,6 +7788,7 @@ function frame(now) {
   else {
     if (keyDown('KeyW') || keyDown('KeyA') || keyDown('KeyS') || keyDown('KeyD') || keyDown('ArrowUp') || keyDown('ArrowDown') || keyDown('ArrowLeft') || keyDown('ArrowRight') || keyDown('Space') || keyDown('ShiftLeft') || keyDown('ShiftRight')) fly(dt);
     ghostUpdate();
+    if ((fc & 15) === 0) sweepScriptUI();
     if (SELH) SELH.update();
     if ((++mkc & 7) === 0) syncMarks();
   }
@@ -6150,6 +7813,16 @@ window.HAWA = {S};
 
 
 /* ---------- موبايل: لمس + تخطيط ---------- */
+
+/* تفويض زر عارض الوحدة الافتراضية من أي مكان (مرة واحدة) */
+document.addEventListener('click', e => {
+  const b = e.target && e.target.closest && e.target.closest('[data-unit-view], .unit-viewer-btn, #sUnitView');
+  if (!b) return;
+  e.preventDefault();
+  e.stopPropagation();
+  try { openUnitViewer(); } catch (err) { console.warn(err); }
+}, true);
+
 const MOB = {
   on: false,
   joy: {x: 0, y: 0, active: false, pid: null},
@@ -6187,7 +7860,7 @@ const MOB = {
     const tBtn = document.getElementById('mTestBtn');
     if (dBtn) dBtn.onclick = () => this.toggleSheet('dock');
     if (sBtn) sBtn.onclick = () => this.toggleSheet('side');
-    if (tBtn) tBtn.onclick = () => { try { if (S.mode !== 'play') playStart(); } catch (_) {} };
+    if (tBtn) tBtn.onclick = () => { try { if (S.mode !== 'play') playStartFX(); } catch (_) {} };
     const mSt = document.getElementById('mStorageBtn');
     if (mSt) mSt.onclick = () => { try { showStorageInfo(); } catch (_) {} };
     this._bindJoy();
@@ -6245,21 +7918,20 @@ const MOB = {
       const bh = document.getElementById('mBuildHint'); if (bh) bh.hidden = true;
       return;
     }
-    const play = !!this.playOn;      // مش S.mode — لأن setPlay بيتنادى قبل/بعد تغيير الوضع
-    const scriptJoy = document.getElementById('hawa-mobile-joystick');
+    const play = !!this.playOn;
     const mt = document.getElementById('mTouch');
-    // جوystick ثابت في البناء واللعب — يختفي لو سكربت جوystick ظاهر في اللعب
-    if (mt) mt.hidden = !!(play && scriptJoy);
+    // وضع اللعب: لا جوystick/قفز/جري افتراضي — يظهر فقط لو الملفات البرمجية استدعت game.touch.show(...)
+    // وضع البناء: الجوystick الافتراضي للحركة/الكاميرا يبقى
+    if (mt) mt.hidden = !!play;
     const mb = document.getElementById('mBar');
     if (mb) mb.hidden = !!play;
     const bh = document.getElementById('mBuildHint');
     if (bh) bh.hidden = !!play;
-    // أزرار اليمين: في البناء = طلوع/نزول للكاميرا، في اللعب = قفز/جري
     const jb = document.getElementById('mJump'), rb = document.getElementById('mRun');
-    if (jb && rb) {
-      jb.innerHTML = play ? 'قفز' : '<b>▲</b><span>طلوع</span>';
-      rb.innerHTML = play ? 'جري' : '<b>▼</b><span>نزول</span>';
-      jb.setAttribute('aria-label', play ? 'قفز' : 'طلوع'); rb.setAttribute('aria-label', play ? 'جري' : 'نزول');
+    if (jb && rb && !play) {
+      jb.innerHTML = '<b>▲</b><span>طلوع</span>';
+      rb.innerHTML = '<b>▼</b><span>نزول</span>';
+      jb.setAttribute('aria-label', 'طلوع'); rb.setAttribute('aria-label', 'نزول');
     }
   },
   _bindJoy() {
@@ -6321,6 +7993,13 @@ const MOB = {
     hold(run, 'ShiftLeft', 'run');
   },
   _bindPlayLook() {
+    // play-wheel-block: منع السكرول/الزوم في طبقة اللعب
+    const playLayer = document.getElementById('play');
+    if (playLayer && !playLayer._hawaWheelBlock) {
+      playLayer._hawaWheelBlock = true;
+      playLayer.addEventListener('wheel', e => { e.preventDefault(); }, { passive: false });
+    }
+
     // النصف الأيمن من شاشة اللعب = تدوير كاميرا
     const play = document.getElementById('play');
     if (!play) return;
@@ -6385,6 +8064,7 @@ const MOB = {
       // إصبع على المشهد = تدوير كاميرا — يشتغل مع جوystick بإصبع تاني
       this.lookTouch = { x: t.clientX, y: t.clientY, t: performance.now(), moved: 0, id: t.identifier };
       this.buildTouch = this.lookTouch;
+      if (S.tool === 'place' || S.tool === 'respawn' || S.tool === 'online_spawn') { S.tr = { x: t.clientX, y: t.clientY }; S.dirty = 1; }
     }, { passive: false });
     cv.addEventListener('touchmove', e => {
       if (!this.on || S.mode !== 'build') return;
@@ -6415,6 +8095,7 @@ const MOB = {
           OB.pitch = clamp(OB.pitch + dy * 0.005, -1.5, 1.5);
           this.lookTouch.x = t.clientX;
           this.lookTouch.y = t.clientY;
+          if (S.tool === 'place' || S.tool === 'respawn' || S.tool === 'online_spawn') { S.tr = { x: t.clientX, y: t.clientY }; S.tapArm = null; }
           camUpdate();
           e.preventDefault();
         }
@@ -6436,7 +8117,21 @@ const MOB = {
             this.lookTouch = null;
             this.buildTouch = null;
             if (bt.moved < 12 && performance.now() - bt.t < 320) {
-              try { click({ clientX: t.clientX, clientY: t.clientY, button: 0 }); } catch (_) {}
+              const placing = !S.pick && (S.tool === 'place' || S.tool === 'respawn' || S.tool === 'online_spawn');
+              if (placing) {
+                // موبايل: اللمسة الأولى بتحرّك المعاينة الشبحية، واللمسة التانية على نفس المكان بتثبّت الكائن
+                const pt = { x: t.clientX, y: t.clientY }, a = S.tapArm, now = performance.now();
+                if (a && Math.hypot(a.x - pt.x, a.y - pt.y) < 40 && now - a.t < 9000) {
+                  S.tapArm = null; S.tr = pt;
+                  try { click({ clientX: t.clientX, clientY: t.clientY, button: 0 }); } catch (_) {}
+                  tipNow('');
+                } else {
+                  S.tapArm = { x: pt.x, y: pt.y, t: now }; S.tr = pt; S.dirty = 1;
+                  tipNow('👻 المعاينة هنا — اضغط تاني على نفس المكان للتثبيت', 3500);
+                }
+              } else {
+                try { click({ clientX: t.clientX, clientY: t.clientY, button: 0 }); } catch (_) {}
+              }
             }
             break;
           }
@@ -6541,20 +8236,43 @@ function boot() {
   $$('[data-ic]').forEach(e => e.innerHTML = ic(e.dataset.ic));
   attach(vp);
   let d = null;
-  if (typeof window.HAWA_EMBEDDED_GAME === 'object' && window.HAWA_EMBEDDED_GAME && Array.isArray(window.HAWA_EMBEDDED_GAME.objs)) {
-    d = window.HAWA_EMBEDDED_GAME;
-  } else {
-    try {
-      const ss = sessionStorage.getItem('hawa_game');
-      if (ss) d = JSON.parse(ss);
-    } catch (e) {}
-    // لا تحميل من localStorage — المصدر مجلد الجهاز فقط
-    if (!d) d = null;
-  }
+  const emb = (typeof window.HAWA_EMBEDDED_GAME === 'object' && window.HAWA_EMBEDDED_GAME && Array.isArray(window.HAWA_EMBEDDED_GAME.objs)) ? window.HAWA_EMBEDDED_GAME : null;
+  // لو اللعبة اتفتحت من اللونشر (فيه meta) نفضّل الملف اللي اترفع على المضمّن
+  let fromLauncher = false;
+  try { fromLauncher = !!sessionStorage.getItem('hawa_play_meta'); } catch (e) {}
+  const readSession = () => {
+    if (window.__HAWA_IDB_GAME && window.__HAWA_IDB_GAME.objs) return window.__HAWA_IDB_GAME;
+    try { const ss = sessionStorage.getItem('hawa_game'); if (ss) return JSON.parse(ss); } catch (e) {}
+    return null;
+  };
+  if (emb && !fromLauncher) d = emb;
+  else d = readSession() || emb || null;
   if (d && d.objs) {
     clearAll();
-    S.scripts = (d.scripts || []).map(s => ({id: +s.id, name: s.name, code: s.code, enabled: s.enabled != null ? !!s.enabled : !!s.global}));
-    S.sdefs = (d.sdefs || []).map(x => ({id: +x.id, name: x.name, code: x.code}));
+    // الإعدادات والوسائط والشخصية — لازم تتطبّق بعد clearAll (اللي بيصفّر الوسائط)
+    try {
+      S.media = (d.media && typeof d.media === 'object') ? JSON.parse(JSON.stringify(d.media)) : {};
+      S.mediaOrder = Array.isArray(d.mediaOrder) ? d.mediaOrder.slice() : Object.keys(S.media);
+      S.mid = Math.max(1, +d.mid || 1);
+      for (const id of Object.keys(S.media)) { const m = S.media[id]; if (m && !m.kind) m.kind = mediaKindFrom(m.mime, m.name); }
+      const pn = d.playNet || (d.meta && d.meta.playNet);
+      S.playNet = (pn === 'online' || pn === 'offline') ? pn : null;
+      S.allowScriptSpawn = !!d.allowScriptSpawn;
+      if (d.player && typeof d.player === 'object') {
+        window.__HAWA_PLAYER_LOCKED = true;
+        for (const k in PCFG) delete PCFG[k];
+        Object.assign(PCFG, JSON.parse(JSON.stringify(PLAYER_DEF)), d.player);
+      }
+    } catch (e) { console.warn('apply game settings', e); }
+    S.scripts = (d.scripts || []).map(s => ({
+      id: +s.id, name: s.name, code: s.code,
+      enabled: s.enabled != null ? !!s.enabled : !!s.global,
+      p: (s.p && typeof s.p === 'object') ? JSON.parse(JSON.stringify(s.p)) : {}
+    }));
+    S.sdefs = (d.sdefs || []).map(x => ({
+      id: +x.id, name: x.name, code: x.code,
+      p: (x.p && typeof x.p === 'object') ? JSON.parse(JSON.stringify(x.p)) : {}
+    }));
     S.did = Math.max(1, ...(S.sdefs.map(x => x.id + 1).concat([1])));
     S.sid = Math.max(1, ...(S.scripts.map(x => x.id + 1).concat([1])));
     for (const r of d.objs) {
@@ -6579,11 +8297,39 @@ function boot() {
     const bar = document.getElementById('bar');
     const app = document.getElementById('app');
     if (bar) bar.style.display = 'none';
-    setTimeout(async () => { try { playStart(); } catch (e) { console.error(e); await uiAlert('فشل بدء اللعب: ' + (e.message || e)); } }, 80);
+    setTimeout(async () => {
+      try {
+        if (!(d && d.objs && d.objs.length)) {
+          await uiAlert('مفيش بيانات لعبة تتشغّل.\nارجع لصفحة «فتح اللعبة» وارفع ملف اللعبة تاني.');
+          location.href = 'game.html';
+          return;
+        }
+        playStart();
+      } catch (e) { console.error(e); await uiAlert('فشل بدء اللعب: ' + (e.message || e)); }
+    }, 80);
   }
 }
 (async function bootAsync() {
   let st = false;
+  // وضع اللعب فقط (play.html): ممنوع نلمس تخزين مشروع البناء —
+  // وإلا هيتحمّل المشروع المحفوظ فوق اللعبة المرفوعة ويرجّعك للبناء.
+  if (window.HAWA_PLAY_ONLY) {
+    try { StoreFS.handle = null; StoreFS.mode = 'none'; } catch (_) {}
+    try {
+      if (!(window.HAWA_EMBEDDED_GAME && window.HAWA_EMBEDDED_GAME.objs) && !sessionStorage.getItem('hawa_game')) {
+        window.__HAWA_IDB_GAME = await new Promise(res => {
+          try {
+            const r = indexedDB.open('hawa_play_tmp', 1);
+            r.onupgradeneeded = () => r.result.createObjectStore('g');
+            r.onsuccess = () => { const q = r.result.transaction('g').objectStore('g').get('game'); q.onsuccess = () => res(q.result || null); q.onerror = () => res(null); };
+            r.onerror = () => res(null);
+          } catch (_) { res(null); }
+        });
+      }
+    } catch (_) {}
+    boot();
+    return;
+  }
   try { st = await StoreFS.init(); } catch (e) { console.warn(e); }
   boot();
   if (st === true) {

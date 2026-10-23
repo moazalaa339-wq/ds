@@ -74,9 +74,9 @@ def _read_json(handler):
 
 
 # ---- Project storage (تخزين المشروع تلقائي: مكان ثابت لكل مستخدم، مستقل عن البورت والمتصفح ونسخة المحرك) ----
-# الافتراضي: ~/HawaEngineData/project   (تقدر تغيّره بمتغير البيئة HAWA_DATA)
-# لما تبعت المحرك لحد (أو تحدّث نسخته) مشروعه بيفضل موجود لأنه برّه مجلد المحرك.
-DATA_DIR = os.path.abspath(os.environ.get("HAWA_DATA") or os.path.join(os.path.expanduser("~"), "HawaEngineData"))
+# الافتراضي: <مجلد المحرك>/hawa_data/project — كل نسخة محرك لها تخزينها الخاص جوه مجلدها،
+# ومفيش أي قراءة من مجلد المستخدم أو من نسخة تانية على الجهاز. (تقدر تغيّره بمتغير البيئة HAWA_DATA)
+DATA_DIR = os.path.abspath(os.environ.get("HAWA_DATA") or os.path.join(ROOT, "hawa_data"))
 PROJECT_DIR = os.path.join(DATA_DIR, "project")
 MAX_WRITE = 512 * 1024 * 1024
 
@@ -437,6 +437,28 @@ class QuietHandler(SimpleHTTPRequestHandler):
         ".html": "text/html",
     })
 
+    def translate_path(self, path):
+        p = SimpleHTTPRequestHandler.translate_path(self, path)
+        dead = os.path.join(ROOT, "__blocked__")
+        try:
+            rp = os.path.realpath(p)
+            root = os.path.realpath(ROOT)
+            if rp != root and not rp.startswith(root + os.sep):
+                return dead
+            data = os.path.realpath(DATA_DIR)
+            if rp == data or rp.startswith(data + os.sep):
+                return dead
+            rel = os.path.relpath(rp, root).replace("\\", "/")
+            if rel != "." and (rel.split("/")[0].startswith(".") or rel.lower().endswith((".py", ".pyc"))):
+                return dead
+        except Exception:
+            return dead
+        return p
+
+    def list_directory(self, path):
+        self.send_error(404, "Not found")
+        return None
+
     def log_message(self, fmt, *args):
         try:
             sys.stderr.write("%s - %s\n" % (self.address_string(), fmt % args))
@@ -474,12 +496,33 @@ class QuietHandler(SimpleHTTPRequestHandler):
         self.send_error(405)
 
 
+def _port_busy(port):
+    """True لو في أي برنامج (سيرفر محرك تاني مثلاً) بيرد على البورت ده."""
+    for host in ("127.0.0.1", "localhost"):
+        c = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            c.settimeout(0.25)
+            if c.connect_ex((host, port)) == 0:
+                return True
+        except Exception:
+            pass
+        finally:
+            try:
+                c.close()
+            except Exception:
+                pass
+    return False
+
+
 def pick_port(start=8765, tries=80):
     for i in range(tries):
         port = start + i
+        if _port_busy(port):
+            continue
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
-            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            if os.name == "nt" and hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+                s.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
             s.bind(("0.0.0.0", port))
             s.close()
             return port
@@ -578,9 +621,20 @@ def main():
     print("========================================")
     print("")
 
-    open_browser(build_url)
+    # Electron / embedded hosts set HAWA_NO_BROWSER=1 to avoid opening Chrome/Edge
+    if os.environ.get("HAWA_NO_BROWSER", "").strip() not in ("1", "true", "yes"):
+        open_browser(build_url)
 
-    _server = ThreadingHTTPServer(("0.0.0.0", port), QuietHandler)
+    class _OwnServer(ThreadingHTTPServer):
+        allow_reuse_address = False
+        def server_bind(self):
+            if os.name == "nt" and hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+                try:
+                    self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+                except Exception:
+                    pass
+            ThreadingHTTPServer.server_bind(self)
+    _server = _OwnServer(("0.0.0.0", port), QuietHandler)
     try:
         _server.daemon_threads = True
     except Exception:

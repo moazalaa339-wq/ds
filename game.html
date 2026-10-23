@@ -5,49 +5,85 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Hawa Game Launcher</title>
 <style>
+:root{--bg:#06050a;--pan:#0e0c14;--card:#1b1726;--tx:#f4efe4;--mu:#a199ae;--tq:#2de2c4;--tq2:#14b8a0;--au:#ffbe3d;--au2:#ff9d1c;
+  --line:rgba(255,214,150,.12);--line2:rgba(255,214,150,.26);--leaf:22px 4px 22px 4px;--leaf-s:12px 3px 12px 3px;
+  --brk:linear-gradient(var(--au),var(--au)) left top/22px 3px no-repeat,linear-gradient(var(--au),var(--au)) left top/3px 22px no-repeat,
+        linear-gradient(var(--tq),var(--tq)) right bottom/22px 3px no-repeat,linear-gradient(var(--tq),var(--tq)) right bottom/3px 22px no-repeat}
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:system-ui,Segoe UI,Tahoma,sans-serif;background:#0a1220;color:#e2e8f0;min-height:100vh;display:flex;align-items:center;justify-content:center}
-.wrap{width:min(520px,94vw);background:#111b2e;border:1px solid #2a3a5a;border-radius:18px;padding:28px;box-shadow:0 20px 60px rgba(0,0,0,.45)}
-h1{font-size:22px;margin-bottom:6px}
-.sub{color:#94a3b8;font-size:13px;margin-bottom:22px;line-height:1.6}
+html,body{min-height:100%}
+body{font:14px/1.55 Cairo,Tahoma,"Segoe UI",sans-serif;color:var(--tx);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px 14px;
+  background:radial-gradient(900px 520px at 10% -10%,rgba(255,190,61,.12),transparent 60%),radial-gradient(900px 560px at 108% 112%,rgba(45,226,196,.13),transparent 60%),
+  repeating-linear-gradient(45deg,rgba(255,214,150,.024) 0 1px,transparent 1px 18px),var(--bg);background-attachment:fixed}
+.wrap{position:relative;width:min(560px,100%);padding:26px 26px 24px;border-radius:var(--leaf);
+  background:var(--brk),linear-gradient(180deg,rgba(255,255,255,.04),transparent 180px),rgba(14,12,20,.94);
+  border:1px solid var(--line2);box-shadow:0 34px 80px rgba(0,0,0,.65);animation:rise .7s cubic-bezier(.16,1,.3,1) both}
+@keyframes rise{from{opacity:0;transform:translateY(26px)}to{opacity:1;transform:none}}
+.top{display:flex;align-items:center;gap:12px;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid var(--line)}
+.home{display:inline-flex;align-items:center;gap:8px;height:42px;padding:0 16px;border-radius:var(--leaf-s);font-weight:800;font-size:13px;color:#ffe2a6;text-decoration:none;
+  background:linear-gradient(180deg,rgba(255,190,61,.18),rgba(255,190,61,.04));border:1px solid rgba(255,190,61,.55);transition:box-shadow .15s,color .15s;flex:none}
+.home:hover{box-shadow:0 0 0 1px var(--au),0 0 22px rgba(255,190,61,.3);color:#fff}
+.home span{font-size:20px;line-height:1;color:var(--au)}
+h1{flex:1;display:flex;align-items:center;gap:12px;font-size:20px;font-weight:900;letter-spacing:.4px}
+h1::before{content:"";width:11px;height:11px;transform:rotate(45deg);background:var(--tq);box-shadow:0 0 14px var(--tq);border-radius:2px;flex:none}
+h1 b{color:var(--tq);font-weight:900}
+.sub{display:none}
+
 .modes{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px}
-.modes button{padding:18px 12px;border-radius:14px;border:1px solid #2a3a5a;background:#0b1424;color:#e2e8f0;font:inherit;font-weight:700;cursor:pointer;transition:.15s}
-.modes button:hover{border-color:#38d9f5;background:#132033}
-.modes button.on{border-color:#38d9f5;background:rgba(56,217,245,.12);color:#7dd3fc}
+.modes button{position:relative;display:flex;flex-direction:column;align-items:center;gap:6px;padding:20px 12px 16px;border-radius:var(--leaf-s);
+  border:1px solid var(--line2);background:linear-gradient(180deg,#1b1726,#110e18);color:var(--tx);font:inherit;font-weight:800;font-size:15px;cursor:pointer;transition:.18s;overflow:hidden}
+.modes button::after{content:"";position:absolute;inset-inline:0;bottom:0;height:3px;background:linear-gradient(90deg,transparent,var(--tq),transparent);opacity:0;transition:opacity .15s}
+.modes button:hover{border-color:rgba(45,226,196,.6);transform:translateY(-2px)}
+.modes button.on{border-color:var(--tq);background:linear-gradient(180deg,rgba(45,226,196,.22),rgba(45,226,196,.04));color:#d9fff7;box-shadow:0 0 0 1px var(--tq),0 14px 34px -10px rgba(45,226,196,.55)}
+.modes button.on::after{opacity:1}
+
 .panel{display:none;flex-direction:column;gap:12px}
 .panel.on{display:flex}
-label{font-size:12px;color:#94a3b8;font-weight:600}
-input,select{width:100%;padding:10px 12px;border-radius:10px;border:1px solid #2a3a5a;background:#0b1424;color:#e2e8f0;font:inherit}
-input:focus,select:focus{outline:none;border-color:#38d9f5}
+label{font-size:12px;color:var(--au);font-weight:800;letter-spacing:.3px}
+input,select{width:100%;padding:10px 14px;border-radius:var(--leaf-s);border:1px solid #3a3150;background:#0a0810;color:var(--tx);font:inherit;transition:border-color .15s,box-shadow .15s}
+input:focus,select:focus{outline:none;border-color:var(--tq);box-shadow:0 0 0 3px rgba(45,226,196,.15)}
+input[type=file]{padding:9px 12px;cursor:pointer;color:var(--mu)}
+input[type=file]::file-selector-button{margin-inline-end:12px;padding:6px 14px;border:1px solid rgba(45,226,196,.5);border-radius:8px 2px 8px 2px;background:rgba(45,226,196,.14);color:#c8fff4;font:inherit;font-weight:700;cursor:pointer}
+input[type=checkbox]{width:18px;height:18px;accent-color:var(--tq)}
 .row{display:flex;gap:8px;flex-wrap:wrap}
-.row button,.btn{flex:1;padding:11px 14px;border-radius:10px;border:1px solid #2a3a5a;background:#1a2740;color:#e2e8f0;font:inherit;font-weight:700;cursor:pointer}
-.row button.pri,.btn.pri{background:#0ea5e9;border-color:#0ea5e9;color:#062033}
-.row button.red{background:#b91c1c;border-color:#b91c1c}
-.row button:hover,.btn:hover{filter:brightness(1.08)}
-.msg{font-size:12.5px;color:#94a3b8;min-height:18px;line-height:1.5}
-.msg.ok{color:#4ade80}.msg.err{color:#f87171}
+.row button,.btn{flex:1;min-height:44px;padding:11px 16px;border-radius:var(--leaf-s);border:1px solid var(--line2);background:linear-gradient(180deg,#1d1828,#130f1a);color:var(--tx);font:inherit;font-weight:800;cursor:pointer;transition:.15s}
+.row button:hover,.btn:hover{border-color:var(--tq);transform:translateY(-1px)}
+.row button.on{border-color:var(--tq);background:rgba(45,226,196,.16);color:#d9fff7}
+.row button.pri,.btn.pri{background:linear-gradient(135deg,#5bf5da,#14b8a0);border-color:#8bffe8;color:#03211a;box-shadow:0 12px 30px -8px rgba(45,226,196,.6)}
+.row button.pri:hover{filter:brightness(1.08)}
+.row button.red{background:linear-gradient(135deg,#d62f55,#8a1730);border-color:#ff8aa3;color:#fff}
+.msg{font-size:12.5px;color:var(--mu);min-height:0;line-height:1.5}
+.msg:empty{display:none}
+.msg.ok{color:#5ff0a4}.msg.err{color:#ff8aa3}
 .lobby{display:none;flex-direction:column;gap:10px;margin-top:8px}
 .lobby.on{display:flex}
 .slots{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-.slot{background:#0b1424;border:1px dashed #2a3a5a;border-radius:12px;padding:14px 8px;text-align:center;min-height:88px}
-.slot.filled{border-style:solid;border-color:#38d9f5;background:rgba(56,217,245,.08)}
+.slot{background:#0a0810;border:1px dashed #3a3150;border-radius:var(--leaf-s);padding:14px 8px;text-align:center;min-height:92px}
+.slot.filled{border-style:solid;border-color:var(--tq);background:linear-gradient(180deg,rgba(45,226,196,.16),rgba(45,226,196,.03))}
 .slot .av{font-size:28px;margin-bottom:4px}
-.slot .nm{font-size:12px;font-weight:700}
-.slot .mut{font-size:11px;color:#64748b}
-.codebox{background:#0b1424;border:1px solid #2a3a5a;border-radius:10px;padding:10px;font-family:Consolas,monospace;font-size:13px;letter-spacing:1px;text-align:center;direction:ltr}
+.slot .nm{font-size:12px;font-weight:800}
+.slot .mut{font-size:11px;color:#7d7690}
+.codebox{background:#0a0810;border:1px solid rgba(255,190,61,.5);border-radius:var(--leaf-s);padding:12px;font-family:Consolas,monospace;font-size:14px;letter-spacing:2px;text-align:center;direction:ltr;color:#ffe2a6}
+.mic-opt{border-radius:var(--leaf-s)!important;border-color:#3a3150!important;background:#0a0810!important}
+
 #playRoot{position:fixed;inset:0;display:none;background:#000;z-index:50}
 #playRoot.on{display:block}
 #playRoot canvas{width:100%;height:100%;display:block}
-#hud{position:absolute;top:12px;left:12px;right:12px;display:flex;justify-content:space-between;pointer-events:none;z-index:2}
-#hud .chip{pointer-events:auto;background:rgba(7,12,22,.75);border:1px solid #2a3a5a;padding:7px 12px;border-radius:999px;font-size:13px;font-weight:700}
-#hud button{pointer-events:auto;cursor:pointer;border:0;background:#b91c1c;color:#fff;padding:7px 14px;border-radius:999px;font:inherit;font-weight:700}
-.fileok{color:#4ade80;font-size:12px}
+#hud{position:absolute;top:12px;left:12px;right:12px;display:flex;justify-content:space-between;align-items:center;gap:8px;pointer-events:none;z-index:2}
+#hud .chip{pointer-events:auto;background:rgba(10,8,15,.78);border:1px solid rgba(255,190,61,.45);color:#ffe2a6;padding:8px 16px;border-radius:999px 5px 999px 5px;font-size:13px;font-weight:800;backdrop-filter:blur(6px)}
+#hud .hbtns{display:flex;gap:8px}
+#hud button,#hud a{pointer-events:auto;cursor:pointer;border:1px solid rgba(255,138,163,.7);background:linear-gradient(135deg,#d62f55,#8a1730);color:#fff;padding:8px 18px;border-radius:5px 999px 5px 999px;font:inherit;font-weight:800;text-decoration:none;backdrop-filter:blur(6px)}
+#hud a.hh{border-color:rgba(255,190,61,.6);background:linear-gradient(180deg,rgba(255,190,61,.26),rgba(10,8,15,.85));color:#ffe2a6}
+.fileok{color:#5ff0a4;font-size:12px}
+@media (max-width:480px){.wrap{padding:20px 16px}.home i{display:none}}
 </style>
+<script src="hawa-fx.js"></script>
 </head>
 <body>
 <div class="wrap" id="ui">
-  <h1>𓂀 Hawa · فتح اللعبة</h1>
-  <p class="sub">اختار وضع اللعب. الأونلاين اختياري: <b>إنترنت (PeerJS)</b> أو <b>شبكة محلية LAN</b> عبر WebRTC وتبادل كود الرووم — حد أقصى 3 لاعبين.</p>
+  <div class="top">
+    <a class="home" id="gHome" href="index.html"><span>⌂</span><i>الرئيسية</i></a>
+    <h1><b>HAWA</b> · وضع اللعب</h1>
+  </div>
 
   <div class="modes">
     <button type="button" id="mOff" class="on">🏠 أوفلاين</button>
@@ -55,23 +91,23 @@ input:focus,select:focus{outline:none;border-color:#38d9f5}
   </div>
 
   <div class="panel on" id="pOff">
-    <label>ملف اللعبة (game.zip أو game.json) — اختياري لو فاضي هيستخدم آخر مشروع محفوظ</label>
+    <label>ملف اللعبة</label>
     <input type="file" id="offFile" accept=".zip,.json">
     <div class="msg" id="offMsg"></div>
     <div class="row"><button type="button" class="pri" id="btnOffPlay">▶ ابدأ أوفلاين</button></div>
   </div>
 
   <div class="panel" id="pOn">
-    <label>ملف اللعبة (مطلوب قبل إنشاء/انضمام)</label>
+    <label>ملف اللعبة</label>
     <input type="file" id="onFile" accept=".zip,.json">
     <div class="msg" id="onFileMsg"></div>
 
-    <label>نوع الشبكة (اختياري)</label>
+    <label>الشبكة</label>
     <div class="row" id="netTypeRow">
-      <button type="button" id="ntPeer" class="on" title="يحتاج إنترنت — كود PeerJS قصير زي المحرك الكبير">🌐 إنترنت (PeerJS)</button>
-      <button type="button" id="ntLan" title="نفس الواي فاي / LAN — WebRTC عبر سيرفر Hawa المحلي، من غير نت">📡 شبكة محلية (LAN)</button>
+      <button type="button" id="ntPeer" class="on">🌐 إنترنت (PeerJS)</button>
+      <button type="button" id="ntLan">📡 شبكة محلية (LAN)</button>
     </div>
-    <div class="msg" id="netTypeHint">إنترنت: كود قصير عبر PeerJS (يحتاج نت للربط فقط). اللعب نفسه P2P.</div>
+    <div class="msg" id="netTypeHint"></div>
     <div class="msg ok" id="lanInfo" style="display:none"></div>
 
     <div class="row">
@@ -86,21 +122,21 @@ input:focus,select:focus{outline:none;border-color:#38d9f5}
       <input id="hostName" placeholder="المضيف" maxlength="20" value="مضيف">
       <label class="mic-opt" style="display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none;padding:10px 12px;border-radius:10px;border:1px solid #2a3a5a;background:#0b1424">
         <input type="checkbox" id="roomMic" checked style="width:18px;height:18px;accent-color:#22c55e;cursor:pointer">
-        <span style="flex:1;line-height:1.4"><b style="color:#e2e8f0">🎙 تفعيل المايك في الرووم</b><br><span style="font-size:11.5px;color:#94a3b8;font-weight:500">لو مفعّل، هيظهر زر المايك (B) لكل اللاعبين أثناء اللعب ويقدروا يسمعوا بعض</span></span>
+        <span style="flex:1;line-height:1.4"><b style="color:#e2e8f0">🎙 تفعيل المايك في الرووم</b></span>
       </label>
       <div class="msg" id="createMsg"></div>
       <div class="row"><button type="button" class="pri" id="btnDoCreate">إنشاء وبدء اللوبي</button></div>
       <div id="hostCodeBox" style="display:none">
-        <label>كود الرووم (ابعته لأصحابك — ينضمّوا بيه)</label>
+        <label>كود الرووم</label>
         <div class="codebox" id="hostCode">—</div>
-        <div class="msg" id="hostCodeHelp">اللاعبين يحطوا الكود ده عندهم عشان ينضموا. في وضع LAN لازم يفتحوا نفس رابط السيرفر المحلي (من جهاز المضيف).</div>
+        <div class="msg" id="hostCodeHelp"></div>
       </div>
     </div>
 
     <div id="joinBox" style="display:none;flex-direction:column;gap:10px">
-      <label>اسم الرووم (بالظبط)</label>
+      <label>اسم الرووم</label>
       <input id="joinRoomName" placeholder="اسم الرووم" maxlength="40">
-      <label>كود الشبكة من المضيف</label>
+      <label>كود الشبكة</label>
       <input id="joinCode" placeholder="الصق الكود هنا" maxlength="64" style="direction:ltr;text-align:left">
       <label>اسمك</label>
       <input id="joinName" placeholder="لاعب" maxlength="20" value="لاعب">
@@ -124,7 +160,7 @@ input:focus,select:focus{outline:none;border-color:#38d9f5}
 <div id="playRoot">
   <div id="hud">
     <div class="chip" id="pName">—</div>
-    <button type="button" id="btnExit">خروج</button>
+    <div class="hbtns"><a class="hh" href="index.html">⌂ الرئيسية</a><button type="button" id="btnExit">خروج</button></div>
   </div>
 </div>
 
@@ -175,12 +211,30 @@ async function loadGameFile(file) {
   throw new Error('صيغة غير مدعومة — استخدم .zip أو .json');
 }
 
+function detectGamePlayNet(data) {
+  if (!data) return null;
+  if (data.playNet === 'online' || data.playNet === 'offline') return data.playNet;
+  if (data.meta && (data.meta.playNet === 'online' || data.meta.playNet === 'offline')) return data.meta.playNet;
+  if ((data.onlineSpawns || []).length > 0) return 'online';
+  if ((data.objs || []).some(o => o && o.type === 'online_spawn')) return 'online';
+  return 'offline';
+}
+
+
 $('#offFile').onchange = async e => {
   const f = e.target.files[0]; if (!f) return;
   try {
-    gameData = await loadGameFile(f);
+    const data = await loadGameFile(f);
+    const pn = detectGamePlayNet(data);
+    if (pn === 'online') {
+      gameData = null;
+      $('#offMsg').className = 'msg err';
+      $('#offMsg').textContent = '⛔ هذا الملف مخصّص للأونلاين — مش هيتشغّل في وضع الأوفلاين. حوّله من مشروع أوفلاين أو استخدم تبويب الأونلاين.';
+      return;
+    }
+    gameData = data;
     $('#offMsg').className = 'msg ok';
-    $('#offMsg').textContent = '✔ تم التعرف: «' + (gameData.name || 'بدون اسم') + '» · ' + (gameData.objs||[]).length + ' كائن';
+    $('#offMsg').textContent = '✔ تم التعرف (أوفلاين): «' + (gameData.name || 'بدون اسم') + '» · ' + (gameData.objs||[]).length + ' كائن';
   } catch (err) {
     gameData = null;
     $('#offMsg').className = 'msg err';
@@ -190,9 +244,23 @@ $('#offFile').onchange = async e => {
 $('#onFile').onchange = async e => {
   const f = e.target.files[0]; if (!f) return;
   try {
-    gameData = await loadGameFile(f);
+    const data = await loadGameFile(f);
+    const pn = detectGamePlayNet(data);
+    if (pn === 'offline') {
+      gameData = null;
+      $('#onFileMsg').className = 'msg err';
+      $('#onFileMsg').textContent = '⛔ هذا الملف مخصّص للأوفلاين — مش هيتشغّل في وضع الأونلاين. حوّل المشروع كأونلاين أو استخدم تبويب الأوفلاين.';
+      return;
+    }
+    if (!(data.onlineSpawns && data.onlineSpawns.length)) {
+      gameData = null;
+      $('#onFileMsg').className = 'msg err';
+      $('#onFileMsg').textContent = '⛔ ملف أونلاين من غير نقاط أونلاين — أضف نقاط أونلاين في المحرّر ثم حوّل اللعبة من جديد.';
+      return;
+    }
+    gameData = data;
     $('#onFileMsg').className = 'msg ok fileok';
-    $('#onFileMsg').textContent = '✔ تم التعرف على الملف وصالح للعب · اسم اللعبة: «' + (gameData.name || 'بدون اسم') + '» · نقاط أونلاين: ' + ((gameData.onlineSpawns||[]).length);
+    $('#onFileMsg').textContent = '✔ تم التعرف (أونلاين): «' + (gameData.name || 'بدون اسم') + '» · نقاط أونلاين: ' + ((gameData.onlineSpawns||[]).length);
   } catch (err) {
     gameData = null;
     $('#onFileMsg').className = 'msg err';
@@ -209,6 +277,11 @@ $('#btnOffPlay').onclick = async () => {
     } catch(_){}
   }
   if (!gameData) { $('#offMsg').className='msg err'; $('#offMsg').textContent='⚠ ارفع ملف اللعبة أو ابنِ مشروع في وضع البناء أولاً'; return; }
+  if (detectGamePlayNet(gameData) === 'online') {
+    $('#offMsg').className='msg err';
+    $('#offMsg').textContent='⛔ الملف أونلاين — مش هيتشغّل هنا. استخدم تبويب الأونلاين.';
+    return;
+  }
   startPlay({ mode: 'offline', data: gameData, slot: 1, players: [{id:'local', name:'لاعب', slot:1}] });
 };
 
@@ -222,16 +295,16 @@ function setNetType(t) {
   const hint = $('#netTypeHint');
   const lanInfo = $('#lanInfo');
   if (t === 'peerjs') {
-    hint.textContent = 'إنترنت (PeerJS): كود قصير زي المحرك الكبير — يحتاج نت للربط فقط، اللعب P2P.';
+    hint.textContent = '';
     lanInfo.style.display = 'none';
   } else {
-    hint.textContent = 'LAN: نفس الواي فاي. السيرفر المحلي بيولّد كود الرووم، والاتصال WebRTC من غير نت.';
+    hint.textContent = '';
     lanInfo.style.display = 'block';
     lanInfo.textContent = 'جاري قراءة عنوان الشبكة المحلية…';
     fetch('/api/lan/info').then(r => r.json()).then(j => {
       if (j && j.urls && j.urls.length) {
-        lanInfo.innerHTML = '✔ افتح على الأجهزة التانية: <b style="direction:ltr;display:inline-block">' + j.urls.map(u => u + '/game.html').join('</b> أو <b style="direction:ltr;display:inline-block">') + '</b>';
-      } else lanInfo.textContent = 'شغّل START_SERVER من جهاز المضيف وافتح نفس الرابط على الشبكة.';
+        lanInfo.innerHTML = '✔ <b style="direction:ltr;display:inline-block">' + j.urls.map(u => u + '/game.html').join('</b> أو <b style="direction:ltr;display:inline-block">') + '</b>';
+      } else lanInfo.textContent = '—';
     }).catch(() => {
       lanInfo.className = 'msg err';
       lanInfo.textContent = '⚠ سيرفر LAN مش متاح — شغّل START_SERVER.bat وخلي الأجهزة على نفس الواي فاي.';
@@ -399,10 +472,24 @@ $('#btnKick').onclick = () => {
 $('#btnLeave').onclick = () => location.reload();
 $('#btnExit').onclick = () => { if (net) try { net.destroy(); } catch(_){ } location.reload(); };
 
-function startPlay(opts) {
-  try {
-    sessionStorage.setItem('hawa_game', JSON.stringify(opts.data));
-  } catch (e) { console.warn(e); }
+async function startPlay(opts) {
+  let stored = false;
+  try { sessionStorage.setItem('hawa_game', JSON.stringify(opts.data)); stored = true; } catch (e) { console.warn('sessionStorage full → IndexedDB', e); }
+  if (!stored) {
+    // الألعاب اللي فيها وسائط كبيرة بتعدّي حد sessionStorage → نخزّنها في IndexedDB
+    try {
+      await new Promise((res, rej) => {
+        const r = indexedDB.open('hawa_play_tmp', 1);
+        r.onupgradeneeded = () => r.result.createObjectStore('g');
+        r.onsuccess = () => { const tx = r.result.transaction('g', 'readwrite'); tx.objectStore('g').put(opts.data, 'game'); tx.oncomplete = res; tx.onerror = () => rej(tx.error); };
+        r.onerror = () => rej(r.error);
+      });
+      try { sessionStorage.removeItem('hawa_game'); } catch (_) {}
+      stored = true;
+    } catch (e) { alert('مش قادر أجهّز اللعبة للتشغيل: ' + (e.message || e)); return; }
+  } else {
+    try { const r = indexedDB.open('hawa_play_tmp', 1); r.onsuccess = () => { try { r.result.close(); indexedDB.deleteDatabase('hawa_play_tmp'); } catch (_) {} }; r.onupgradeneeded = () => r.result.createObjectStore('g'); } catch (_) {}
+  }
   const netCfg = {
     mode: opts.mode || 'offline',
     transport: opts.transport || (opts.net && opts.net.transport) || netType || 'peerjs',

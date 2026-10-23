@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Hawa Engine · بناء</title>
+<link rel="stylesheet" href="style.css">
+<script src="hawa-fx.js"></script>
+</head>
+<body>
+
+<!-- ================= طبقة البناء (Build) ================= -->
+<div id="app">
+  <header id="bar">
+    <a id="bHome" class="home-btn" href="index.html" title="الرئيسية"><span>⌂</span><i>الرئيسية</i></a>
+    <div class="brand"><span class="logo"><em>𓂀</em></span><div><b>Hawa</b> Engine<small>v2.20 · بناء</small></div></div>
+
+    <nav class="tabs" id="secs">
+      <button data-sec="objects" class="on"><span>🏛</span>الكائنات</button>
+      <button data-sec="prog"><span>⚙</span>البرمجة</button>
+      <button data-sec="sobj"><span>🎮</span>الكائنات البرمجية</button>
+    </nav>
+
+    <div class="grow"></div>
+
+    <div class="seg seg-net">
+      <button id="bPlayNet" type="button" title="أونلاين / أوفلاين">❓<i>أونلاين / أوفلاين</i></button>
+      <button id="bMyFiles" type="button" title="ملفاتي">📁<i>ملفاتي</i></button>
+    </div>
+    <div class="seg seg-proj">
+      <button id="bSave" title="حفظ"><span data-ic="save"></span><i>حفظ</i></button>
+      <button id="bProjDown" title="تحميل المشروع"><span data-ic="save"></span><i>تحميل</i></button>
+      <button id="bProjUp" title="رفع المشروع"><span data-ic="load"></span><i>رفع</i></button>
+    </div>
+    <details class="menu" id="barMenu">
+      <summary title="المزيد"><span>⋯</span><i>المزيد</i></summary>
+      <div class="menu-pop">
+        <button id="bStorage" title="عرض التخزين">💾<i>عرض التخزين</i></button>
+        <button id="bWipe" class="danger-btn" title="حذف الكلي">🗑<i>حذف الكلي</i></button>
+      </div>
+    </details>
+    <button id="bConvert" class="go convert-btn" type="button" title="تحويل المشروع إلى لعبة كاملة">📦<i>تحويل إلى لعبة</i></button>
+    <button id="bTest" class="go" title="اختبر (P)"><span data-ic="play"></span>اختبر</button>
+    <button id="bFullscreen" type="button" title="ملء الشاشة">⛶</button>
+  </header>
+
+  <!-- شريط الأدوات الجانبي -->
+  <nav id="rail">
+    <div class="rail-group" id="tools">
+      <button data-tool="select" class="on" title="تحديد"><span data-ic="cursor"></span></button>
+      <button data-tool="place" title="وضع"><span data-ic="plus"></span></button>
+      <button data-tool="delete" title="حذف"><span data-ic="trash"></span></button>
+      <button data-tool="boxdel" title="حذف محيطي"><span data-ic="marquee"></span></button>
+    </div>
+    <div class="rail-group">
+      <button id="bFly" title="طيران"><span data-ic="fly"></span></button>
+      <button id="bSpawns" title="نقط البداية"><span data-ic="flag"></span><span class="snap-l" id="spawnN">0</span></button>
+      <button id="bSnap" title="الشبكة"><span data-ic="grid"></span><span class="snap-l">0.5</span></button>
+      <button id="bCoordRail" title="الإحداثيات"><span data-ic="grid"></span></button>
+    </div>
+    <div class="rail-group bottom">
+      <button id="bPar" class="on" title="اللوحات"><span data-ic="panel"></span></button>
+    </div>
+  </nav>
+
+  <!-- لوحة الأقسام اليسرى -->
+  <aside id="dock">
+    <div class="dock-head"><span id="dockTitle">الكائنات</span><button type="button" class="m-close" data-m-close aria-label="إغلاق">✕</button></div>
+    <div id="mSecs" class="m-secs">
+      <button type="button" data-sec="objects" class="on"><span>🏛</span>الكائنات</button>
+      <button type="button" data-sec="prog"><span>⚙</span>البرمجة</button>
+      <button type="button" data-sec="sobj"><span>🎮</span>برمجية</button>
+    </div>
+
+    <div id="catP">
+      <div class="search"><span data-ic="search"></span><input id="q" placeholder="ابحث عن كائن"></div>
+      <div id="grid"></div>
+    </div>
+
+    <div id="progP" hidden>
+      <div class="sub"><span>ملفات البرمجة</span><span id="pCount" class="mut">0</span></div>
+      <div class="row">
+        <button id="pNew" class="pri">＋ ملف جديد</button>
+        <button id="pUp">⬆ رفع</button>
+        <button id="pAuto" title="تلقائي">⬇</button>
+      </div>
+      <div id="pList"></div>
+    </div>
+
+    <div id="sobjP" hidden>
+      <div class="sub"><span>كائنات برمجية</span><span id="sCount" class="mut">0</span></div>
+      <div class="row sobj-toolbar">
+        <button id="sNew" class="pri">＋ كائن جديد</button>
+        <button id="sUp">⬆ رفع</button>
+        <button id="sAuto" title="تلقائي">⬇</button>
+        <button type="button" id="sUnitView" class="unit-viewer-btn" title="عارض الوحدة الافتراضية — 1 وحدة = 1 متر">عارض الوحده الافتراضيه</button>
+      </div>
+      <div id="sList"></div>
+    </div>
+  </aside>
+
+  <!-- منطقة العرض -->
+  <main id="vp">
+    <canvas id="cv"></canvas>
+
+    <div id="modeChip" class="chip-top">🏗 بناء</div>
+    <div id="marqueeBox" hidden></div>
+
+    <div id="gz" hidden>
+      <div class="gz-row">
+        <div class="gseg">
+          <button data-g="move" class="on" title="نقل"><span class="ico" data-ic="move"></span><i>نقل</i></button>
+          <button data-g="rotate" title="تدوير"><span class="ico" data-ic="rotate"></span><i>تدوير</i></button>
+          <button data-g="scale" title="حجم"><span class="ico" data-ic="scale"></span><i>حجم</i></button>
+        </div>
+        <div class="gseg">
+          <button id="gUp" data-a="up" title="طلوع"><span class="ico" data-ic="up"></span><i>طلوع</i></button>
+          <button id="gDown" data-a="down" title="نزول"><span class="ico" data-ic="down"></span><i>نزول</i></button>
+          <button id="gFly" data-a="fly" title="طيران"><span class="ico" data-ic="fly"></span><i>طيران</i></button>
+          <button id="gVis" data-a="vis" title="إظهار / إخفاء"><span class="ico" data-ic="eye"></span><i id="gVisT">إخفاء</i></button>
+        </div>
+        <div class="gseg">
+          <button id="gParams" title="بارامترات" style="display:none"><span class="ico">⚙</span><i>بارامترات</i></button>
+          <button id="gDup" title="نسخ"><span class="ico" data-ic="copy"></span><i>نسخ</i></button>
+          <button id="gDel" class="red" title="حذف"><span class="ico" data-ic="trash"></span><i>حذف</i></button>
+        </div>
+      </div>
+      <div id="gzHint" class="gz-hint"></div>
+    </div>
+
+    <div id="paramPanel" class="param-panel" hidden>
+      <div class="param-hd"><span id="paramTitle">بارامترات</span><button type="button" id="paramClose" title="إغلاق">✕</button></div>
+      <div id="paramBody" class="param-body"></div>
+    </div>
+    <div id="coordPanel" class="coord-panel" hidden>
+      <div class="cp-row"><b>X</b><span id="cx">0.000</span></div>
+      <div class="cp-row"><b>Y</b><span id="cy">0.000</span></div>
+      <div class="cp-row"><b>Z</b><span id="cz">0.000</span></div>
+      <div class="cp-row mut" id="cName">—</div>
+    </div>
+    <div id="crosshair" hidden>+</div>
+
+    <div id="stat"></div>
+    <div id="tip"></div>
+  </main>
+
+  <!-- لوحة المشهد والخصائص اليمين -->
+  <aside id="side">
+    <div class="sub"><span>المشهد</span><span id="objCount" class="mut">0 كائن</span><button type="button" class="m-close" data-m-close aria-label="إغلاق">✕</button></div>
+    <div class="search"><span data-ic="search"></span><input id="hq" placeholder="ابحث في المشهد"></div>
+    <div id="hier"></div>
+    <div class="sub"><span>الخصائص</span></div>
+    <div id="ins"></div>
+  </aside>
+</div>
+
+<!-- ================= طبقة الاختبار (منفصلة تماماً) ================= -->
+<div id="play" hidden>
+  <div id="pvp"></div>
+  <div id="pTop">
+    <button id="pExit" class="stop"><span data-ic="stop"></span>خروج للبناء<kbd>P</kbd></button>
+  </div>
+  <div id="pHud">
+    <div class="chip msg" id="pMsg" hidden></div>
+  </div>
+  <div id="pPrompt" class="prompt" hidden></div>
+  <div id="pFps"></div>
+  <div id="pHelp" hidden></div>
+  <button type="button" id="pMic" title="المايك">
+    <span class="mic-ico" aria-hidden="true">
+      <svg class="r" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/><line x1="4" y1="4" x2="20" y2="20"/></svg>
+      <svg class="g" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+    </span>
+    <kbd>B</kbd>
+    <span class="mic-lbl">مكتوم</span>
+    <span class="mic-bar"><i></i></span>
+  </button>
+</div>
+
+<!-- ================= محرر الملفات ================= -->
+<div id="ed" hidden>
+  <div class="box">
+    <div class="eh">
+      <span id="edKind" class="tag">ملف برمجة</span>
+      <input id="edName" placeholder="اسم الملف">
+      <span class="grow"></span>
+      <button type="button" id="edS" class="pri" onclick="try{window.__hawaSaveEd&&window.__hawaSaveEd()}catch(e){alert(e)}"><span data-ic="save"></span>حفظ</button>
+      <button type="button" id="edD" class="red" title="حذف" onclick="try{window.__hawaDelEd&&window.__hawaDelEd()}catch(e){alert(e)}"><span data-ic="trash"></span></button>
+      <button type="button" id="edX" title="إغلاق" onclick="try{window.__hawaCloseEd&&window.__hawaCloseEd()}catch(e){alert(e)}">✕</button>
+    </div>
+    <div id="edSaveMsg" role="status"></div>
+    <textarea id="edT" spellcheck="false"></textarea>
+  </div>
+</div>
+<input type="file" id="fl" accept=".json,.js,.txt" multiple hidden>
+<div id="storageModal" hidden>
+  <div class="storage-box">
+    <div class="storage-hd"><b>التخزين المحلي</b><button type="button" id="storageClose">✕</button></div>
+    <div id="storageBody" class="storage-body"></div>
+  </div>
+</div>
+<input type="file" id="flProj" accept=".zip,application/zip" hidden>
+
+<!-- واجهة الموبايل -->
+<div id="mBar" hidden>
+  <button type="button" id="mDockBtn" aria-label="قائمة الكائنات والبرمجة"><span>☰</span><i>القائمة</i></button>
+  <button type="button" id="mSideBtn" aria-label="المشهد والخصائص"><span>📋</span><i>المشهد</i></button>
+  <span class="m-grow"></span>
+  <button type="button" id="mMoreBtn" aria-label="المزيد"><span>⋯</span><i>المزيد</i></button>
+  <button type="button" id="mTestBtn" class="go" aria-label="اختبر"><span>▶</span><i>اختبر</i></button>
+</div>
+<div id="mOverlay"></div>
+<div id="mMore">
+  <div class="mm-hd"><b>المزيد</b><button type="button" data-m-close aria-label="إغلاق">✕</button></div>
+  <div class="mm-grid">
+    <a id="mmHome" class="mm-home" href="index.html"><span>⌂</span>الرئيسية</a>
+    <button type="button" data-proxy="bPlayNet"><span>🌐</span>أونلاين / أوفلاين</button>
+    <button type="button" data-proxy="bSave"><span>💾</span>حفظ</button>
+    <button type="button" data-proxy="bStorage"><span>🗂</span>عرض التخزين</button>
+    <button type="button" data-proxy="bMyFiles"><span>📁</span>ملفاتي</button>
+    <button type="button" data-proxy="bProjDown"><span>⬇</span>تحميل المشروع</button>
+    <button type="button" data-proxy="bProjUp"><span>⬆</span>رفع المشروع</button>
+    <button type="button" data-proxy="bConvert" class="mm-convert"><span>📦</span>تحويل إلى لعبة</button>
+    <button type="button" data-proxy="bFullscreen"><span>⛶</span>ملء الشاشة</button>
+    <button type="button" data-proxy="bWipe" class="mm-danger"><span>🗑</span>حذف الكلي</button>
+  </div>
+</div>
+<div id="mTouch" hidden>
+  <div id="mJoy"><i id="mJoyKnob"></i></div>
+  <div id="mAct">
+    <button type="button" id="mJump">قفز</button>
+    <button type="button" id="mRun">جري</button>
+  </div>
+</div>
+
+
+<div id="myFilesModal" class="hawa-modal" hidden>
+    <div class="mf-panel">
+      <div class="mf-hd">
+        <h3 id="mfTitle">ملفاتي</h3>
+        <button type="button" id="mfClose" title="إغلاق">✕</button>
+      </div>
+      <div class="mf-tools">
+        <input type="search" id="mfSearch" placeholder="بحث بالاسم…" autocomplete="off">
+        <label class="media-btn mf-up">⬆ رفع<input type="file" id="mfUpload" multiple accept="image/*,audio/*,video/*,.pdf,application/pdf" hidden></label>
+      </div>
+      <p id="mfHint" hidden></p>
+      <div id="mfList" class="mf-list"></div>
+      <div class="mf-ft">
+        <span class="mut small" id="mfCount">0 ملف</span>
+        <button type="button" id="mfCancelPick" hidden>إلغاء الاختيار</button>
+      </div>
+    </div>
+  </div>
+<div id="spawnsModal" class="hawa-modal" hidden>
+    <div class="sp-panel">
+      <div class="sp-hd">
+        <h3>نقط البداية</h3>
+        <button type="button" id="spClose">✕</button>
+      </div>
+      <div class="sp-body">
+        <section class="sp-half" id="spOffSection">
+          <h4>🟢 أوفلاين </h4>
+          <div id="spOffList" class="sp-list"></div>
+          <button type="button" class="go" id="spOffPlace">وضع نقطة أوفلاين</button>
+        </section>
+        <section class="sp-half" id="spOnSection">
+          <h4>🔴 أونلاين <span class="mut small" id="spOnCount">(0/3)</span></h4>
+          <div id="spOnList" class="sp-list"></div>
+          <button type="button" class="go" id="spOnPlace">وضع نقطة أونلاين</button>
+        </section>
+      </div>
+      <div class="sp-ft">
+        <label class="sp-ai"><input type="checkbox" id="spAllowScript"> السماح للسكربت بتحديد مكان اللاعب</label>
+      </div>
+    </div>
+  </div>
+
+<script src="three.min.js"></script>
+<script src="jszip.min.js"></script>
+<script src="peerjs.min.js"></script>
+<script src="engine.js"></script>
+<script>
+(function(){var m=document.getElementById('barMenu');if(!m)return;
+document.addEventListener('pointerdown',function(e){if(m.open&&!m.contains(e.target))m.removeAttribute('open')});
+m.addEventListener('click',function(e){if(e.target.closest('.menu-pop button'))setTimeout(function(){m.removeAttribute('open')},0)});
+document.addEventListener('keydown',function(e){if(e.key==='Escape')m.removeAttribute('open')});})();
+</script>
+<script>
+(function(){function go(e){var a=e.currentTarget;e.preventDefault();try{var s=document.getElementById('bSave');if(s)s.click()}catch(_){}
+setTimeout(function(){location.href=a.getAttribute('href')},120)}
+['bHome','mmHome'].forEach(function(id){var el=document.getElementById(id);if(el)el.addEventListener('click',go)})})();
+</script>
+</body>
+</html>

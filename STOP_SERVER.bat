@@ -11,17 +11,17 @@ if exist "%~dp0.hawa_pid" (
   )
 )
 
-REM 2) اقتل أي python شغال http_server.py من المجلد ده
+REM 2) اقتل بس سيرفر المجلد ده (مش أي نسخة تانية على الجهاز)
 for /f "tokens=2 delims=," %%P in ('tasklist /FI "IMAGENAME eq python.exe" /FO CSV /NH 2^>nul') do (
-  wmic process where "ProcessId=%%~P" get CommandLine 2>nul | findstr /I /C:"http_server.py" >nul 2>&1
+  wmic process where "ProcessId=%%~P" get CommandLine 2>nul | findstr /I /C:"%~dp0http_server.py" >nul 2>&1
   if not errorlevel 1 taskkill /PID %%~P /F >nul 2>&1
 )
 for /f "tokens=2 delims=," %%P in ('tasklist /FI "IMAGENAME eq python3.exe" /FO CSV /NH 2^>nul') do (
-  wmic process where "ProcessId=%%~P" get CommandLine 2>nul | findstr /I /C:"http_server.py" >nul 2>&1
+  wmic process where "ProcessId=%%~P" get CommandLine 2>nul | findstr /I /C:"%~dp0http_server.py" >nul 2>&1
   if not errorlevel 1 taskkill /PID %%~P /F >nul 2>&1
 )
 for /f "tokens=2 delims=," %%P in ('tasklist /FI "IMAGENAME eq py.exe" /FO CSV /NH 2^>nul') do (
-  wmic process where "ProcessId=%%~P" get CommandLine 2>nul | findstr /I /C:"http_server.py" >nul 2>&1
+  wmic process where "ProcessId=%%~P" get CommandLine 2>nul | findstr /I /C:"%~dp0http_server.py" >nul 2>&1
   if not errorlevel 1 taskkill /PID %%~P /F >nul 2>&1
 )
 
