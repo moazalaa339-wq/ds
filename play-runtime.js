@@ -1,6 +1,7 @@
 /* Hawa Play Runtime + Net
-   - PeerJS (إنترنت): تبادل أكواد قصير عبر سيرفر Peer العام
-   - LAN WebRTC: شبكة محلية عبر سيرفر Hawa المحلي + WebRTC DataChannel (من غير نت)
+   - PeerJS (إنترنت): عبر سيرفر Peer العام
+   - LAN WebRTC: شبكة محلية عبر سيرفر Hawa المحلي
+   - Codes (تبادل الأكواد): WebRTC يدوي — نسخ/لصق SDP — من غير بايثون ومن غير PeerJS
    - حد أقصى 3 لاعبين
 */
 'use strict';
@@ -337,7 +338,270 @@ const HawaNet = (() => {
     };
   }
 
-  return { createHost, joinHost, createHostLan, joinHostLan, randCode };
+
+  /* ---------- تبادل الأكواد: WebRTC يدوي (من غير بايثون / PeerJS) ---------- */
+  function rtcIceServers() {
+    return [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+      { urls: 'stun:stun2.l.google.com:19302' },
+      { urls: 'stun:global.stun.twilio.com:3478' }
+    ];
+  }
+  function rtcSanitizeCode(code) {
+    let s = String(code || '');
+    s = s.replace(/[\u200B-\u200D\uFEFF\u00A0\u202A-\u202E\u2066-\u2069]/g, '');
+    s = s.replace(/[\r\n\t\f\v ]+/g, '');
+    s = s.replace(/^SM1\./i, '');
+    s = s.replace(/-/g, '+').replace(/_/g, '/');
+    s = s.replace(/[^A-Za-z0-9+/=]/g, '');
+    const pad = s.length % 4;
+    if (pad === 1) throw new Error('الكود ناقص أو اتقطع أثناء النسخ');
+    if (pad === 2) s += '==';
+    else if (pad === 3) s += '=';
+    return s;
+  }
+  function rtcUtf8ToB64(str) {
+    const bytes = new TextEncoder().encode(str);
+    let bin = '';
+    for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+    return btoa(bin);
+  }
+  function rtcB64ToUtf8(b64) {
+    const bin = atob(b64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new TextDecoder().decode(bytes);
+  }
+  function rtcNormalizeSdp(sdp, role) {
+    var s = String(sdp || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    var lines = s.split('\n');
+    var out = [];
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i].trim();
+      if (!line) continue;
+      if (/^a=max-message-size:/i.test(line)) continue;
+      if (/^a=x-/i.test(line)) continue;
+      if (/^a=extmap-allow-mixed/i.test(line)) continue;
+      if (role === 'answer' && /^a=setup:/i.test(line)) {
+        if (/actpass/i.test(line)) line = 'a=setup:active';
+        else if (!/active|passive|holdconn/i.test(line)) line = 'a=setup:active';
+      }
+      out.push(line);
+    }
+    if (role === 'answer') {
+      var result = [];
+      var i = 0;
+      while (i < out.length) {
+        var line = out[i];
+        result.push(line);
+        if (/^m=/i.test(line)) {
+          var j = i + 1, hasSetup = false;
+          while (j < out.length && !/^m=/i.test(out[j])) {
+            if (/^a=setup:/i.test(out[j])) hasSetup = true;
+            j++;
+          }
+          if (!hasSetup) result.push('a=setup:active');
+        }
+        i++;
+      }
+      return result.join('\r\n') + '\r\n';
+    }
+    return out.join('\r\n') + '\r\n';
+  }
+  function rtcEncodeSdp(sdp, role) {
+    var s = rtcNormalizeSdp(sdp, role || null);
+    if (!s || s.indexOf('v=0') < 0) throw new Error('SDP غير جاهز');
+    if (s.indexOf('m=') < 0) throw new Error('SDP ناقص');
+    var b64 = rtcUtf8ToB64(s);
+    var lines = [];
+    for (var i = 0; i < b64.length; i += 64) lines.push(b64.substr(i, 64));
+    return 'SM1.\n' + lines.join('\n');
+  }
+  function rtcDecodeSdp(code, role) {
+    var raw = rtcSanitizeCode(code);
+    if (!raw || raw.length < 20) throw new Error('الكود قصير جدًا — انسخه كامل');
+    var sdp;
+    try { sdp = rtcB64ToUtf8(raw); }
+    catch (e) { throw new Error('فشل فك الكود — انسخه كامل من غير قص'); }
+    sdp = rtcNormalizeSdp(sdp, role || null);
+    if (sdp.indexOf('v=0') < 0) throw new Error('كود غير صالح بعد الفك');
+    if (sdp.indexOf('m=') < 0) throw new Error('الكود مش مكتمل');
+    return sdp;
+  }
+  function rtcWaitIce(pc, ms) {
+    return new Promise(resolve => {
+      if (!pc || pc.iceGatheringState === 'complete') return resolve();
+      let done = false;
+      const finish = () => { if (done) return; done = true; try { pc.removeEventListener('icecandidate', onCand); } catch (_) {} resolve(); };
+      const onCand = (ev) => { if (!ev.candidate) finish(); };
+      pc.addEventListener('icecandidate', onCand);
+      setTimeout(finish, ms || 4000);
+    });
+  }
+  function rtcMakePc() {
+    return new RTCPeerConnection({ iceServers: rtcIceServers() });
+  }
+
+  /**
+   * Host: ينشئ Offer ويُرجعه كنص للنسخ. بعد ما الضيف يبعت Answer → applyAnswer(code).
+   */
+  async function createHostCodes({ roomName, hostName, onPeerJoin, onPeerLeave, onMessage }) {
+    if (typeof RTCPeerConnection === 'undefined') throw new Error('المتصفح لا يدعم WebRTC');
+    const code = randCode();
+    const pc = rtcMakePc();
+    const dc = pc.createDataChannel('hawa', { ordered: true });
+    const conns = new Map();
+    let remoteApi = null;
+
+    const api = {
+      transport: 'codes',
+      code,
+      peerId: code,
+      roomName: roomName || 'CODES',
+      hostName: hostName || 'مضيف',
+      _pc: pc,
+      _dc: dc,
+      offerCode: null,
+      status: 'waiting-offer',
+      broadcast(m) {
+        const payload = (typeof m === 'string') ? m : JSON.stringify(m);
+        // قناة واحدة — لا تكرر الإرسال عبر remoteApi و dc
+        try { if (dc.readyState === 'open') dc.send(payload); } catch (_) {}
+      },
+      sendTo(id, m) {
+        if (remoteApi && (id === remoteApi.id || id === 'guest')) try { remoteApi.send(m); } catch (_) {}
+      },
+      destroy() {
+        try { dc.close(); } catch (_) {}
+        try { pc.close(); } catch (_) {}
+        conns.clear();
+      },
+      async makeOffer() {
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        await rtcWaitIce(pc, 4500);
+        const sdp = pc.localDescription && pc.localDescription.sdp;
+        this.offerCode = rtcEncodeSdp(sdp, 'offer');
+        this.status = 'offer-ready';
+        return this.offerCode;
+      },
+      async applyAnswer(answerCode) {
+        const sdp = rtcDecodeSdp(answerCode, 'answer');
+        await pc.setRemoteDescription({ type: 'answer', sdp });
+        this.status = 'connecting';
+      }
+    };
+
+    dc.onopen = () => {
+      const id = 'guest-' + randCode().slice(0, 4);
+      remoteApi = {
+        id,
+        playerName: null,
+        send(m) { try { if (dc.readyState === 'open') dc.send(JSON.stringify(m)); } catch (_) {} },
+        close() { try { dc.close(); } catch (_) {} }
+      };
+      conns.set(id, remoteApi);
+      api.status = 'connected';
+      // انتظر hello
+    };
+    dc.onmessage = (ev) => {
+      let d = ev.data;
+      try { d = typeof d === 'string' ? JSON.parse(d) : d; } catch (_) {}
+      if (d && d.t === 'hello') {
+        if (remoteApi) {
+          remoteApi.playerName = d.name || 'لاعب';
+          onPeerJoin && onPeerJoin(remoteApi);
+        }
+      } else if (remoteApi) {
+        onMessage && onMessage(remoteApi.id, d);
+      }
+    };
+    dc.onclose = () => {
+      if (remoteApi) {
+        conns.delete(remoteApi.id);
+        onPeerLeave && onPeerLeave(remoteApi.id);
+      }
+    };
+    pc.onconnectionstatechange = () => {
+      if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+        if (remoteApi) onPeerLeave && onPeerLeave(remoteApi.id);
+      }
+    };
+
+    await api.makeOffer();
+    return api;
+  }
+
+  /**
+   * Joiner: يلصق Offer من المضيف → يولّد Answer للنسخ → بعد الاتصال يبعت hello.
+   */
+  async function joinHostCodes({ offerCode, playerName, onWelcome, onLobby, onStart, onMessage, onClose }) {
+    if (typeof RTCPeerConnection === 'undefined') throw new Error('المتصفح لا يدعم WebRTC');
+    const pc = rtcMakePc();
+    let dc = null;
+    let opened = false;
+
+    const api = {
+      transport: 'codes',
+      code: null,
+      answerCode: null,
+      _pc: pc,
+      status: 'need-offer',
+      broadcast() {},
+      sendTo() {},
+      destroy() {
+        try { if (dc) dc.close(); } catch (_) {}
+        try { pc.close(); } catch (_) {}
+      },
+      async makeAnswerFromOffer(offerText) {
+        const sdp = rtcDecodeSdp(offerText, 'offer');
+        await pc.setRemoteDescription({ type: 'offer', sdp });
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        await rtcWaitIce(pc, 4500);
+        this.answerCode = rtcEncodeSdp(pc.localDescription.sdp, 'answer');
+        this.status = 'answer-ready';
+        return this.answerCode;
+      }
+    };
+
+    pc.ondatachannel = (ev) => {
+      dc = ev.channel;
+      api._dc = dc;
+      dc.onopen = () => {
+        opened = true;
+        api.status = 'connected';
+        try {
+          dc.send(JSON.stringify({ t: 'hello', name: playerName || 'لاعب' }));
+        } catch (_) {}
+        // سلوت مؤقت — المضيف هيبعت welcome بالسلوت الحقيقي
+        onWelcome && onWelcome({ slot: 2, roomName: 'CODES', players: [] });
+      };
+      dc.onmessage = (e) => {
+        let d = e.data;
+        try { d = typeof d === 'string' ? JSON.parse(d) : d; } catch (_) {}
+        if (!d) return;
+        if (d.t === 'lobby') onLobby && onLobby(d.players || []);
+        else if (d.t === 'start') onStart && onStart(d);
+        else if (d.t === 'welcome') onWelcome && onWelcome(d);
+        else onMessage && onMessage('host', d);
+      };
+      dc.onclose = () => { onClose && onClose(); };
+    };
+
+    // لو العرض جاهز من البداية
+    if (offerCode) await api.makeAnswerFromOffer(offerCode);
+
+    // wrap send for joiner
+    api.broadcast = (m) => { try { if (dc && dc.readyState === 'open') dc.send(JSON.stringify(m)); } catch (_) {} };
+    api.sendTo = (id, m) => api.broadcast(m);
+
+    return api;
+  }
+
+  return { createHost, joinHost, createHostLan, joinHostLan, createHostCodes, joinHostCodes, randCode };
+
 })();
 
 const HawaPlay = (() => {

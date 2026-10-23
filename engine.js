@@ -6762,20 +6762,80 @@ const NetMP = {
   initFromSession() {
     let meta = null;
     try { meta = JSON.parse(sessionStorage.getItem('hawa_play_meta') || 'null'); } catch (e) {}
-    if (!meta || meta.mode !== 'online' || !meta.code) { this.on = false; return; }
+    if (!meta || meta.mode !== 'online') { this.on = false; return; }
     this.transport = meta.transport || 'peerjs';
     this.on = true; this.role = meta.isHost ? 'host' : 'guest';
-    this.isHost = !!meta.isHost; this.code = String(meta.code).trim().toUpperCase();
+    this.isHost = !!meta.isHost; this.code = meta.code ? String(meta.code).trim().toUpperCase() : 'CODES';
     this.slot = +meta.slot || 1; this.name = meta.playerName || 'لاعب';
     this.voice = meta.voice != null ? !!meta.voice : true;
     this.conns = new Map(); this.remotes = new Map(); this.objs = new Map();
     this.ready = false; this.acc = 0; this.seq = 0;
-    this._dcMap = new Map(); // LAN datachannels
-    if (this.transport === 'lan') this._startLan();
+    this._dcMap = new Map();
+    if (this.transport === 'codes') {
+      this._startCodesLive();
+    } else if (this.transport === 'lan') this._startLan();
     else {
+      if (!meta.code) { this.on = false; return; }
       if (typeof Peer === 'undefined') { console.warn('PeerJS missing'); this.on = false; return; }
       this._startPeer();
     }
+  },
+  _findCodesLive() {
+    try { if (window.__HAWA_LIVE_NET__) return window.__HAWA_LIVE_NET__; } catch (_) {}
+    try { if (window.parent && window.parent !== window && window.parent.__HAWA_LIVE_NET__) return window.parent.__HAWA_LIVE_NET__; } catch (_) {}
+    try { if (window.top && window.top.__HAWA_LIVE_NET__) return window.top.__HAWA_LIVE_NET__; } catch (_) {}
+    try { if (window.opener && window.opener.__HAWA_LIVE_NET__) return window.opener.__HAWA_LIVE_NET__; } catch (_) {}
+    return null;
+  },
+  _startCodesLive() {
+    const self = this;
+    let tries = 0;
+    const bind = (live) => {
+      if (!live) return false;
+      this._codesNet = live;
+      this.ready = true;
+      this.on = true;
+      try {
+        const dc = live._dc;
+        if (dc) {
+          const prev = dc.onmessage;
+          dc.onmessage = function (ev) {
+            try { if (typeof prev === 'function') prev.call(dc, ev); } catch (_) {}
+            try {
+              let d = ev.data;
+              if (typeof d === 'string') d = JSON.parse(d);
+              if (!d || d.t === 'hello' || d.t === 'welcome' || d.t === 'lobby' || d.t === 'start' || d.t === 'full') return;
+              self._onMsg('remote', d);
+            } catch (_) {}
+          };
+          if (dc.readyState === 'open') self.ready = true;
+          else dc.addEventListener('open', () => { self.ready = true; });
+        }
+      } catch (err) { console.warn(err); }
+      say('🔑 أونلاين (تبادل أكواد) · سلوت ' + this.slot + (this.isHost ? ' · مضيف' : ' · ضيف'), 3000);
+      return true;
+    };
+    if (bind(this._findCodesLive())) return;
+    const poll = () => {
+      tries++;
+      if (bind(this._findCodesLive())) return;
+      if (tries < 40) setTimeout(poll, 100);
+      else {
+        console.warn('codes: live net timeout');
+        const fileProto = (typeof location !== 'undefined' && location.protocol === 'file:');
+        say(fileProto
+          ? '⚠ افتح عبر START_SERVER.bat (مش file://) — الأونلاين لا يعمل من الملفات مباشرة'
+          : '⚠ فشل ربط شبكة تبادل الأكواد — اللعب محلي فقط', 6000);
+        this.on = false;
+        this.ready = false;
+      }
+    };
+    setTimeout(poll, 50);
+    try {
+      window.addEventListener('message', (ev) => {
+        if (ev && ev.data && ev.data.t === 'hawa_codes_net') bind(this._findCodesLive());
+      });
+    } catch (_) {}
   },
   async _startLan() {
     // إعادة ربط WebRTC عبر سيرفر Hawa المحلي بنفس كود الرووم
@@ -7283,6 +7343,10 @@ const NetMP = {
   },
   broadcast(msg) {
     if (!msg) return;
+    if (this.transport === 'codes' && this._codesNet) {
+      try { this._codesNet.broadcast(msg); } catch (_) {}
+      return;
+    }
     if (this.transport === 'lan' && this._dcMap) {
       for (const [id, e] of this._dcMap) {
         try {
@@ -7458,14 +7522,26 @@ function playStart() {
   // أونلاين: ريسبون على سلو اللاعب + تشغيل الشبكة
   try {
     NetMP.initFromSession();
-    if (NetMP.on) {
+    const placeOnline = () => {
+      if (!NetMP.on) return;
       const sp = S.objs.filter(o => o.type === 'online_spawn');
       const mine = sp.find(o => +((o.p && o.p.slot) || 0) === NetMP.slot) || sp[NetMP.slot - 1];
       if (mine) {
         rt.p.set(mine.pos[0], mine.pos[1] + .02, mine.pos[2]);
         rt.v.set(0, 0, 0);
       }
-      say('🌐 أونلاين · سلوت ' + NetMP.slot + ' · ' + (NetMP.isHost ? 'مضيف' : 'ضيف'), 2500);
+      say((NetMP.transport === 'codes' ? '🔑' : '🌐') + ' أونلاين · سلوت ' + NetMP.slot + ' · ' + (NetMP.isHost ? 'مضيف' : 'ضيف'), 2500);
+    };
+    placeOnline();
+    // تبادل الأكواد قد يتأخر حقن الشبكة بعد الـ iframe
+    if (NetMP.transport === 'codes') {
+      let n = 0;
+      const wait = () => {
+        n++;
+        if (NetMP.on && NetMP._codesNet) { placeOnline(); return; }
+        if (n < 50) setTimeout(wait, 100);
+      };
+      setTimeout(wait, 120);
     }
   } catch (e) { console.error(e); }
   const game = {
