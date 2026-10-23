@@ -687,7 +687,10 @@ function roomFull() {
 }
 function allReady() {
   if (!roomPlayers.length) return false;
-  return roomPlayers.every(p => p && p.ready);
+  // القائد مش محتاج يستعد — الضيوف فقط
+  const guests = roomPlayers.filter(p => p && !p.host);
+  if (!guests.length) return roomPlayers.length >= 1; // لوحده؟ يسمح
+  return guests.every(p => p && p.ready);
 }
 function renderSlots() {
   const max = maxSlots();
@@ -743,8 +746,10 @@ function updStartBtn() {
   const can = full && ready;
   b.disabled = !can;
   b.style.opacity = can ? '1' : '.45';
+  const guests = roomPlayers.filter(p => p && !p.host);
+  const guestsReady = guests.filter(p => p.ready).length;
   if (!full) b.textContent = '▶ انتظار اكتمال الرووم ('+roomPlayers.length+'/'+maxSlots()+')';
-  else if (!ready) b.textContent = '▶ انتظار استعداد الجميع ('+roomPlayers.filter(p=>p.ready).length+'/'+roomPlayers.length+')';
+  else if (!ready) b.textContent = '▶ انتظار استعداد الضيوف ('+guestsReady+'/'+guests.length+')';
   else b.textContent = '▶ بدء اللعب';
   const mic = document.getElementById('lobbyMicWrap');
   if (mic) mic.style.display = isHost ? 'inline-flex' : 'none';
@@ -754,7 +759,12 @@ function updStartBtn() {
 function updReadyBtn() {
   const b = document.getElementById('btnReady');
   if (!b) return;
-  b.style.display = $('#lobby').classList.contains('on') ? 'block' : 'none';
+  // القائد: مفيش زر استعداد — بينتظر الضيوف ويضغط بدء
+  if (isHost) {
+    b.style.display = 'none';
+    return;
+  }
+  b.style.display = ($('#lobby') && $('#lobby').classList.contains('on')) ? 'block' : 'none';
   if (myReady) {
     b.classList.add('is-ready');
     b.textContent = '✔ مستعد — اضغط للإلغاء';
@@ -819,7 +829,7 @@ $('#btnDoCreate').onclick = async () => {
   roomVoice = !!(document.getElementById('roomMic') && document.getElementById('roomMic').checked);
   isHost = true;
   myReady = false;
-  roomPlayers = [{ id: 'host', name: hn, slot: 1, host: true, ready: false }];
+  roomPlayers = [{ id: 'host', name: hn, slot: 1, host: true, ready: true }];
   $('#createMsg').className='msg'; $('#createMsg').textContent = netType === 'lan' ? 'جاري إنشاء رووم LAN…' : (netType === 'codes' ? 'جاري تجهيز كود العرض…' : 'جاري إنشاء رووم PeerJS…');
   try {
     const onPeerJoin = (peer) => {
@@ -874,6 +884,7 @@ $('#btnDoCreate').onclick = async () => {
       buildCodesAnswersHost();
       const ansHost = document.getElementById('codesAnswersHost');
       if (ansHost) ansHost.style.display = 'flex';
+      try { updReadyBtn(); updStartBtn(); } catch (_) {}
     } else {
       const common = {
         roomName: rn || 'Room',
@@ -886,7 +897,7 @@ $('#btnDoCreate').onclick = async () => {
       } else {
         net = await HawaNet.createHost(common);
       }
-      roomPlayers = [{ id: net.peerId || 'host', name: hn, slot: 1, host: true, ready: false }];
+      roomPlayers = [{ id: net.peerId || 'host', name: hn, slot: 1, host: true, ready: true }];
       showEl('createBox', 'none');
       showEl('hostCodeBox', 'block');
       if ($('#hostCode')) $('#hostCode').textContent = net.code || net.peerId || '—';
@@ -895,6 +906,7 @@ $('#btnDoCreate').onclick = async () => {
       showEl('btnStart', 'block');
       $('#lobbyTitle').textContent = 'لوبي «' + rn + '» · ' + (gameData.name||'');
       renderSlots();
+      try { updReadyBtn(); updStartBtn(); } catch (_) {}
       $('#createMsg').className='msg ok';
       $('#createMsg').textContent = '✔ الرووم جاهز';
     }
@@ -1336,22 +1348,30 @@ async function startPlay(opts) {
 }
 function goPlay(opts) {
   if (opts.mode === 'online' && opts.net && (opts.transport === 'codes' || netType === 'codes')) {
-    // اخفِ واجهة اللوبي/الإنشاء عشان متبقاش طبقتين فوق بعض
+    // اخفِ كل طبقات اللوبي/التحميل عشان متبقاش صورتين فوق بعض
     try {
-      const wrap = document.querySelector('.wrap') || document.querySelector('main') || document.getElementById('app');
-      if (wrap) wrap.style.display = 'none';
+      const load = document.getElementById('hawaLoad');
+      if (load) {
+        load.classList.remove('on');
+        load.style.display = 'none';
+        load.style.visibility = 'hidden';
+        load.style.pointerEvents = 'none';
+        try { load.remove(); } catch (_) {}
+      }
+      document.querySelectorAll('.wrap, main, #app, .panel, #lobby, #codesBox').forEach(el => {
+        try { el.style.display = 'none'; el.style.visibility = 'hidden'; } catch (_) {}
+      });
       const lob = document.getElementById('lobby');
       if (lob) lob.classList.remove('on');
       document.body.style.overflow = 'hidden';
-      const load = document.getElementById('hawaLoad');
-      if (load) { load.classList.remove('on'); load.style.display = 'none'; }
+      document.body.style.background = '#09070d';
     } catch (_) {}
     let fr = document.getElementById('hawaCodesFrame');
     if (!fr) {
       fr = document.createElement('iframe');
       fr.id = 'hawaCodesFrame';
       fr.title = 'Hawa Play';
-      fr.style.cssText = 'position:fixed;inset:0;border:0;width:100%;height:100%;z-index:99999;background:#09070d';
+      fr.style.cssText = 'position:fixed;inset:0;border:0;width:100%;height:100%;z-index:2147483646;background:#09070d';
       document.body.appendChild(fr);
     }
     fr.onload = function () {

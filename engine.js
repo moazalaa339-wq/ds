@@ -4884,9 +4884,11 @@ const VoiceChat = {
     if (!b) {
       b = document.createElement('button');
       b.id = 'pMic'; b.type = 'button'; b.title = 'تفعيل/إيقاف المايك (B)';
-      b.innerHTML = '<span class="mic-ico" aria-hidden="true"><svg class="r" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/><line x1="4" y1="4" x2="20" y2="20"/></svg><svg class="g" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></span><kbd>B</kbd><span class="mic-lbl">مايك</span>';
+      b.innerHTML = '<span class="mic-ico" aria-hidden="true"><svg class="r" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/><line x1="4" y1="4" x2="20" y2="20"/></svg><svg class="g" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></span><kbd>B</kbd><span class="mic-lbl">مايك</span><span class="mic-bar"><i></i></span>';
+      const bar = document.getElementById('pOnlineBar');
       const play = document.getElementById('play');
-      if (play) play.appendChild(b);
+      if (bar) { b.classList.add('online-compact'); bar.appendChild(b); }
+      else if (play) play.appendChild(b);
       else document.body.appendChild(b);
     }
     if (b && !b._voiceBound) {
@@ -5260,7 +5262,8 @@ const VoiceChat = {
       a.setAttribute('playsinline', '');
       a.setAttribute('autoplay', '');
       a.srcObject = stream;
-      a.volume = 1;
+      a.volume = this.muteAll ? 0 : 1;
+      a.muted = !!this.muteAll;
       const go = () => a.play().catch(() => {});
       go();
       // فك قفل الصوت بأي لمسة/ضغطة — من غير ما تحتاج تفتح مايك
@@ -5297,11 +5300,22 @@ const VoiceChat = {
       try { this._attachCodesAudio(); } catch (_) {}
     }
   },
+  muteAll: false,
+  setMuteAll(on) {
+    this.muteAll = !!on;
+    for (const a of this._remoteAudios.values()) {
+      try { a.muted = this.muteAll; a.volume = this.muteAll ? 0 : 1; } catch (_) {}
+    }
+    return this.muteAll;
+  },
+  toggleMuteAll() { return this.setMuteAll(!this.muteAll); },
   destroy() {
     this.off();
+    this.muteAll = false;
     for (const [, c] of this._inCalls) { try { c.close(); } catch (_) {} }
     this._inCalls.clear();
     for (const pid of [...this._remoteAudios.keys()]) this._stopRemote(pid);
+    if (this._listenLoop) { try { clearInterval(this._listenLoop); } catch (_) {} this._listenLoop = null; }
   }
 };
 try {
@@ -7192,7 +7206,7 @@ const NetMP = {
     this.ready = true;
     this.on = true;
     
-    const attachDc = (dc, fromId) => {
+    const attachDc = (dc, fromId, slotHint) => {
       if (!dc || dc.__hawaNetBound) return;
       dc.__hawaNetBound = true;
       const prev = dc.onmessage;
@@ -7207,11 +7221,39 @@ const NetMP = {
       };
       if (dc.readyState === 'open') self.ready = true;
       else try { dc.addEventListener('open', () => { self.ready = true; }); } catch (_) {}
+      // انقطاع مفاجئ (قفل التبويب / انقطاع نت) بدون رسالة leave
+      try {
+        dc.addEventListener('close', () => {
+          try {
+            let removed = false;
+            if (slotHint != null) {
+              const r = self.remotes.get(+slotHint);
+              if (r) {
+                const nm = r.name || ('لاعب ' + slotHint);
+                self._removeRemote(+slotHint);
+                try { say('💀 غادر اللاعب «' + nm + '»', 3500); } catch (_) {}
+                removed = true;
+              }
+            }
+            if (!removed) {
+              for (const [k, r] of self.remotes) {
+                // آخر remote لو مفيش مطابقة — متلحقش الكل
+                if (self.remotes.size === 1) {
+                  const nm = r.name || ('لاعب ' + k);
+                  self._removeRemote(k);
+                  try { say('💀 غادر اللاعب «' + nm + '»', 3500); } catch (_) {}
+                  break;
+                }
+              }
+            }
+          } catch (_) {}
+        });
+      } catch (_) {}
     };
     try {
       if (typeof live.forEachChannel === 'function') {
         live.forEachChannel((e, slot) => {
-          if (e && e.dc) attachDc(e.dc, (e.remoteApi && e.remoteApi.id) || ('slot-' + slot));
+          if (e && e.dc) attachDc(e.dc, (e.remoteApi && e.remoteApi.id) || ('slot-' + slot), e.slot != null ? e.slot : slot);
         });
       } else if (live._dc) {
         attachDc(live._dc, 'remote');
@@ -7424,13 +7466,35 @@ const NetMP = {
     c.on('close', () => {
       self.conns.delete(c.peer);
       for (const [k, r] of self.remotes) {
-        if (r.peerId === c.peer) { self._removeRemote(k); break; }
+        if (r.peerId === c.peer) {
+          const nm = r.name || ('لاعب ' + k);
+          self._removeRemote(k);
+          try { say('💀 غادر اللاعب «' + nm + '»', 3500); } catch (_) {}
+          break;
+        }
       }
     });
   },
   _onMsg(from, msg) {
     if (!msg || !msg.t) return;
     if (this._handleNetMsg(from, msg)) return;
+    if (msg.t === 'leave' || msg.t === 'bye') {
+      const slot = +(msg.slot || 0);
+      const nm = msg.name || (this.remotes.get(slot) && this.remotes.get(slot).name) || 'لاعب';
+      if (slot && slot !== this.slot) this._removeRemote(slot);
+      else {
+        // بدون سلوت: ابحث بالـ peerId
+        for (const [k, r] of this.remotes) {
+          if (r.peerId === from || (msg.peerId && r.peerId === msg.peerId)) {
+            this._removeRemote(k);
+            break;
+          }
+        }
+      }
+      try { say('💀 غادر اللاعب «' + nm + '»', 3500); } catch (_) {}
+      if (this.isHost) this._relay(from, msg);
+      return;
+    }
     if (msg.t === 'hello' && this.isHost) {
       const c = this.conns.get(from);
       if (c) try { c.send({ t: 'hi', slot: this.slot, name: this.name }); } catch (e) {}
@@ -8161,7 +8225,35 @@ const NetMP = {
       try { fn(msg.type, msg.payload || {}, msg.from, msg.fromName); } catch (e) { console.warn(e); }
     }
   },
+  announceLeave() {
+    if (!this.on) return;
+    const msg = { t: 'leave', slot: this.slot, name: this.name || 'لاعب', peerId: this.code || null };
+    try {
+      // peerjs
+      for (const [, c] of this.conns) {
+        try { if (c && c.open) c.send(msg); } catch (_) {}
+      }
+      // codes
+      if (this._codesNet) {
+        try {
+          if (typeof this._codesNet.broadcast === 'function') this._codesNet.broadcast(msg);
+          else if (typeof this._codesNet.forEachChannel === 'function') {
+            this._codesNet.forEachChannel((e) => {
+              try { if (e.dc && e.dc.readyState === 'open') e.dc.send(JSON.stringify(msg)); } catch (_) {}
+            });
+          }
+        } catch (_) {}
+      }
+      // lan
+      if (this._dcMap) {
+        for (const e of this._dcMap.values()) {
+          try { if (e.dc && e.dc.readyState === 'open') e.dc.send(JSON.stringify(msg)); } catch (_) {}
+        }
+      }
+    } catch (_) {}
+  },
   stop() {
+    try { this.announceLeave(); } catch (_) {}
     this._lanStopped = true;
     try { if (this.peer) this.peer.destroy(); } catch (e) {}
     if (this._dcMap) {
@@ -8170,10 +8262,27 @@ const NetMP = {
       }
       this._dcMap.clear();
     }
+    try {
+      const live = this._codesNet || (typeof window !== 'undefined' && window.__HAWA_LIVE_NET__);
+      if (live) {
+        try { if (typeof live.destroy === 'function') live.destroy(); } catch (_) {}
+        try {
+          if (typeof live.forEachChannel === 'function') {
+            live.forEachChannel((e) => {
+              try { if (e.dc) e.dc.close(); } catch (_) {}
+              try { if (e.pc) e.pc.close(); } catch (_) {}
+            });
+          }
+        } catch (_) {}
+        try { if (live._pc) live._pc.close(); } catch (_) {}
+        try { if (live._dc) live._dc.close(); } catch (_) {}
+      }
+    } catch (_) {}
     for (const slot of [...this.remotes.keys()]) this._removeRemote(slot);
     this.conns.clear(); this.objs.clear();
     this._objQueue = new Map(); this._netShared = new Map(); this._eventHandlers = [];
     this.peer = null; this.on = false; this.ready = false;
+    this._codesNet = null;
   }
 };
 
@@ -8201,8 +8310,125 @@ function showEnginePlayLoad(ms) {
   });
 }
 
+
+const OnlineMenu = {
+  open: false,
+  bound: false,
+  ensure() {
+    if (this.bound) return;
+    this.bound = true;
+    const menuBtn = document.getElementById('pMenuBtn');
+    const menu = document.getElementById('pOnlineMenu');
+    const close = document.getElementById('pMenuClose');
+    const mute = document.getElementById('pMuteAll');
+    const leave = document.getElementById('pLeaveOnline');
+    const conf = document.getElementById('pOnlineConfirm');
+    const leaveOk = document.getElementById('pLeaveOk');
+    const leaveCancel = document.getElementById('pLeaveCancel');
+    if (menuBtn) menuBtn.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); this.toggle(); });
+    if (close) close.addEventListener('click', e => { e.preventDefault(); this.hide(); });
+    if (menu) menu.addEventListener('click', e => { if (e.target === menu) this.hide(); });
+    if (mute) mute.addEventListener('click', e => {
+      e.preventDefault();
+      const on = VoiceChat.toggleMuteAll();
+      mute.classList.toggle('active', on);
+      const lbl = document.getElementById('pMuteAllLbl');
+      if (lbl) lbl.textContent = on ? 'إلغاء كتم أصوات اللاعبين' : 'كتم أصوات جميع اللاعبين';
+      try { say(on ? '🔇 تم كتم أصوات الجميع' : '🔊 تم إلغاء الكتم', 1800); } catch (_) {}
+    });
+    if (leave) leave.addEventListener('click', e => {
+      e.preventDefault();
+      this.hide();
+      if (conf) { conf.classList.add('on'); conf.setAttribute('aria-hidden', 'false'); }
+    });
+    if (leaveCancel) leaveCancel.addEventListener('click', e => {
+      e.preventDefault();
+      if (conf) { conf.classList.remove('on'); conf.setAttribute('aria-hidden', 'true'); }
+    });
+    if (conf) conf.addEventListener('click', e => {
+      if (e.target === conf) { conf.classList.remove('on'); conf.setAttribute('aria-hidden', 'true'); }
+    });
+    if (leaveOk) leaveOk.addEventListener('click', e => {
+      e.preventDefault();
+      this.leaveToHome();
+    });
+    // إغلاق الصفحة / Alt+F4
+    if (!window.__hawaLeaveBound) {
+      window.__hawaLeaveBound = true;
+      const bye = () => {
+        try { if (NetMP && NetMP.on) NetMP.announceLeave(); } catch (_) {}
+        try { if (NetMP && NetMP.on) NetMP.stop(); } catch (_) {}
+      };
+      window.addEventListener('pagehide', bye);
+      window.addEventListener('beforeunload', bye);
+    }
+  },
+  show() {
+    this.ensure();
+    const menu = document.getElementById('pOnlineMenu');
+    if (menu) { menu.classList.add('on'); menu.setAttribute('aria-hidden', 'false'); }
+    this.open = true;
+    try { if (document.pointerLockElement) document.exitPointerLock(); } catch (_) {}
+  },
+  hide() {
+    const menu = document.getElementById('pOnlineMenu');
+    if (menu) { menu.classList.remove('on'); menu.setAttribute('aria-hidden', 'true'); }
+    const conf = document.getElementById('pOnlineConfirm');
+    if (conf) { conf.classList.remove('on'); conf.setAttribute('aria-hidden', 'true'); }
+    this.open = false;
+  },
+  toggle() { if (this.open) this.hide(); else this.show(); },
+  leaveToHome() {
+    try { NetMP.announceLeave(); } catch (_) {}
+    try { NetMP.stop(); } catch (_) {}
+    try { VoiceChat.destroy(); } catch (_) {}
+    try {
+      sessionStorage.removeItem('hawa_play_meta');
+      sessionStorage.removeItem('hawa_play');
+    } catch (_) {}
+    // لو جوا iframe (تبادل أكواد): رجّع الأب للرئيسية
+    try {
+      if (window.parent && window.parent !== window) {
+        window.parent.location.href = 'index.html';
+        return;
+      }
+    } catch (_) {}
+    try { location.href = 'index.html'; } catch (_) {}
+  },
+  setupOnlineChrome() {
+    this.ensure();
+    try { document.body.classList.add('online-play'); } catch (_) {}
+    const bar = document.getElementById('pOnlineBar');
+    if (bar) bar.classList.add('show');
+    const home = document.getElementById('playHome');
+    if (home) home.style.display = 'none';
+    const top = document.getElementById('pTop');
+    if (top) top.style.display = 'none';
+    // المايك داخل الشريط
+    const mic = document.getElementById('pMic');
+    if (mic) {
+      mic.classList.add('online-compact', 'show');
+      mic.style.display = 'flex';
+      if (bar && mic.parentElement !== bar) bar.appendChild(mic);
+    }
+  }
+};
+
 async function playStart() {
-  try { await showEnginePlayLoad(3000); } catch (_) {}
+  // متظهرش شاشة تحميل تانية لو جايين من game.html (أونلاين) — كانت بتعمل طبقتين فوق بعض
+  let skipLoad = false;
+  try {
+    if (window.HAWA_PLAY_ONLY) skipLoad = true;
+    const meta = JSON.parse(sessionStorage.getItem('hawa_play_meta') || 'null');
+    if (meta && meta.mode === 'online') skipLoad = true;
+  } catch (_) {}
+  if (!skipLoad) {
+    try { await showEnginePlayLoad(1200); } catch (_) {}
+  }
+  try {
+    const el = document.getElementById('hawaEngineLoad');
+    if (el) { el.style.display = 'none'; try { el.remove(); } catch (_) {} }
+  } catch (_) {}
   try { MOB.closeSheets(); MOB.setPlay(true); } catch (_) {}
   for (const id of [...PREV.keys()]) removePreview(id);
   try { S._buildCam = getBuilderCam(); } catch (_) { S._buildCam = null; }
@@ -8240,26 +8466,35 @@ async function playStart() {
       help.innerHTML = '';
     }
     try {
-      if (online && voiceOn) {
-        VoiceChat.ensureBtn();
-        const b = document.getElementById('pMic');
-        if (b) { b.style.display = 'flex'; b.style.visibility = 'visible'; b.style.opacity = '1'; b.style.zIndex = '50'; }
-        // استماع لصوت الآخرين من غير مايك — فك قفل الصوت بأول لمسة
-        try { VoiceChat._startListenLoop(); } catch (_) {}
-        try {
-          const unlockOnce = () => {
-            try { VoiceChat._unlock && VoiceChat._unlock(); } catch (_) {}
-            try { VoiceChat._ensureListenAll && VoiceChat._ensureListenAll(); } catch (_) {}
-          };
-          addEventListener('pointerdown', unlockOnce, { once: false, passive: true });
-          addEventListener('keydown', unlockOnce, { once: false, passive: true });
-        } catch (_) {}
-        try { say('🔊 اضغط أي مكان لسماع الآخرين · المايك (B) عشان يسمعوك', 4500); } catch (_) {}
+      if (online) {
+        try { OnlineMenu.setupOnlineChrome(); } catch (e) { console.warn(e); }
+        if (voiceOn) {
+          VoiceChat.ensureBtn();
+          const b = document.getElementById('pMic');
+          if (b) {
+            b.classList.add('online-compact', 'show');
+            b.style.display = 'flex'; b.style.visibility = 'visible'; b.style.opacity = '1';
+            const bar = document.getElementById('pOnlineBar');
+            if (bar && b.parentElement !== bar) bar.appendChild(b);
+          }
+          try { VoiceChat._startListenLoop(); } catch (_) {}
+          try {
+            const unlockOnce = () => {
+              try { VoiceChat._unlock && VoiceChat._unlock(); } catch (_) {}
+              try { VoiceChat._ensureListenAll && VoiceChat._ensureListenAll(); } catch (_) {}
+            };
+            addEventListener('pointerdown', unlockOnce, { once: false, passive: true });
+            addEventListener('keydown', unlockOnce, { once: false, passive: true });
+          } catch (_) {}
+          try { say('🔊 اضغط أي مكان لسماع الآخرين · المايك أعلى اليسار', 4000); } catch (_) {}
+        }
       } else {
-        
+        try { document.body.classList.remove('online-play'); } catch (_) {}
         try { VoiceChat.off(); } catch (_) {}
         const b = document.getElementById('pMic');
         if (b) b.style.display = 'none';
+        const bar = document.getElementById('pOnlineBar');
+        if (bar) bar.classList.remove('show');
       }
     } catch (e) { console.warn(e); }
   })();

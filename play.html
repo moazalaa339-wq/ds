@@ -146,21 +146,57 @@
   <div id="pTop">
     <button id="pExit" class="stop"><span data-ic="stop"></span>خروج للبناء<kbd>P</kbd></button>
   </div>
+  <div id="pOnlineBar">
+    <button type="button" id="pMenuBtn" title="قائمة الأونلاين">𓂀</button>
+    <button type="button" id="pMic" class="online-compact" title="المايك (B)">
+      <span class="mic-ico" aria-hidden="true">
+        <svg class="r" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/><line x1="4" y1="4" x2="20" y2="20"/></svg>
+        <svg class="g" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+      </span>
+      <kbd>B</kbd>
+      <span class="mic-lbl">مكتوم</span>
+      <span class="mic-bar"><i></i></span>
+    </button>
+  </div>
   <div id="pHud">
     <div class="chip msg" id="pMsg" hidden></div>
   </div>
   <div id="pPrompt" class="prompt" hidden></div>
   <div id="pFps"></div>
   <div id="pHelp" hidden></div>
-  <button type="button" id="pMic" title="تفعيل/إيقاف المايك (B)">
-    <span class="mic-ico" aria-hidden="true">
-      <svg class="r" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/><line x1="4" y1="4" x2="20" y2="20"/></svg>
-      <svg class="g" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
-    </span>
-    <kbd>B</kbd>
-    <span class="mic-lbl">مكتوم</span>
-    <span class="mic-bar"><i></i></span>
-  </button>
+</div>
+<div id="pOnlineMenu" aria-hidden="true">
+  <div class="pom-card" role="dialog">
+    <div class="pom-head">
+      <div class="pom-logo">𓂀</div>
+      <div>
+        <div class="pom-title">Hawa Online</div>
+        <div class="pom-sub">إعدادات الجلسة</div>
+      </div>
+      <button type="button" class="pom-close" id="pMenuClose" title="إغلاق">✕</button>
+    </div>
+    <div class="pom-list">
+      <button type="button" class="pom-item" id="pMuteAll">
+        <span class="ic">🔇</span>
+        <span id="pMuteAllLbl">كتم أصوات جميع اللاعبين</span>
+      </button>
+      <button type="button" class="pom-item danger" id="pLeaveOnline">
+        <span class="ic">🚪</span>
+        <span>الخروج من الأونلاين والرجوع للرئيسية</span>
+      </button>
+    </div>
+    <div class="pom-hint">المايك من الأيقونة أعلى اليسار · B للتبديل</div>
+  </div>
+</div>
+<div id="pOnlineConfirm" aria-hidden="true">
+  <div class="poc-card">
+    <h3>تأكيد الخروج</h3>
+    <p>هتخرج من الرووم ويتقطع الاتصال، واللاعبين هيشوفوا إنك غادرت. متأكد؟</p>
+    <div class="poc-row">
+      <button type="button" class="poc-cancel" id="pLeaveCancel">إلغاء</button>
+      <button type="button" class="poc-ok" id="pLeaveOk">تأكيد الخروج</button>
+    </div>
+  </div>
 </div>
 
 <!-- ================= محرر الملفات ================= -->
