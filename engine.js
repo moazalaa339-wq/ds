@@ -258,6 +258,24 @@ function setVirtualKey(code, down) {
 function clearVirtualKeys() {
   for (const c of Object.keys(VK)) { delete VK[c]; if (K[c]) K[c] = 0; }
 }
+/** امسح كل المفاتيح (فيزيائي + افتراضي) — يمنع اللزق بعد فقدان التركيز */
+function clearAllKeys(reason) {
+  try {
+    for (const c of Object.keys(K)) delete K[c];
+    for (const c of Object.keys(VK)) delete VK[c];
+  } catch (_) {
+    try { for (const k in K) K[k] = 0; } catch (__) {}
+    try { for (const k in VK) delete VK[k]; } catch (__) {}
+  }
+  // صفّر حالات متعلقة بالإدخال المستمر
+  try { if (typeof rmb !== 'undefined') rmb = false; } catch (_) {}
+  try {
+    if (typeof RT !== 'undefined' && RT) {
+      RT.spPrev = false;
+      if (RT.v && RT.v.set) { /* لا نصفر السرعة بالكامل أثناء القفز — بس المفاتيح */ }
+    }
+  } catch (_) {}
+}
 function applyInputMap(inp) {
   if (!inp || typeof inp !== 'object') return;
   const pairs = [
@@ -1382,14 +1400,40 @@ addEventListener('mousedown', e => { if (e.button === 0) K.Mouse0 = 1; if (e.but
 addEventListener('mouseup', e => { if (e.button === 0) K.Mouse0 = 0; if (e.button === 2) K.Mouse2 = 0; });
 
 let ctrlPend = false;
-addEventListener('blur', () => { for (const k in K) K[k] = 0; });
+// —— منع لزق المفاتيح عند الخروج من النافذة/التطبيق ——
+(function bindKeyUnstick() {
+  const wipe = () => { try { clearAllKeys('focus-lost'); } catch (_) {} ctrlPend = false; };
+  // window blur: Alt+Tab / تطبيق تاني
+  window.addEventListener('blur', wipe);
+  // الصفحة مخفية (تبويب تاني / تصغير)
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden || document.visibilityState === 'hidden') wipe();
+  });
+  // إغلاق/تجميد الصفحة
+  window.addEventListener('pagehide', wipe);
+  // الرجوع للنافذة: امسح كمان (لو مفتاح اتفلت برة من غير keyup)
+  window.addEventListener('focus', wipe);
+  document.addEventListener('focusin', () => { /* لا تمسح عند التركيز على input */ });
+  // خروج من pointer lock
+  document.addEventListener('pointerlockchange', () => {
+    if (!document.pointerLockElement) wipe();
+  });
+  // لو المتصفح علّق الـ keyup
+  window.addEventListener('mouseup', e => {
+    if (e.button === 0) K.Mouse0 = 0;
+    if (e.button === 2) { K.Mouse2 = 0; try { rmb = false; } catch (_) {} }
+  });
+})();
 addEventListener('keyup', e => {
   K[e.code] = 0;
+  try { delete K[e.code]; } catch (_) {}
   if (e.key === 'Control' && ctrlPend && S.mode === 'build') toggleLock();
   if (e.key === 'Control') ctrlPend = false;
 });
 addEventListener('keydown', e => {
-  if (e.target.matches('input,textarea,select')) return;
+  // لو الصفحة مش ظاهرة: متسجّلش ضغطات
+  if (document.hidden || document.visibilityState === 'hidden') return;
+  if (e.target && e.target.matches && e.target.matches('input,textarea,select,[contenteditable="true"]')) return;
   K[e.code] = 1;
   if (e.key !== 'Control') ctrlPend = false;
   if (S.mode === 'play') {

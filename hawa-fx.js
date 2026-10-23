@@ -3,8 +3,9 @@
   'use strict';
   var W = window, D = document;
 
+  /* ألوان موحّدة مع ستايل المحرك / مشهد الانتقال: ذهب + سماوي */
   var CFG = {
-    test:  { C: 1400, D: 2000, rgb: [190, 120, 255], rgb2: [255, 60, 220],  sub: '',   ar: '' },
+    test:  { C: 1400, D: 2000, rgb: [45, 226, 196],  rgb2: [255, 190, 61],  sub: '',   ar: '' },
     build: { C: 1900, D: 3000, rgb: [255, 190, 61],  rgb2: [255, 157, 28],  sub: '',   ar: '' },
     play:  { C: 1750, D: 2800, rgb: [45, 226, 196],  rgb2: [20, 184, 160],  sub: '',   ar: '' }
   };
@@ -132,8 +133,8 @@
         if (o.g > 0) {
           var gx = Math.sin(o.time * .05 + i * 2.3) * fs * .05 * o.g;
           c.globalCompositeOperation = 'lighter';
-          c.fillStyle = 'rgba(255,40,200,.85)'; c.fillText(L[i], -ws[i] / 2 + gx, 0);
-          c.fillStyle = 'rgba(0,220,255,.85)'; c.fillText(L[i], -ws[i] / 2 - gx, 0);
+          c.fillStyle = 'rgba(255,190,61,.9)'; c.fillText(L[i], -ws[i] / 2 + gx, 0);
+          c.fillStyle = 'rgba(45,226,196,.9)'; c.fillText(L[i], -ws[i] / 2 - gx, 0);
           c.globalCompositeOperation = 'source-over';
         }
         var g = c.createLinearGradient(0, -fs * .75, 0, 0);
@@ -199,8 +200,8 @@
     
     if (cover > 0) {
       var g = c.createRadialGradient(VW / 2, VH / 2, 0, VW / 2, VH / 2, Math.hypot(VW, VH) / 2);
-      g.addColorStop(0, 'rgba(36,12,64,' + (cover * fade) + ')');
-      g.addColorStop(1, 'rgba(6,3,14,' + (cover * fade) + ')');
+      g.addColorStop(0, 'rgba(14,12,20,' + (cover * fade) + ')');
+      g.addColorStop(1, 'rgba(6,5,10,' + (cover * fade) + ')');
       c.fillStyle = g; c.fillRect(0, 0, VW, VH);
       
       c.fillStyle = 'rgba(255,255,255,' + (.025 * cover * fade) + ')';
@@ -229,7 +230,7 @@
     var fl = pr(t, C - 80, C + 180);
     if (fl > 0 && fl < 1) {
       var fa = fl < .35 ? fl / .35 : 1 - (fl - .35) / .65;
-      c.fillStyle = 'rgba(255,240,255,' + (fa * .35) + ')'; c.fillRect(0, 0, VW, VH);
+      c.fillStyle = 'rgba(255,242,220,' + (fa * .35) + ')'; c.fillRect(0, 0, VW, VH);
     }
   }
 
