@@ -1,14 +1,4 @@
-/* =====================================================================
-   HAWA ENGINE — Transition FX
-   ثلاث انتقالات سينمائية بنفس الهوية وألوان/أسلوب مختلف:
-     test  : لقطة شاشة (كاميرا + فلاش + صورة تطير) — بنفسجي/وردي
-     build : بناء بالطوب + شرر لحام — ذهبي
-     play  : قفزة سرعة (iris + نجوم) — فيروزي
-   الاستخدام:
-     HawaFX.play('test', cb, {snap})   // يشغّل ثم ينادي cb تحت الغطاء
-     HawaFX.navigate('build', 'build.html')  // يغطّي ثم ينتقل للصفحة
-     HawaFX.arrive()                   // في الصفحة الجديدة: يكشف الغطاء
-   ===================================================================== */
+
 (function () {
   'use strict';
   var W = window, D = document;
@@ -20,7 +10,7 @@
   };
   var FLAG = 'hawa_fx_arrive';
 
-  /* ---------- أدوات ---------- */
+  
   function cl(x, a, b) { return x < a ? a : x > b ? b : x; }
   function pr(t, a, b) { return cl((t - a) / (b - a), 0, 1); }
   function lerp(a, b, k) { return a + (b - a) * k; }
@@ -36,7 +26,7 @@
   }
   var FONT = 'Cairo,Tahoma,"Segoe UI",sans-serif';
 
-  /* ---------- صوت خفيف (WebAudio) ---------- */
+  
   var AC = null;
   function sfx(kind) {
     try {
@@ -59,7 +49,7 @@
         o.connect(g); g.connect(a.destination); o.start(T0 + d); o.stop(T0 + d + dur + .02);
       };
       if (kind === 'test') {
-        /* أصوات طبيعية: غالق كاميرا + همسة هواء — بدون إيقاع موسيقي */
+        
         noise(.42, .04, 4200, 1800, .38, 'highpass');
         noise(.48, .07, 1600, 600, .22, 'lowpass');
         tone(.55, .18, 180, 90, .045, 'sine');
@@ -69,7 +59,7 @@
         tone(.45, .35, 110, 38, .5, 'sine');
         for (var i = 0; i < 4; i++) { tone(1.0 + i * .13, .14, 1100 - i * 90, 500, .07, 'square'); noise(1.0 + i * .13, .08, 3500, 1200, .12, 'bandpass'); }
       } else {
-        /* دخول اللعب: همس فضاء + نبضة ناعمة */
+        
         noise(.05, .9, 120, 900, .22, 'lowpass');
         tone(.4, .8, 95, 42, .12, 'sine');
         noise(1.1, .35, 600, 180, .1, 'bandpass');
@@ -78,7 +68,7 @@
     } catch (_) { }
   }
 
-  /* ---------- الكانفس ---------- */
+  
   var cv = null, c = null, VW = 0, VH = 0, dpr = 1, raf = 0, busy = false;
   function fit() {
     if (!cv) return;
@@ -102,7 +92,7 @@
     cv = null; c = null; busy = false; api.busy = false;
   }
 
-  /* ---------- العنوان المشترك: شعار + HAWA + ENGINE + سطر فرعي ---------- */
+  
   function mark(x, y, r, o) {
     var p = pr(o.p, 0, .5); if (p <= 0) return;
     var A = o.cfg.rgb, B = o.cfg.rgb2, e = eo(p);
@@ -112,7 +102,7 @@
     c.shadowColor = rgba(A, .85); c.shadowBlur = r * .9; c.fillStyle = g; rr(c, -r, -r, 2 * r, 2 * r, r * .28); c.fill();
     c.shadowBlur = 0; c.strokeStyle = rgba(A, .6); c.lineWidth = 1.5; rr(c, -r * 1.3, -r * 1.3, 2.6 * r, 2.6 * r, r * .36); c.stroke();
     c.restore();
-    /* عين مرسومة فيكتور (مش خط) — تظهر على أي جهاز */
+    
     c.save(); c.globalAlpha = o.a * e; c.translate(x, y);
     var ew = r * .86, eh = r * .48;
     c.fillStyle = '#140a1c'; c.strokeStyle = '#140a1c'; c.lineWidth = Math.max(2, r * .11); c.lineJoin = 'round'; c.lineCap = 'round';
@@ -154,7 +144,7 @@
       }
       x += ws[i] + gap;
     }
-    /* ENGINE */
+    
     var ep = pr(o.p, .35, .8);
     if (ep > 0) {
       var f2 = fs * .27, sp = f2 * .95, E = 'ENGINE'.split(''), ey = base + fs * .42;
@@ -169,12 +159,12 @@
       c.beginPath(); c.moveTo(cx - et / 2 - 22, ey - f2 * .35); c.lineTo(cx - et / 2 - 22 - ln, ey - f2 * .35);
       c.moveTo(cx + et / 2 + 22, ey - f2 * .35); c.lineTo(cx + et / 2 + 22 + ln, ey - f2 * .35); c.stroke();
     }
-    /* سطر فرعي (مُعطّل إن كان فارغاً) */
+    
     var sp2 = pr(o.p, .55, 1);
     if (sp2 > 0 && cfg.sub) {
       var f3 = Math.max(11, fs * .095), sgp = f3 * .32;
       c.font = '700 ' + f3 + 'px ' + FONT; c.globalAlpha = o.a * eo(sp2) * .85; c.fillStyle = rgba(A, 1);
-      /* مقاطع: اللاتيني بتباعد حروف، والعربي كلمة كاملة (عشان الحروف تفضل متصلة) */
+      
       var segs = cfg.sub.split('·').map(function (z) { return z.trim(); }), parts = [], sw = 0, k, m;
       segs.forEach(function (z, idx) {
         if (idx > 0) { var dw = c.measureText('·').width; parts.push({ dot: 1, w: dw }); sw += dw + sgp * 2; }
@@ -190,7 +180,7 @@
         else if (pt.ar) { c.fillText(pt.t, sx, sy); sx += pt.w; }
         else { for (m = 0; m < pt.chs.length; m++) { c.fillText(pt.chs[m], sx, sy); sx += pt.cw[m] + sgp; } sx -= sgp; }
       });
-      /* شريط تقدّم رفيع */
+      
       var bw = Math.min(VW * .36, 360), by = sy + f3 * 1.5;
       c.globalAlpha = o.a * .35; c.fillStyle = rgba(A, .35); rr(c, cx - bw / 2, by, bw, 3, 2); c.fill();
       c.globalAlpha = o.a * .95; c.fillStyle = rgba(A, 1); c.shadowColor = rgba(A, .9); c.shadowBlur = 10;
@@ -199,27 +189,25 @@
     c.restore();
   }
 
-  /* =====================================================================
-     TEST — لقطة شاشة
-     ===================================================================== */
+  
   function rTest(t, cfg, snap) {
-    /* بدون مرحلة التقاط الشاشة — فقط ما بعد الالتقاط: غطاء + عنوان + فلاش */
+    
     var A = cfg.rgb, B = cfg.rgb2, C = cfg.C, tt = Math.min(t, C);
     var cover = eo(pr(tt, 0, 380));
     var fade = 1 - pr(t, C, C + 420);
 
-    /* غطاء بنفسجي ناعم */
+    
     if (cover > 0) {
       var g = c.createRadialGradient(VW / 2, VH / 2, 0, VW / 2, VH / 2, Math.hypot(VW, VH) / 2);
       g.addColorStop(0, 'rgba(36,12,64,' + (cover * fade) + ')');
       g.addColorStop(1, 'rgba(6,3,14,' + (cover * fade) + ')');
       c.fillStyle = g; c.fillRect(0, 0, VW, VH);
-      /* خطوط مسح خفيفة جداً */
+      
       c.fillStyle = 'rgba(255,255,255,' + (.025 * cover * fade) + ')';
       for (var y = 0; y < VH; y += 5) c.fillRect(0, y, VW, 1);
     }
 
-    /* العنوان HAWA */
+    
     var tp = pr(tt, 280, 900);
     if (tp > 0 && fade > 0) {
       title({
@@ -227,7 +215,7 @@
         g: tt < 1200 ? Math.max(0, 1 - pr(tt, 700, 1200)) * 0.8 : 0,
         time: tt, bar: pr(tt, 500, C)
       });
-      /* خط مسح ناعم */
+      
       var sy2 = lerp(-30, VH + 30, eio(pr(tt, 350, 1100)));
       if (pr(tt, 350, 1100) > 0 && pr(tt, 350, 1100) < 1) {
         var sg = c.createLinearGradient(0, sy2 - 50, 0, sy2 + 2);
@@ -237,7 +225,7 @@
       }
     }
 
-    /* فلاش خفيف عند الانتقال */
+    
     var fl = pr(t, C - 80, C + 180);
     if (fl > 0 && fl < 1) {
       var fa = fl < .35 ? fl / .35 : 1 - (fl - .35) / .65;
@@ -245,9 +233,7 @@
     }
   }
 
-  /* =====================================================================
-     BUILD — طوب + شرر
-     ===================================================================== */
+  
   function rBuild(t, cfg) {
     var A = cfg.rgb, B = cfg.rgb2, C = cfg.C, tt = Math.min(t, C);
     var rows = Math.max(9, Math.round(VH / 72)), rh = VH / rows, bw = Math.max(96, VW / 9);
@@ -273,17 +259,17 @@
       }
       c.restore();
     }
-    /* شبكة بلوبرنت خفيفة فوق الطوب */
+    
     var cover = pr(tt, 500, 1000) * (1 - pr(t, C, C + 350));
     if (cover > 0) {
       c.save(); c.globalAlpha = cover * .5; c.strokeStyle = rgba(A, .13); c.lineWidth = 1; c.beginPath();
       for (var gx = 0; gx < VW; gx += 48) { c.moveTo(gx, 0); c.lineTo(gx, VH); }
       for (var gy = 0; gy < VH; gy += 48) { c.moveTo(0, gy); c.lineTo(VW, gy); }
       c.stroke(); c.restore();
-      /* ظل مركزي لقراءة العنوان */
+      
       var vg = c.createRadialGradient(VW / 2, VH / 2, 0, VW / 2, VH / 2, Math.min(VW, VH) * .75);
       vg.addColorStop(0, 'rgba(0,0,0,' + (.7 * cover) + ')'); vg.addColorStop(1, 'rgba(0,0,0,0)'); c.fillStyle = vg; c.fillRect(0, 0, VW, VH);
-      /* علامات الزوايا */
+      
       c.save(); c.globalAlpha = cover; c.strokeStyle = rgba(A, .9); c.lineWidth = 2.5;
       var m = Math.min(VW, VH) * .05, Ln = m * 1.3;
       c.beginPath();
@@ -292,7 +278,7 @@
       c.moveTo(VW - m, VH - m - Ln); c.lineTo(VW - m, VH - m); c.lineTo(VW - m - Ln, VH - m);
       c.moveTo(m + Ln, VH - m); c.lineTo(m, VH - m); c.lineTo(m, VH - m - Ln); c.stroke(); c.restore();
     }
-    /* العنوان + شرر */
+    
     var tp = pr(tt, 900, 1650), fade = 1 - pr(t, C, C + 380), sparks = [];
     if (tp > 0 && fade > 0) {
       var fs = Math.min(VW * .2, VH * .26, 190);
@@ -300,7 +286,7 @@
         cfg: cfg, p: tp, a: fade, style: 'drop', g: 0, time: tt, dy: -(1 - fade) * 10, bar: pr(tt, 1000, C),
         letterLand: function (idx, lx, ly, lp) { if (lp > .6) sparks.push([idx, lx, ly, (lp - .6) / .4]); }
       });
-      /* الشرر: حسب زمن هبوط كل حرف */
+      
       for (i = 0; i < sparks.length; i++) {
         var s0 = sparks[i], landT = 900 + s0[0] * .13 * 750 + .6 * .5 * 750 * 1.0;
         var age = (tt - landT) / 1000;
@@ -316,9 +302,7 @@
     }
   }
 
-  /* =====================================================================
-     PLAY — بوابة سداسية + شرائط أورورا + كوكبة جزيئات (مختلف كلياً عن iris)
-     ===================================================================== */
+  
   function rPlay(t, cfg) {
     var A = cfg.rgb, B = cfg.rgb2, C = cfg.C, tt = Math.min(t, C);
     var cx = VW / 2, cy = VH / 2, maxR = Math.hypot(VW, VH) / 2;
@@ -328,14 +312,14 @@
     var fadeOut = eio(pr(t, C, cfg.D));
     var reveal = t < C ? 0 : fadeOut;
 
-    /* خلفية فضاء عميق */
+    
     var bg = c.createLinearGradient(0, 0, 0, VH);
     bg.addColorStop(0, 'rgba(2,18,28,' + coverIn + ')');
     bg.addColorStop(.45, 'rgba(1,10,18,' + coverIn + ')');
     bg.addColorStop(1, 'rgba(0,6,12,' + coverIn + ')');
     c.fillStyle = bg; c.fillRect(0, 0, VW, VH);
 
-    /* شرائط أورورا متموجة أفقياً */
+    
     var i, j;
     if (coverIn > 0) {
       for (i = 0; i < 5; i++) {
@@ -357,7 +341,7 @@
       }
     }
 
-    /* كوكبة جزيئات تتجمّع نحو المركز */
+    
     c.save(); c.globalAlpha = coverIn * (1 - reveal);
     for (i = 0; i < 120; i++) {
       var seed = hs(i * 13.7);
@@ -376,7 +360,7 @@
     }
     c.restore();
 
-    /* بوابة سداسية دوّارة */
+    
     function hexPath(r, rot) {
       c.beginPath();
       for (var k = 0; k < 6; k++) {
@@ -399,14 +383,14 @@
         c.stroke();
         c.restore();
       }
-      /* توهج داخل البوابة */
+      
       var glow = c.createRadialGradient(cx, cy, 0, cx, cy, baseR * 1.1);
       glow.addColorStop(0, rgba(A, 0.35 * portal * (1 - reveal)));
       glow.addColorStop(0.6, rgba(B, 0.12 * portal * (1 - reveal)));
       glow.addColorStop(1, 'rgba(0,0,0,0)');
       c.fillStyle = glow; c.fillRect(0, 0, VW, VH);
 
-      /* شظايا بلورية تندفع للخارج */
+      
       if (burst > 0) {
         c.save(); c.globalAlpha = (1 - reveal) * Math.min(1, burst * 1.4);
         for (i = 0; i < 36; i++) {
@@ -423,7 +407,7 @@
       }
     }
 
-    /* موجة أفقية ناعمة (مسح ضوئي) */
+    
     var scan = pr(tt, 500, 1600);
     if (scan > 0 && scan < 1) {
       var sy = lerp(-40, VH + 40, eio(scan));
@@ -433,13 +417,13 @@
       c.fillStyle = 'rgba(200,255,245,.85)'; c.fillRect(0, sy, VW, 2);
     }
 
-    /* العنوان */
+    
     var tp = pr(tt, 720, 1450), fade = 1 - pr(t, C, C + 380);
     if (tp > 0 && fade > 0) {
       title({ cfg: cfg, p: tp, a: fade * (1 - reveal * 0.5), style: 'rise', g: 0, time: tt, bar: pr(tt, 900, C) });
     }
 
-    /* كشف المشهد: البوابة تتوسّع كالدم و تمسح الغطاء */
+    
     if (t >= C) {
       var hole = eo(fadeOut) * maxR * 1.15;
       c.save(); c.globalCompositeOperation = 'destination-out'; c.fillStyle = '#000';
@@ -452,7 +436,7 @@
         hexPath(hole, fadeOut * 0.4); c.stroke(); c.restore();
       }
     } else {
-      /* طبقة شفافة خفيفة فوق كل شيء أثناء التغطية */
+      
       c.fillStyle = 'rgba(0,8,12,' + (0.08 * coverIn) + ')'; c.fillRect(0, 0, VW, VH);
     }
   }
@@ -466,7 +450,7 @@
     else rPlay(t, cfg);
   }
 
-  /* ---------- تشغيل المراحل ---------- */
+  
   function phase2(kind, snap, done) {
     var cfg = CFG[kind], s2 = 0;
     (function loop(now) {
@@ -481,7 +465,7 @@
   var api = {
     busy: false,
     kinds: CFG,
-    /* يشغّل الأنيميشن؛ cb يُنادى تحت الغطاء الكامل */
+    
     play: function (kind, cb, opts) {
       opts = opts || {};
       if (busy || !CFG[kind]) return false;
@@ -499,12 +483,12 @@
           location.href = opts.nav; return;
         }
         try { cb && cb(); } catch (e) { console.error('[HawaFX cb]', e); }
-        /* بعد ما cb يخلّص (ممكن يكون تقيل) نبدأ مرحلة الكشف من أول */
+        
         raf = requestAnimationFrame(function () { phase2(kind, opts.snap); });
       })(performance.now());
       return true;
     },
-    /* معاينة إطار ثابت عند زمن معيّن (للتجارب) */
+    
     preview: function (kind, t, snap) { if (!cv) { mount(); busy = true; api.busy = true; } render(kind, t, snap); },
     close: function () { unmount(); },
     navigate: function (kind, url) {
@@ -512,7 +496,7 @@
       if (W.matchMedia && W.matchMedia('(prefers-reduced-motion:reduce)').matches) { location.href = url; return; }
       if (!api.play(kind, null, { nav: url })) location.href = url;
     },
-    /* في الصفحة الجديدة: يبدأ مغطّي ثم يكشف */
+    
     arrive: function () {
       var f = null;
       try { f = sessionStorage.getItem(FLAG); sessionStorage.removeItem(FLAG); } catch (_) { }

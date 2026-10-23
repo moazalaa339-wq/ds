@@ -31,32 +31,32 @@
     <div class="grow"></div>
 
     <div class="seg">
-      <button id="bAuto" title="ملف تلقائي للذكاء الاصطناعي حسب القسم"><span data-ic="code"></span><i>تلقائي</i></button>
-      <button id="bSave" title="حفظ المشروع (Ctrl+S)"><span data-ic="save"></span><i>حفظ</i></button>
-      <button id="bLoad" title="تحميل مشروع"><span data-ic="load"></span><i>تحميل</i></button>
+      <button id="bAuto" title="تلقائي"><span data-ic="code"></span><i>تلقائي</i></button>
+      <button id="bSave" title="حفظ"><span data-ic="save"></span><i>حفظ</i></button>
+      <button id="bLoad" title="تحميل"><span data-ic="load"></span><i>تحميل</i></button>
     </div>
     <div class="seg">
-      <button id="bConvert" title="تحويل المشروع إلى لعبة جاهزة للتوزيع (ZIP)"><span data-ic="export"></span><i>تحويل إلى لعبة</i></button>
-      <button id="bOpenGame" title="فتح صفحة اللعبة (أوفلاين / أونلاين)"><span data-ic="play"></span><i>فتح اللعبة</i></button>
+      <button id="bConvert" title="تحويل إلى لعبة"><span data-ic="export"></span><i>تحويل إلى لعبة</i></button>
+      <button id="bOpenGame" title="فتح اللعبة"><span data-ic="play"></span><i>فتح اللعبة</i></button>
     </div>
-    <button id="bTest" class="go" title="تشغيل الاختبار (P للخروج)"><span data-ic="play"></span>اختبر</button>
+    <button id="bTest" class="go" title="اختبر"><span data-ic="play"></span>اختبر</button>
   </header>
 
   <!-- شريط الأدوات الجانبي -->
   <nav id="rail">
     <div class="rail-group" id="tools">
-      <button data-tool="select" class="on" title="تحديد (Esc)"><span data-ic="cursor"></span></button>
-      <button data-tool="place" title="وضع كائن (N)"><span data-ic="plus"></span></button>
-      <button data-tool="delete" title="حذف بالضغط (Del)"><span data-ic="trash"></span></button>
+      <button data-tool="select" class="on" title="تحديد"><span data-ic="cursor"></span></button>
+      <button data-tool="place" title="وضع"><span data-ic="plus"></span></button>
+      <button data-tool="delete" title="حذف"><span data-ic="trash"></span></button>
     </div>
     <div class="rail-group">
-      <button id="bFly" title="وضع الطيران (V)"><span data-ic="fly"></span></button>
-      <button id="bRs" title="نقطة بدء أوفلاين: تتموضع فوق أي سطح صلب"><span data-ic="flag"></span></button>
-      <button id="bOnRs" title="نقطة بدء أونلاين (حد أقصى 3 لاعبين)"><span data-ic="users"></span><span class="snap-l" id="onRsN">0/3</span></button>
-      <button id="bSnap" title="خطوة الشبكة"><span data-ic="grid"></span><span class="snap-l">0.5</span></button>
+      <button id="bFly" title="طيران"><span data-ic="fly"></span></button>
+      <button id="bRs" title="نقطة أوفلاين"><span data-ic="flag"></span></button>
+      <button id="bOnRs" title="نقطة أونلاين"><span data-ic="users"></span><span class="snap-l" id="onRsN">0/8</span></button>
+      <button id="bSnap" title="شبكة"><span data-ic="grid"></span><span class="snap-l">0.5</span></button>
     </div>
     <div class="rail-group bottom">
-      <button id="bPar" class="on" title="إظهار/إخفاء اللوحات"><span data-ic="panel"></span></button>
+      <button id="bPar" class="on" title="لوحات"><span data-ic="panel"></span></button>
     </div>
   </nav>
 
@@ -77,7 +77,6 @@
         <button id="pAuto" title="ملف تلقائي">⬇</button>
       </div>
       <div id="pList"></div>
-      <p class="hint">كل ملف يتفعّل بزر «تفعيل»: الأخضر = شغال في الاختبار، الأحمر = متوقف. الملف المفعّل بيشتغل مع اللعبة كلها من غير ما تحطه على كائن.</p>
     </div>
 
     <div id="sobjP" hidden>
@@ -88,7 +87,6 @@
         <button id="sAuto" title="ملف تلقائي">⬇</button>
       </div>
       <div id="sList"></div>
-      <p class="hint">اضغط «وضع» ثم اضغط على الأرض: الكائن يتحط زي الشكل الحقيقي ومعاه بارامتراته في لوحة الخصائص. يدعم سكربتات المحرك الكبير (Game.defineParams / Game.onUpdate).</p>
     </div>
   </aside>
 
@@ -114,7 +112,7 @@
         <div class="gseg">
           <button id="gDup" title="نسخ (Ctrl+D)"><span class="ico" data-ic="copy"></span><i>نسخ</i></button>
           <button id="gDel" class="red" title="حذف (Del)"><span class="ico" data-ic="trash"></span><i>حذف</i></button>
-          <button id="gCoord" title="إظهار/إخفاء الإحداثيات (مثل المحرك الكبير)"><span class="ico" data-ic="grid"></span><i>إحداثيات</i></button>
+          <button id="gCoord" title="إحداثيات"><span class="ico" data-ic="grid"></span><i>إحداثيات</i></button>
         </div>
       </div>
       <div id="gzHint" class="gz-hint"></div>

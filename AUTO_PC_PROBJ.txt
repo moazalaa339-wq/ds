@@ -39,6 +39,13 @@
 ممنوع: var Game = ... داخل الملف.
 === نهاية API_TRUTH_V900 ===
 
+=== OPEN_PLAYER_CONTROL_LOCAL_V1100 ===
+حتى أوفلاين: Game.controlPlayer / teleportPlayer / setPlayerAppearance / setPlayerState / setCinematic / getAllPlayers متاحة محلياً.
+أونلاين: نفس الدوال تشتغل عبر الشبكة (شوف ملفات *_SYNC). أي تحكم في اللاعبين مسموح — الأمثلة مش قيود.
+=== نهاية OPEN_PLAYER_CONTROL_LOCAL_V1100 ===
+
+
+
 === AUTO_PC_PROBJ.txt (ملف تلقائي مخصص — يُحمَّل وحده) ===
 device=PC  section=PROBJ  playNet=offline
 هذا الملف فقط للسياق الحالي. ممنوع الاعتماد على ملفات تلقائي أخرى.
@@ -401,15 +408,20 @@ MEDIA_PARAMS (إلزامي عند طلب صورة/صوت/فيديو/ملف):
   مثال: {key:"sfx",label:"صوت",type:"audio",value:""} · {key:"col",label:"لون",type:"color",value:"#ff0000"}
 الكولايدر: أسماء wall/حائط أو isWall:true؛ متصغّرش المجسم لدرجة يختفي التصادم.
 
-PLAYER_IDENTITY: كل لاعب مربوط بـ username التسجيل + صورته (avatar).
-  Game.getMyName() / getMyUsername() → اسم التسجيل اللي سجّل بيه اللاعب (مش id تقني)
-  Game.getMyAvatar() → صورة البروفايل (dataURL/url) لنفس الحساب
-  Game.getAllPlayers() → [{id,name/username,avatar,local,mesh,position}]
-  Game.getRoster() → [{id,name,isHost}] أسماء الدخول للغرفة
-  Game.getNetPlayers() → لاعبين السيرفر بأسماء التسجيل + avatar إن وُجد
-RULE: لما تتعامل مع لاعبين السيرفر استخدم name/username من getAllPlayers/getRoster — ده نفس الاسم الظاهر في اللوبي وصورته.
-مثال ترحيب بالاسم المسجّل:
-  var p=Game.getAllPlayers()||[]; p.forEach(function(x){ /* x.name + x.avatar */ });
+PLAYER_IDENTITY: اسم اللاعب = الاسم اللي كتبه في لوبي الأونلاين (إنشاء/انضمام) — متاح بحرية في أي سكربت.
+  Game.getMyName() / getMyUsername() → اسمك من اللوبي (مش id تقني)
+  Game.getLocalPlayer() → {name,username,slot,mesh,position,local:true}
+  Game.getAllPlayers() → [{id,name,username,slot,local,isHost,mesh,position}] كل الموجودين
+  Game.getRoster() → [{id,name,slot,isHost}] قائمة الغرفة
+  Game.getRemotePlayers() → لاعبين تانيين أونلاين [{slot,name,rig}]
+  Game.getPing() → رقم البنج بالملّي ثانية (null لو أوفلاين)
+  Game.getPlayerId() → رقم السلوت (تقني)
+RULE: استخدم name/username من getMyName / getAllPlayers / getRoster — ده نفس الاسم الظاهر في اللوبي.
+  تقدر تعرضه فوق الراس أو في HUD أو أي مكان براحتك — مفيش قالب إجباري.
+مثال ترحيب:
+  Game.subtitle("أهلاً يا " + (Game.getMyName()||"لاعب"));
+مثال قائمة:
+  var p=Game.getAllPlayers()||[]; p.forEach(function(x){ /* x.name + x.mesh */ });
 MULTIPLAYER_PARITY: Scripted systems MUST feel like the football field — every player sees the same world.
 ENGINE_AUTO_SYNC (always on online):
   Game.setPosition/setRotation/setVisible/setScale → auto net
@@ -548,7 +560,7 @@ Write sync like the football field: professional multiplayer-first code
 runtime=Full GameAPI (play + test + multiplayer)
 
 === اللاعبون (محلي + سيرفر) ===
-Game.getMyName() / getMyUsername() → اسم التسجيل (username) في اللوبي
+Game.getMyName() / getMyUsername() → اسمك من لوبي الأونلاين (اللي كتبته عند الإنشاء/الانضمام)
 Game.getMyAvatar()            → صورة البروفايل لنفس الحساب
 Game.getLocalPlayer()         → أنا {mesh,position,name,avatar?}
 Game.getAllPlayers()          → كل الموجودين (محلي+أونلاين)

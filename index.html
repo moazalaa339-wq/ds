@@ -108,38 +108,67 @@ kbd{font:700 11px/1 Consolas,monospace;padding:5px 9px;border:1px solid var(--li
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 
 /* ---------- أنيميشن دخول المحرك — عظيم وهادئ ---------- */
-#boot{
-  position:fixed;inset:0;z-index:50;background:#05040a;
-  display:flex;align-items:center;justify-content:center;flex-direction:column;
-  pointer-events:auto;transition:opacity 1.05s cubic-bezier(.4,0,.2,1),visibility 1.05s}
-#boot.done{opacity:0;visibility:hidden;pointer-events:none}
-#boot canvas{position:absolute;inset:0;width:100%;height:100%}
-#boot .boot-logo{
-  position:relative;z-index:2;text-align:center;opacity:0;
-  transform:translateY(10px);transition:opacity 1.35s cubic-bezier(.22,1,.36,1),transform 1.35s cubic-bezier(.22,1,.36,1)}
-#boot .boot-logo.show{opacity:1;transform:none}
-#boot .boot-logo .eye{
-  font-size:clamp(20px,3.5vw,28px);color:rgba(200,195,185,.55);margin-bottom:14px;
-  letter-spacing:0;opacity:0;transition:opacity 1.2s ease .15s}
-#boot .boot-logo.show .eye{opacity:1}
-#boot .boot-logo h1{
-  font:300 clamp(40px,8vw,72px)/1 "Segoe UI",Cairo,Tahoma,sans-serif;
-  letter-spacing:.28em;margin:0;padding-inline-start:.28em;
-  color:#f2eee6;font-weight:300}
-#boot .boot-logo .sub{
-  font:500 10px/1 Cairo,Tahoma,sans-serif;letter-spacing:.5em;
-  color:rgba(160,150,165,.45);margin-top:16px;padding-inline-start:.5em}
-#boot .boot-bar{
-  position:relative;z-index:2;width:min(140px,36vw);height:1px;margin-top:36px;
-  background:rgba(255,255,255,.06);overflow:hidden;opacity:0;transition:opacity .8s ease .2s}
-#boot .boot-bar.show{opacity:1}
-#boot .boot-bar i{
-  display:block;height:100%;width:0;background:rgba(242,238,230,.5);
-  transition:width .1s linear}
-.page.boot-hide{opacity:0;transform:translateY(12px);pointer-events:none}
+#gate{position:fixed;inset:0;z-index:50;direction:ltr;overflow:hidden;background:#020206;pointer-events:auto;cursor:pointer;-webkit-tap-highlight-color:transparent}
+#gate.open{background:transparent;pointer-events:none}
+#gate.done{display:none!important}
+#gate .door{position:absolute;left:0;right:0;height:50%;overflow:hidden;z-index:1;will-change:transform;
+  transition:transform .85s cubic-bezier(.66,0,.2,1);
+  background:
+    repeating-linear-gradient(90deg,transparent 0 119px,rgba(255,255,255,.028) 119px 120px),
+    repeating-linear-gradient(0deg,transparent 0 59px,rgba(255,255,255,.02) 59px 60px),
+    linear-gradient(180deg,#0b0a14,#171322)}
+#gate .door.top{top:0;transform:translateY(-101%)}
+#gate .door.bot{bottom:0;transform:translateY(101%);
+  background:
+    repeating-linear-gradient(90deg,transparent 0 119px,rgba(255,255,255,.028) 119px 120px),
+    repeating-linear-gradient(0deg,transparent 0 59px,rgba(255,255,255,.02) 59px 60px),
+    linear-gradient(0deg,#0b0a14,#171322)}
+#gate .door::after{content:"";position:absolute;left:0;right:0;height:1px;background:rgba(255,255,255,.16)}
+#gate .door.top::after{bottom:0}
+#gate .door.bot::after{top:0}
+#gate.close .door{transform:none}
+#gate.open .door{transition:transform 1.15s cubic-bezier(.76,0,.18,1)}
+#gate.open .door.top{transform:translateY(-101%)}
+#gate.open .door.bot{transform:translateY(101%)}
+
+#gate .stage{position:absolute;left:0;width:100%;height:200%;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  font-family:"Segoe UI",Cairo,Tahoma,sans-serif;user-select:none}
+#gate .door.top .stage{top:0}
+#gate .door.bot .stage{bottom:0}
+#gate .eye{font-size:clamp(22px,5vw,34px);color:rgba(220,212,196,.6);margin-bottom:clamp(10px,2vh,18px);opacity:0;transform:translateY(-10px);
+  transition:opacity .9s ease,transform .9s ease}
+#gate.logo .eye{opacity:1;transform:none}
+#gate .big{display:flex;font-weight:700;font-size:clamp(54px,17vw,132px);line-height:1;letter-spacing:.14em;padding-inline-start:.14em;color:#f4f0e8}
+#gate .small{display:flex;font-weight:500;font-size:clamp(14px,4.4vw,28px);line-height:1;color:rgba(45,226,196,.92);
+  margin-top:clamp(12px,2.4vh,22px);letter-spacing:1.1em;padding-inline-start:1.1em;transition:letter-spacing 1.5s cubic-bezier(.16,1,.3,1),padding .9s}
+#gate.logo .small{letter-spacing:.62em;padding-inline-start:.62em}
+#gate .ch{display:inline-block;opacity:0;transform:translateY(38px) scale(1.18);filter:blur(10px);transition:text-shadow .55s ease}
+#gate.logo .ch{animation:gChIn .95s cubic-bezier(.16,1,.3,1) forwards;animation-delay:var(--d,0ms)}
+#gate.charge .big .ch{text-shadow:0 0 22px rgba(45,226,196,.65),0 0 64px rgba(45,226,196,.3)}
+#gate.charge .small .ch{text-shadow:0 0 16px rgba(255,190,61,.7)}
+@keyframes gChIn{0%{opacity:0;transform:translateY(38px) scale(1.18);filter:blur(10px)}60%{filter:blur(0)}100%{opacity:1;transform:none;filter:blur(0)}}
+
+#gate #seam,#gate #prog{position:absolute;left:0;right:0;top:50%;height:2px;margin-top:-1px;pointer-events:none;
+  background:linear-gradient(90deg,transparent,#2de2c4 18%,#fff 50%,#ffbe3d 82%,transparent)}
+#gate #seam{z-index:4;opacity:0;transform:scaleX(.02);box-shadow:0 0 16px 3px rgba(45,226,196,.6),0 0 46px 8px rgba(255,190,61,.28)}
+#gate.impact #seam{animation:gSeam .85s ease-out forwards}
+@keyframes gSeam{0%{opacity:1;transform:scaleX(.02) scaleY(3)}35%{opacity:1;transform:scaleX(1) scaleY(4)}100%{opacity:0;transform:scaleX(1) scaleY(1)}}
+#gate #prog{z-index:4;opacity:0;transform:scaleX(0);box-shadow:0 0 10px 1px rgba(45,226,196,.45)}
+#gate.logo #prog{opacity:.9;transform:scaleX(1);transition:transform 2s cubic-bezier(.4,0,.2,1),opacity .4s}
+#gate.charge #prog{box-shadow:0 0 18px 4px rgba(45,226,196,.8),0 0 50px 10px rgba(255,190,61,.35);transition:box-shadow .4s}
+#gate.open #prog{opacity:0;transition:opacity .3s}
+#gate #burst{position:absolute;left:0;right:0;top:50%;height:300px;margin-top:-150px;z-index:4;pointer-events:none;opacity:0;transform:scaleY(.05);
+  background:radial-gradient(ellipse at center,rgba(255,255,255,.55),rgba(45,226,196,.25) 30%,transparent 70%)}
+#gate.impact #burst{animation:gBurst .9s ease-out forwards}
+@keyframes gBurst{0%{opacity:1;transform:scaleY(.05)}100%{opacity:0;transform:scaleY(1)}}
+#gate #beam{position:absolute;inset:0;z-index:0;opacity:0;pointer-events:none;
+  background:radial-gradient(ellipse 100% 42% at 50% 50%,rgba(225,255,249,.95),rgba(45,226,196,.38) 45%,transparent 78%)}
+#gate.open #beam{animation:gBeam 1.2s ease-out forwards}
+@keyframes gBeam{0%{opacity:1}100%{opacity:0}}
+.page.boot-hide{opacity:0;transform:translateY(16px) scale(1.035);pointer-events:none}
 .page.boot-show{
   opacity:1;transform:none;
-  transition:opacity 1.15s cubic-bezier(.22,1,.36,1) .05s,transform 1.15s cubic-bezier(.22,1,.36,1) .05s}
+  transition:opacity 1.1s cubic-bezier(.22,1,.36,1),transform 1.4s cubic-bezier(.22,1,.36,1)}
 .modes.boot-pop .card{animation:none;opacity:0;transform:translateY(14px)}
 .modes.boot-pop.reveal .card{
   opacity:1;transform:none;
@@ -154,14 +183,11 @@ kbd{font:700 11px/1 Consolas,monospace;padding:5px 9px;border:1px solid var(--li
 </head>
 <body>
 
-<div id="boot" aria-hidden="false">
-  <canvas id="bootCv"></canvas>
-  <div class="boot-logo" id="bootLogo">
-    <div class="eye">𓂀</div>
-    <h1>HAWA</h1>
-    <div class="sub">ENGINE</div>
-  </div>
-  <div class="boot-bar" id="bootBar"><i id="bootFill"></i></div>
+<div id="gate" aria-hidden="true">
+  <div id="beam"></div>
+  <div class="door top"><div class="stage"><div class="eye">𓂀</div><div class="big"><span class="ch" style="--d:0ms">H</span><span class="ch" style="--d:90ms">A</span><span class="ch" style="--d:180ms">W</span><span class="ch" style="--d:270ms">A</span></div><div class="small"><span class="ch" style="--d:420ms">E</span><span class="ch" style="--d:485ms">N</span><span class="ch" style="--d:550ms">G</span><span class="ch" style="--d:615ms">I</span><span class="ch" style="--d:680ms">N</span><span class="ch" style="--d:745ms">E</span></div></div></div>
+  <div class="door bot"><div class="stage"><div class="eye">𓂀</div><div class="big"><span class="ch" style="--d:0ms">H</span><span class="ch" style="--d:90ms">A</span><span class="ch" style="--d:180ms">W</span><span class="ch" style="--d:270ms">A</span></div><div class="small"><span class="ch" style="--d:420ms">E</span><span class="ch" style="--d:485ms">N</span><span class="ch" style="--d:550ms">G</span><span class="ch" style="--d:615ms">I</span><span class="ch" style="--d:680ms">N</span><span class="ch" style="--d:745ms">E</span></div></div></div>
+  <div id="burst"></div><div id="seam"></div><div id="prog"></div>
 </div>
 
 <div class="bg"></div>
@@ -446,105 +472,46 @@ kbd{font:700 11px/1 Consolas,monospace;padding:5px 9px;border:1px solid var(--li
 </script>
 
 <script>
+/* بوابتان: تنغلقان من نص الشاشة ← يظهر HAWA ENGINE ← تنفتحان على الرئيسية */
 (function () {
-  var boot = document.getElementById('boot');
-  if (!boot) return;
-  var cv = document.getElementById('bootCv'), c = cv.getContext('2d');
-  var logo = document.getElementById('bootLogo'), bar = document.getElementById('bootBar'), fill = document.getElementById('bootFill');
+  var g = document.getElementById('gate');
   var page = document.getElementById('mainPage'), modes = document.getElementById('modeCards');
-  var dpr = Math.min(devicePixelRatio || 1, 2), W = 0, H = 0, t0 = 0, done = false, raf = 0;
-  function size() {
-    W = innerWidth; H = innerHeight;
-    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
-    cv.style.width = W + 'px'; cv.style.height = H + 'px';
-    c.setTransform(dpr, 0, 0, dpr, 0, 0);
-  }
-  size();
-  addEventListener('resize', size);
-
-  function clamp(x, a, b) { return x < a ? a : x > b ? b : x; }
-  function pr(t, a, b) { return clamp((t - a) / (b - a), 0, 1); }
-  function eo(x) { return 1 - Math.pow(1 - x, 3); }
-  function eio(x) { return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2; }
-
-  var DUR = 2600;
-
-  function finish() {
-    if (done) return;
-    done = true;
-    cancelAnimationFrame(raf);
-    boot.classList.add('done');
-    boot.setAttribute('aria-hidden', 'true');
+  if (!g) return;
+  var done = false, opened = false, timers = [];
+  function at(ms, fn) { timers.push(setTimeout(fn, ms)); }
+  function reveal(fast) {
     if (page) { page.classList.remove('boot-hide'); page.classList.add('boot-show'); }
-    if (modes) requestAnimationFrame(function () { modes.classList.add('reveal'); });
+    if (modes) setTimeout(function () { modes.classList.add('reveal'); }, fast ? 0 : 380);
+  }
+  function end() {
+    if (done) return; done = true;
+    timers.forEach(clearTimeout);
+    g.classList.add('done');
+  }
+  function openNow() {
+    if (opened) return; opened = true;
+    timers.forEach(clearTimeout); timers = [];
+    g.classList.add('close', 'logo', 'charge', 'open');
+    reveal();
+    at(1300, end);
   }
 
-  function frame(now) {
-    var t = now - t0;
-    c.clearRect(0, 0, W, H);
-
-    var cover = eo(pr(t, 0, 700));
-    var soft = eio(pr(t, 200, 1600));
-    var fade = eo(pr(t, DUR - 750, DUR));
-
-    /* خلفية صلبة هادئة */
-    c.fillStyle = 'rgb(5,4,10)';
-    c.fillRect(0, 0, W, H);
-
-    /* توهج مركزي خفيف جداً — عمق بدون صخب */
-    var g = c.createRadialGradient(W * 0.5, H * 0.38, 0, W * 0.5, H * 0.38, Math.max(W, H) * 0.62);
-    g.addColorStop(0, 'rgba(32,28,42,' + (0.55 * soft * (1 - fade * 0.4)) + ')');
-    g.addColorStop(0.55, 'rgba(14,12,20,' + (0.25 * soft * (1 - fade * 0.3)) + ')');
-    g.addColorStop(1, 'rgba(5,4,10,0)');
-    c.fillStyle = g;
-    c.fillRect(0, 0, W, H);
-
-    /* إطار vignette ناعم */
-    var vg = c.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.25, W / 2, H / 2, Math.hypot(W, H) * 0.72);
-    vg.addColorStop(0, 'rgba(0,0,0,0)');
-    vg.addColorStop(1, 'rgba(0,0,0,' + (0.55 * cover) + ')');
-    c.fillStyle = vg;
-    c.fillRect(0, 0, W, H);
-
-    /* خط أفقي رفيع جداً — يرسم نفسه مرة واحدة */
-    var lineP = eo(pr(t, 700, 1700));
-    if (lineP > 0) {
-      var lw = Math.min(100, W * 0.14) * lineP;
-      c.strokeStyle = 'rgba(230,220,205,' + (0.28 * cover * (1 - fade)) + ')';
-      c.lineWidth = 1;
-      c.beginPath();
-      c.moveTo(W / 2 - lw, H * 0.51);
-      c.lineTo(W / 2 + lw, H * 0.51);
-      c.stroke();
-    }
-
-    /* واجهة */
-    var prog = Math.min(1, t / (DUR - 200));
-    if (t > 400) {
-      logo.classList.add('show');
-      bar.classList.add('show');
-    }
-    if (fill) fill.style.width = (prog * 100) + '%';
-
-    if (t < DUR) raf = requestAnimationFrame(frame);
-    else finish();
+  var nav = (performance.getEntriesByType && performance.getEntriesByType('navigation')[0]) || {};
+  var skip = matchMedia('(prefers-reduced-motion: reduce)').matches || nav.type === 'back_forward';
+  if (skip) { reveal(true); end(); }
+  else {
+    void g.offsetWidth;                                   /* تثبيت الحالة الأولية */
+    requestAnimationFrame(function () { g.classList.add('close'); });  /* 0ms: البوابتان تتقابلان */
+    at(900,  function () { g.classList.add('impact'); });  /* التقاء + وميض */
+    at(1000, function () { g.classList.add('logo'); });    /* ظهور HAWA ENGINE */
+    at(3000, function () { g.classList.add('charge'); });  /* توهج قبل الفتح */
+    at(3350, openNow);                                     /* الانفتاح + الرئيسية */
+    g.addEventListener('click', openNow);
+    addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') openNow();
+    }, { once: true });
   }
-
-  var skip = matchMedia('(prefers-reduced-motion: reduce)').matches
-    || sessionStorage.getItem('hawa_boot_done') === '1';
-  if (skip) {
-    finish();
-  } else {
-    sessionStorage.setItem('hawa_boot_done', '1');
-    t0 = performance.now();
-    raf = requestAnimationFrame(frame);
-  }
-
-  function skipNow() { if (!done) finish(); }
-  boot.addEventListener('click', skipNow);
-  addEventListener('keydown', function (e) {
-    if (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') skipNow();
-  }, { once: true });
+  addEventListener('pageshow', function (e) { if (e.persisted) { reveal(true); end(); } });
 })();
 </script>
 

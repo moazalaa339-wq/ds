@@ -39,6 +39,71 @@
 ممنوع: var Game = ... داخل الملف.
 === نهاية API_TRUTH_V900 ===
 
+=== OPEN_PLAYER_CONTROL_V1100 (أولوية قصوى — تحكم حر بأي لاعب أونلاين/أوفلاين) ===
+السكربتات تقدر تتحكم في أي لاعب بأي طريقة. الأمثلة مش قيود — أي منطق مسموح.
+
+الأهداف (target): رقم السلوت | اسم اللاعب | "me" | "local" | "all" | "*" | "others"
+
+الدوال الأساسية:
+- Game.getAllPlayers() → [{id,slot,name,local,isHost,mesh,position,yaw,velocity,locked,state,appearance}]
+- Game.getPlayer(target) → لاعب واحد أو مصفوفة لو all
+- Game.forEachPlayer(fn) → يمر على كل اللاعبين
+- Game.controlPlayer(target, cmd) → أمر حر (موضع، مظهر، حالة، كاميرا، إدخال، مفاصل، أي مفتاح)
+- Game.teleportPlayer(target, x,y,z, opt)
+- Game.teleportAll(x,y,z, opt) / Game.teleportOthers(x,y,z, opt)
+- Game.setPlayerAppearance(target, {style,skin,shirt,pants,jacket,...})  // أي مفاتيح PCFG
+- Game.setPlayerState(target, key, val) أو Game.setPlayerState(target, {k:v,...})
+- Game.getPlayerState(target, key?)
+- Game.givePlayer(target, key, val)  // سلاح/عنصر/قدرة/أي بيانات
+- Game.lockPlayer(target, bool) / Game.lockAll(bool)
+- Game.setCinematic({mode:"follow"|"orbit"|"fixed", targetSlot|target, pos, lookAt, offset, fov, radius, speed, height, lerp})
+- Game.clearCinematic()
+- Game.setCamera(cfg) / Game.clearCamera()
+- Game.onPlayerCmd(fn)  // استقبال أوامر من لاعبين تانيين
+- Game.netEvent(to, type, payload) / Game.onNetEvent(fn)
+- Game.setShared(k,v) / Game.getShared(k, default)
+- Game.isNetworked() / Game.isHost() / Game.mySlot()
+
+صيغة cmd لـ controlPlayer (كل الحقول اختيارية — اخلط براحتك):
+{
+  pos:[x,y,z] | teleport:[x,y,z] | x,y,z,
+  yaw, pitch, velocity:[vx,vy,vz],
+  locked, hold, speedMul, animLock,
+  appearance:{ style:"suit"|"guy"|"soldier"|..., skin, shirt, pants, jacket, hair, ... },
+  limbs:{ armL:[rx,ry,rz], armR:[...], legL:[...], ... },
+  input:{ up,down,left,right,jump,run,interact,action, KeyE:... },
+  camera:{ mode, targetSlot, pos, lookAt, offset, fov, ... } | null,
+  state:{ weapon:"ak", hp:100, team:"red", ... أي مفاتيح },
+  say:"رسالة قصيرة"
+}
+
+أمثلة (للتوضيح فقط — مش قالب إلزامي):
+Game.teleportPlayer(2, 10, 0, 5, {yaw: Math.PI});
+Game.controlPlayer("all", { appearance:{ jacket:"#ff0000" } });
+Game.givePlayer("others", "weapon", "random_"+Math.floor(Math.random()*5));
+Game.setCinematic({ mode:"orbit", target: 1, radius: 6, height: 3, speed: 0.5 });
+Game.forEachPlayer(p => { if (!p.local) Game.teleportPlayer(p.slot, 0, 2, 0); });
+
+قواعد:
+1) أوفلاين: الأوامر تطبّق محلياً فوراً.
+2) أونلاين: الأوامر بتتبعت على الشبكة وتتنفّذ عند المستهدف (والمضيف يمرّرها).
+3) الحالة state حرّة بالكامل — سلاح، حي، فريق، كوينز، أي شيء.
+4) المظهر appearance يحدّث الشخصية فوراً (ستايل/ألوان/لبس).
+5) الكاميرا السينمائية تشتغل على جهاز اللاعب المستهدف أو محلياً عبر setCinematic.
+6) ممنوع تقييد الطلب على الأمثلة دي — لو المستخدم طلب أي تفاعل مع اللاعبين، نفّذه بالـ API ده.
+
+=== نهاية OPEN_PLAYER_CONTROL_V1100 ===
+
+=== EXAMPLES_NOT_TEMPLATES_V1101 (حرج) ===
+كل أمثلة التحكم في اللاعبين (تيليبورت، سلاح عشوائي، كاميرا سينمائية، لبس، حالة…) هي للتوضيح فقط.
+ليست قوالب وليست حدود. المطلوب: أقصى حرية ممكنة في التعامل مع أي لاعب بأي منطق يكتبه السكربت.
+لو المستخدم طلب شيء جديد عن اللاعبين: نفّذه عبر controlPlayer / state / appearance / camera حتى لو مفيش مثال مطابق.
+=== نهاية EXAMPLES_NOT_TEMPLATES_V1101 ===
+
+
+
+
+
 === AUTO_PHONE_PROBJ_SYNC.txt (ملف تلقائي مخصص — يُحمَّل وحده) ===
 device=PHONE  section=PROBJ  playNet=online
 هذا الملف فقط للسياق الحالي. ممنوع الاعتماد على ملفات تلقائي أخرى.
@@ -404,15 +469,20 @@ MEDIA_PARAMS (إلزامي عند طلب صورة/صوت/فيديو/ملف):
   مثال: {key:"sfx",label:"صوت",type:"audio",value:""} · {key:"col",label:"لون",type:"color",value:"#ff0000"}
 الكولايدر: أسماء wall/حائط أو isWall:true؛ متصغّرش المجسم لدرجة يختفي التصادم.
 
-PLAYER_IDENTITY: كل لاعب مربوط بـ username التسجيل + صورته (avatar).
-  Game.getMyName() / getMyUsername() → اسم التسجيل اللي سجّل بيه اللاعب (مش id تقني)
-  Game.getMyAvatar() → صورة البروفايل (dataURL/url) لنفس الحساب
-  Game.getAllPlayers() → [{id,name/username,avatar,local,mesh,position}]
-  Game.getRoster() → [{id,name,isHost}] أسماء الدخول للغرفة
-  Game.getNetPlayers() → لاعبين السيرفر بأسماء التسجيل + avatar إن وُجد
-RULE: لما تتعامل مع لاعبين السيرفر استخدم name/username من getAllPlayers/getRoster — ده نفس الاسم الظاهر في اللوبي وصورته.
-مثال ترحيب بالاسم المسجّل:
-  var p=Game.getAllPlayers()||[]; p.forEach(function(x){ /* x.name + x.avatar */ });
+PLAYER_IDENTITY: اسم اللاعب = الاسم اللي كتبه في لوبي الأونلاين (إنشاء/انضمام) — متاح بحرية في أي سكربت.
+  Game.getMyName() / getMyUsername() → اسمك من اللوبي (مش id تقني)
+  Game.getLocalPlayer() → {name,username,slot,mesh,position,local:true}
+  Game.getAllPlayers() → [{id,name,username,slot,local,isHost,mesh,position}] كل الموجودين
+  Game.getRoster() → [{id,name,slot,isHost}] قائمة الغرفة
+  Game.getRemotePlayers() → لاعبين تانيين أونلاين [{slot,name,rig}]
+  Game.getPing() → رقم البنج بالملّي ثانية (null لو أوفلاين)
+  Game.getPlayerId() → رقم السلوت (تقني)
+RULE: استخدم name/username من getMyName / getAllPlayers / getRoster — ده نفس الاسم الظاهر في اللوبي.
+  تقدر تعرضه فوق الراس أو في HUD أو أي مكان براحتك — مفيش قالب إجباري.
+مثال ترحيب:
+  Game.subtitle("أهلاً يا " + (Game.getMyName()||"لاعب"));
+مثال قائمة:
+  var p=Game.getAllPlayers()||[]; p.forEach(function(x){ /* x.name + x.mesh */ });
 MULTIPLAYER_PARITY: Scripted systems MUST feel like the football field — every player sees the same world.
 ENGINE_AUTO_SYNC (always on online):
   Game.setPosition/setRotation/setVisible/setScale → auto net
@@ -551,7 +621,7 @@ Write sync like the football field: professional multiplayer-first code
 runtime=Full GameAPI (play + test + multiplayer)
 
 === اللاعبون (محلي + سيرفر) ===
-Game.getMyName() / getMyUsername() → اسم التسجيل (username) في اللوبي
+Game.getMyName() / getMyUsername() → اسمك من لوبي الأونلاين (اللي كتبته عند الإنشاء/الانضمام)
 Game.getMyAvatar()            → صورة البروفايل لنفس الحساب
 Game.getLocalPlayer()         → أنا {mesh,position,name,avatar?}
 Game.getAllPlayers()          → كل الموجودين (محلي+أونلاين)

@@ -1,9 +1,4 @@
-/* Hawa Play Runtime + Net
-   - PeerJS (إنترنت): عبر سيرفر Peer العام
-   - LAN WebRTC: شبكة محلية عبر سيرفر Hawa المحلي
-   - Codes (تبادل الأكواد): WebRTC يدوي — نسخ/لصق SDP — من غير بايثون ومن غير PeerJS
-   - حد أقصى 3 لاعبين
-*/
+
 'use strict';
 
 const HawaNet = (() => {
@@ -17,21 +12,136 @@ const HawaNet = (() => {
     return (prefix || 'p') + '-' + randCode() + randCode().slice(0, 2);
   }
 
-  /* ---------- إنترنت: PeerJS ---------- */
+  
+  function peerJsOptions() {
+    return {
+      host: '0.peerjs.com',
+      port: 443,
+      path: '/',
+      secure: true,
+      debug: 1,
+      pingInterval: 5000,
+      config: {
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' },
+          { urls: 'stun:stun.cloudflare.com:3478' }
+        ]
+      }
+    };
+  }
+
+  function peerErrMsg(err) {
+    const t = (err && (err.type || err.message || err)) || '';
+    const s = String(t);
+    if (/unavailable-id|id.*taken|is taken/i.test(s)) return 'الكود مستخدم — جرّب تاني';
+    if (/network|websocket|server-error|socket/i.test(s)) return 'فشل الاتصال بسيرفر PeerJS — الإنترنت أو السيرفر السحابي مش مستقر، جرّب تاني أو استخدم «تبادل الأكواد»';
+    if (/peer-unavailable/i.test(s)) return 'المضيف مش موجود — تأكد من الكود وإن الرووم لسه مفتوحة';
+    if (/ssl/i.test(s)) return 'مشكلة SSL مع سيرفر Peer — افتح من http عبر START_SERVER';
+    if (/timeout/i.test(s)) return 'انتهى الوقت — سيرفر PeerJS بطيء أو الإنترنت ضعيف';
+    return s || 'خطأ PeerJS غير معروف';
+  }
+
+  function openPeer(id) {
+    return new Promise((res, rej) => {
+      if (typeof Peer === 'undefined') {
+        rej(new Error('PeerJS غير محمّل — تأكد إن peerjs.min.js موجود'));
+        return;
+      }
+      let done = false;
+      const opts = peerJsOptions();
+      let peer;
+      try {
+        peer = id ? new Peer(String(id), opts) : new Peer(opts);
+      } catch (e) {
+        rej(new Error(peerErrMsg(e)));
+        return;
+      }
+      const timer = setTimeout(() => {
+        if (done) return;
+        done = true;
+        try { peer.destroy(); } catch (_) {}
+        rej(new Error('timeout Peer — سيرفر 0.peerjs.com بطيء أو الإنترنت ضعيف (جرّب تاني أو استخدم تبادل الأكواد)'));
+      }, 20000);
+      peer.on('open', (openId) => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        res(peer);
+      });
+      peer.on('error', (err) => {
+        if (done) return;
+        
+        const type = err && err.type;
+        if (type === 'unavailable-id') {
+          done = true;
+          clearTimeout(timer);
+          try { peer.destroy(); } catch (_) {}
+          rej(Object.assign(new Error(peerErrMsg(err)), { type: 'unavailable-id', peer }));
+          return;
+        }
+        
+        if (!peer.id) {
+          done = true;
+          clearTimeout(timer);
+          try { peer.destroy(); } catch (_) {}
+          rej(new Error(peerErrMsg(err)));
+        }
+      });
+    });
+  }
+
   async function createHost({ roomName, gameName, onPeerJoin, onPeerLeave, onMessage }) {
     if (typeof Peer === 'undefined') throw new Error('PeerJS غير محمّل');
-    const code = randCode();
-    const peer = new Peer(code, { debug: 0 });
-    await new Promise((res, rej) => {
-      peer.on('open', res);
-      peer.on('error', rej);
-      setTimeout(() => rej(new Error('timeout Peer — تأكد من اتصال الإنترنت')), 15000);
-    });
+    let peer = null;
+    let code = null;
+    let lastErr = null;
+    
+    for (let attempt = 0; attempt < 4; attempt++) {
+      try {
+        code = randCode();
+        peer = await openPeer(code);
+        break;
+      } catch (e) {
+        lastErr = e;
+        if (e && e.type === 'unavailable-id') continue;
+        
+        if (attempt === 3) {
+          try {
+            peer = await openPeer(null);
+            code = peer.id;
+            break;
+          } catch (e2) {
+            lastErr = e2;
+          }
+        }
+      }
+    }
+    if (!peer) throw new Error(peerErrMsg(lastErr) || 'فشل إنشاء Peer');
+
     const conns = new Map();
+    const live = {
+      transport: 'peerjs',
+      code: String(peer.id || code).toUpperCase(),
+      peerId: peer.id,
+      _peer: peer,
+      _conns: conns,
+      onData: null,
+      broadcast(m) {
+        for (const c of conns.values()) {
+          try { if (c && c.open) c.send(m); } catch (_) {}
+        }
+      },
+      sendTo(id, m) {
+        const c = conns.get(id);
+        if (c) try { c.send(m); } catch (_) {}
+      },
+      destroy() { try { peer.destroy(); } catch (_) {} }
+    };
     peer.on('connection', conn => {
       conn.on('open', () => {
         conns.set(conn.peer, conn);
-        const api = {
+        const guest = {
           id: conn.peer,
           playerName: null,
           send(m) { try { conn.send(m); } catch (_) {} },
@@ -39,9 +149,14 @@ const HawaNet = (() => {
         };
         conn.on('data', d => {
           if (d && d.t === 'hello') {
-            api.playerName = d.name || 'لاعب';
-            onPeerJoin && onPeerJoin(api);
-          } else onMessage && onMessage(conn.peer, d);
+            guest.playerName = d.name || 'لاعب';
+            onPeerJoin && onPeerJoin(guest);
+          } else {
+            onMessage && onMessage(conn.peer, d);
+            if (typeof live.onData === 'function') {
+              try { live.onData(conn.peer, d); } catch (e) { console.warn(e); }
+            }
+          }
         });
         conn.on('close', () => {
           conns.delete(conn.peer);
@@ -49,53 +164,74 @@ const HawaNet = (() => {
         });
       });
     });
-    return {
-      transport: 'peerjs',
-      code,
-      peerId: peer.id,
-      broadcast(m) { for (const c of conns.values()) try { c.send(m); } catch (_) {} },
-      sendTo(id, m) { const c = conns.get(id); if (c) try { c.send(m); } catch (_) {} },
-      destroy() { try { peer.destroy(); } catch (_) {} }
-    };
+    peer.on('error', (err) => {
+      console.warn('PeerJS host error', err);
+    });
+
+    return live;
   }
 
   async function joinHost({ code, roomName, playerName, onWelcome, onLobby, onStart, onMessage, onClose }) {
     if (typeof Peer === 'undefined') throw new Error('PeerJS غير محمّل');
-    const peer = new Peer({ debug: 0 });
+    const target = String(code || '').trim();
+    if (!target) throw new Error('الكود فاضي');
+    const peer = await openPeer(null);
+    const conn = peer.connect(target, { reliable: true, serialization: 'json' });
     await new Promise((res, rej) => {
-      peer.on('open', res);
-      peer.on('error', rej);
-      setTimeout(() => rej(new Error('timeout Peer — تأكد من الإنترنت')), 15000);
+      let done = false;
+      const t = setTimeout(() => {
+        if (done) return;
+        done = true;
+        rej(new Error('فشل الاتصال بالكود — تأكد إنه صحيح والمضيف فاتح والاثنين على إنترنت'));
+      }, 20000);
+      conn.on('open', () => { if (done) return; done = true; clearTimeout(t); res(); });
+      conn.on('error', (err) => {
+        if (done) return;
+        done = true;
+        clearTimeout(t);
+        rej(new Error(peerErrMsg(err) || 'فشل اتصال الضيف'));
+      });
+      peer.on('error', (err) => {
+        if (done) return;
+        if (err && err.type === 'peer-unavailable') {
+          done = true;
+          clearTimeout(t);
+          rej(new Error('المضيف مش موجود — تأكد من الكود'));
+        }
+      });
     });
-    const conn = peer.connect(code, { reliable: true });
-    await new Promise((res, rej) => {
-      conn.on('open', res);
-      conn.on('error', rej);
-      setTimeout(() => rej(new Error('فشل الاتصال بالكود — تأكد إنه صحيح والمضيف فاتح')), 15000);
-    });
-    conn.send({ t: 'hello', name: playerName, room: roomName });
+    try { conn.send({ t: 'hello', name: playerName, room: roomName }); } catch (_) {}
+    const live = {
+      transport: 'peerjs',
+      code: target,
+      peerId: peer.id,
+      _peer: peer,
+      _conn: conn,
+      onData: null,
+      broadcast(m) { try { conn.send(m); } catch (_) {} },
+      sendTo() { try { conn.send(arguments[1]); } catch (_) {} },
+      destroy() { try { conn.close(); peer.destroy(); } catch (_) {} }
+    };
     conn.on('data', d => {
       if (!d || !d.t) return;
       if (d.t === 'welcome') onWelcome && onWelcome(d);
       else if (d.t === 'lobby') onLobby && onLobby(d.players || []);
       else if (d.t === 'start') onStart && onStart(d);
       else if (d.t === 'full') { onClose && onClose(); alert('الرووم ممتلئ'); }
-      else onMessage && onMessage('host', d);
+      else {
+        onMessage && onMessage('host', d);
+        if (typeof live.onData === 'function') {
+          try { live.onData('host', d); } catch (e) { console.warn(e); }
+        }
+      }
     });
     conn.on('close', () => onClose && onClose());
-    return {
-      transport: 'peerjs',
-      code,
-      peerId: peer.id,
-      broadcast(m) { try { conn.send(m); } catch (_) {} },
-      sendTo() { try { conn.send(arguments[1]); } catch (_) {} },
-      destroy() { try { conn.close(); peer.destroy(); } catch (_) {} }
-    };
+    return live;
   }
 
-  /* ---------- LAN: WebRTC + سيرفر Hawa المحلي للتوقيع ---------- */
+  
   function lanBase() {
-    // نفس أصل الصفحة (السيرفر المحلي)
+    
     return location.origin;
   }
 
@@ -108,7 +244,7 @@ const HawaNet = (() => {
   }
 
   function makePC() {
-    // بدون STUN عام → يعتمد على عناوين الشبكة المحلية فقط
+    
     return new RTCPeerConnection({ iceServers: [] });
   }
 
@@ -120,7 +256,7 @@ const HawaNet = (() => {
       body: JSON.stringify({ name: roomName, hostName: hostName || 'مضيف', peerId })
     });
     const code = created.code;
-    const channels = new Map(); // remotePeerId -> {pc, dc, api}
+    const channels = new Map(); 
     let pollAfter = 0;
     let stopped = false;
     let knownPlayers = created.players || [{ id: peerId, name: hostName || 'مضيف', slot: 1, host: true }];
@@ -181,7 +317,7 @@ const HawaNet = (() => {
         if (res.players) {
           knownPlayers = res.players;
           onPlayers && onPlayers(res.players);
-          // أي ضيف جديد مفيش قناة معاه → اعمل offer
+          
           for (const p of res.players) {
             if (p.id === peerId) continue;
             if (!channels.has(p.id)) ensureChannel(p.id).catch(e => console.warn('LAN offer', e));
@@ -201,7 +337,7 @@ const HawaNet = (() => {
             }
           }
         }
-      } catch (e) { /* سيرفر مش جاهز أو شبكة */ }
+      } catch (e) {  }
       if (!stopped) setTimeout(poll, 700);
     }
     poll();
@@ -310,7 +446,7 @@ const HawaNet = (() => {
     }
     poll();
 
-    // welcome محلي فوري من بيانات الانضمام
+    
     onWelcome && onWelcome({
       t: 'welcome',
       slot: joined.slot,
@@ -338,8 +474,7 @@ const HawaNet = (() => {
     };
   }
 
-
-  /* ---------- تبادل الأكواد: WebRTC يدوي (من غير بايثون / PeerJS) ---------- */
+  
   function rtcIceServers() {
     return [
       { urls: 'stun:stun.l.google.com:19302' },
@@ -443,16 +578,84 @@ const HawaNet = (() => {
     return new RTCPeerConnection({ iceServers: rtcIceServers() });
   }
 
-  /**
-   * Host: ينشئ Offer ويُرجعه كنص للنسخ. بعد ما الضيف يبعت Answer → applyAnswer(code).
-   */
-  async function createHostCodes({ roomName, hostName, onPeerJoin, onPeerLeave, onMessage }) {
+  
+  async function createHostCodes({ roomName, hostName, maxGuests, onPeerJoin, onPeerLeave, onMessage }) {
     if (typeof RTCPeerConnection === 'undefined') throw new Error('المتصفح لا يدعم WebRTC');
     const code = randCode();
-    const pc = rtcMakePc();
-    const dc = pc.createDataChannel('hawa', { ordered: true });
-    const conns = new Map();
-    let remoteApi = null;
+    const guestsNeeded = Math.max(1, Math.min(7, +(maxGuests) || 1));
+    const slots = [];
+    for (let i = 0; i < guestsNeeded; i++) slots.push(i + 2); 
+
+    const conns = new Map(); 
+    const bySlot = new Map(); 
+    const apiRef = { onData: null };
+
+    async function buildSlot(slot) {
+      const pc = rtcMakePc();
+      const dc = pc.createDataChannel('hawa', { ordered: true });
+      const entry = { slot, pc, dc, remoteApi: null, offerCode: null, status: 'waiting-offer' };
+
+      dc.onopen = () => {
+        const id = 'guest-s' + slot + '-' + randCode().slice(0, 4);
+        const remoteApi = {
+          id,
+          slot,
+          playerName: null,
+          send(m) { try { if (dc.readyState === 'open') dc.send(JSON.stringify(m)); } catch (_) {} },
+          close() { try { dc.close(); } catch (_) {} }
+        };
+        entry.remoteApi = remoteApi;
+        conns.set(id, remoteApi);
+        entry.status = 'connected';
+      };
+      dc.onmessage = (ev) => {
+        let d = ev.data;
+        try { d = typeof d === 'string' ? JSON.parse(d) : d; } catch (_) {}
+        if (d && d.t === 'hello') {
+          if (entry.remoteApi) {
+            entry.remoteApi.playerName = d.name || 'لاعب';
+            entry.remoteApi.slot = slot;
+            onPeerJoin && onPeerJoin(entry.remoteApi);
+          }
+        } else if (entry.remoteApi) {
+          onMessage && onMessage(entry.remoteApi.id, d);
+          if (apiRef && typeof apiRef.onData === 'function') {
+            try { apiRef.onData(entry.remoteApi.id, d); } catch (e) { console.warn(e); }
+          }
+        }
+      };
+      dc.onclose = () => {
+        if (entry.remoteApi) {
+          conns.delete(entry.remoteApi.id);
+          onPeerLeave && onPeerLeave(entry.remoteApi.id);
+          entry.remoteApi = null;
+          entry.status = 'closed';
+        }
+      };
+      pc.onconnectionstatechange = () => {
+        if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+          if (entry.remoteApi) {
+            onPeerLeave && onPeerLeave(entry.remoteApi.id);
+            conns.delete(entry.remoteApi.id);
+            entry.remoteApi = null;
+          }
+        }
+      };
+
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      await rtcWaitIce(pc, 4500);
+      const sdp = pc.localDescription && pc.localDescription.sdp;
+      entry.offerCode = rtcEncodeSdp(sdp, 'offer');
+      entry.status = 'offer-ready';
+      bySlot.set(slot, entry);
+      return entry;
+    }
+
+    
+    await Promise.all(slots.map(s => buildSlot(s)));
+
+    const firstOffer = bySlot.get(slots[0]) && bySlot.get(slots[0]).offerCode;
 
     const api = {
       transport: 'codes',
@@ -460,93 +663,111 @@ const HawaNet = (() => {
       peerId: code,
       roomName: roomName || 'CODES',
       hostName: hostName || 'مضيف',
-      _pc: pc,
-      _dc: dc,
-      offerCode: null,
-      status: 'waiting-offer',
+      maxGuests: guestsNeeded,
+      slots: slots.slice(),
+      onData: null,
+      get _dc() { 
+        for (const e of bySlot.values()) {
+          if (e.dc && e.dc.readyState === 'open') return e.dc;
+        }
+        for (const e of bySlot.values()) if (e.dc) return e.dc;
+        return null;
+      },
+      forEachChannel(fn) {
+        bySlot.forEach((e, s) => { try { fn(e, s); } catch (_) {} });
+      },
+      
+      offerCode: firstOffer || null,
+      
+      offerCodes: (() => {
+        const o = {};
+        bySlot.forEach((e, s) => { o[s] = e.offerCode; });
+        return o;
+      })(),
+      status: 'offer-ready',
       broadcast(m) {
         const payload = (typeof m === 'string') ? m : JSON.stringify(m);
-        // قناة واحدة — لا تكرر الإرسال عبر remoteApi و dc
-        try { if (dc.readyState === 'open') dc.send(payload); } catch (_) {}
+        bySlot.forEach(e => {
+          try {
+            if (e.dc && e.dc.readyState === 'open') e.dc.send(payload);
+          } catch (_) {}
+        });
       },
       sendTo(id, m) {
-        if (remoteApi && (id === remoteApi.id || id === 'guest')) try { remoteApi.send(m); } catch (_) {}
+        const ra = conns.get(id);
+        if (ra) try { ra.send(m); } catch (_) {}
+        else {
+          
+          const slot = +id;
+          const e = bySlot.get(slot);
+          if (e && e.remoteApi) try { e.remoteApi.send(m); } catch (_) {}
+        }
       },
       destroy() {
-        try { dc.close(); } catch (_) {}
-        try { pc.close(); } catch (_) {}
+        bySlot.forEach(e => {
+          try { e.dc && e.dc.close(); } catch (_) {}
+          try { e.pc && e.pc.close(); } catch (_) {}
+        });
+        bySlot.clear();
         conns.clear();
       },
+      getOffer(slot) {
+        const e = bySlot.get(+slot);
+        return e ? e.offerCode : null;
+      },
       async makeOffer() {
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-        await rtcWaitIce(pc, 4500);
-        const sdp = pc.localDescription && pc.localDescription.sdp;
-        this.offerCode = rtcEncodeSdp(sdp, 'offer');
-        this.status = 'offer-ready';
+        
         return this.offerCode;
       },
-      async applyAnswer(answerCode) {
-        const sdp = rtcDecodeSdp(answerCode, 'answer');
-        await pc.setRemoteDescription({ type: 'answer', sdp });
-        this.status = 'connecting';
-      }
-    };
-
-    dc.onopen = () => {
-      const id = 'guest-' + randCode().slice(0, 4);
-      remoteApi = {
-        id,
-        playerName: null,
-        send(m) { try { if (dc.readyState === 'open') dc.send(JSON.stringify(m)); } catch (_) {} },
-        close() { try { dc.close(); } catch (_) {} }
-      };
-      conns.set(id, remoteApi);
-      api.status = 'connected';
-      // انتظر hello
-    };
-    dc.onmessage = (ev) => {
-      let d = ev.data;
-      try { d = typeof d === 'string' ? JSON.parse(d) : d; } catch (_) {}
-      if (d && d.t === 'hello') {
-        if (remoteApi) {
-          remoteApi.playerName = d.name || 'لاعب';
-          onPeerJoin && onPeerJoin(remoteApi);
+      
+      async applyAnswer(answerCode, slot) {
+        let targetSlot = slot != null ? +slot : null;
+        if (!targetSlot) {
+          
+          for (const s of slots) {
+            const e = bySlot.get(s);
+            if (e && e.status !== 'connected' && e.status !== 'connecting') {
+              targetSlot = s;
+              break;
+            }
+          }
         }
-      } else if (remoteApi) {
-        onMessage && onMessage(remoteApi.id, d);
-      }
-    };
-    dc.onclose = () => {
-      if (remoteApi) {
-        conns.delete(remoteApi.id);
-        onPeerLeave && onPeerLeave(remoteApi.id);
-      }
-    };
-    pc.onconnectionstatechange = () => {
-      if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
-        if (remoteApi) onPeerLeave && onPeerLeave(remoteApi.id);
+        if (!targetSlot) throw new Error('مفيش سلوت فاضي لاستقبال رد');
+        const e = bySlot.get(targetSlot);
+        if (!e) throw new Error('سلوت غير موجود: ' + targetSlot);
+        if (e.status === 'connected') throw new Error('سلوت ' + targetSlot + ' متصل بالفعل');
+        const sdp = rtcDecodeSdp(answerCode, 'answer');
+        await e.pc.setRemoteDescription({ type: 'answer', sdp });
+        e.status = 'connecting';
+        return targetSlot;
       }
     };
 
-    await api.makeOffer();
+    
+    Object.defineProperty(api, 'onData', {
+      get() { return apiRef.onData; },
+      set(fn) { apiRef.onData = fn; },
+      enumerable: true,
+      configurable: true
+    });
     return api;
   }
 
-  /**
-   * Joiner: يلصق Offer من المضيف → يولّد Answer للنسخ → بعد الاتصال يبعت hello.
-   */
-  async function joinHostCodes({ offerCode, playerName, onWelcome, onLobby, onStart, onMessage, onClose }) {
+  
+  async function joinHostCodes({ offerCode, offer, playerName, onWelcome, onLobby, onStart, onMessage, onClose, onAnswer, onConnected }) {
     if (typeof RTCPeerConnection === 'undefined') throw new Error('المتصفح لا يدعم WebRTC');
     const pc = rtcMakePc();
     let dc = null;
     let opened = false;
+    const offerText = (offerCode || offer || '').trim();
 
     const api = {
       transport: 'codes',
       code: null,
       answerCode: null,
+      offerCode: null,
       _pc: pc,
+      onData: null,
       status: 'need-offer',
       broadcast() {},
       sendTo() {},
@@ -554,14 +775,23 @@ const HawaNet = (() => {
         try { if (dc) dc.close(); } catch (_) {}
         try { pc.close(); } catch (_) {}
       },
-      async makeAnswerFromOffer(offerText) {
-        const sdp = rtcDecodeSdp(offerText, 'offer');
+      /** امسح أكواد العرض/الرد من الذاكرة بعد الاتصال */
+      clearCodes() {
+        this.answerCode = null;
+        this.offerCode = null;
+        this._offerRaw = null;
+      },
+      async makeAnswerFromOffer(text) {
+        const sdp = rtcDecodeSdp(text, 'offer');
         await pc.setRemoteDescription({ type: 'offer', sdp });
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
         await rtcWaitIce(pc, 4500);
         this.answerCode = rtcEncodeSdp(pc.localDescription.sdp, 'answer');
+        this.offerCode = null;
+        this._offerRaw = null;
         this.status = 'answer-ready';
+        try { if (typeof onAnswer === 'function') onAnswer(this.answerCode); } catch (_) {}
         return this.answerCode;
       }
     };
@@ -572,11 +802,13 @@ const HawaNet = (() => {
       dc.onopen = () => {
         opened = true;
         api.status = 'connected';
+        // بعد اكتمال القناة: امسح الأكواد من الذاكرة
+        try { api.clearCodes(); } catch (_) {}
         try {
           dc.send(JSON.stringify({ t: 'hello', name: playerName || 'لاعب' }));
         } catch (_) {}
-        // سلوت مؤقت — المضيف هيبعت welcome بالسلوت الحقيقي
-        onWelcome && onWelcome({ slot: 2, roomName: 'CODES', players: [] });
+        try { if (typeof onConnected === 'function') onConnected({ slot: 2 }); } catch (_) {}
+        onWelcome && onWelcome({ slot: 2, roomName: 'CODES', players: [], connected: true });
       };
       dc.onmessage = (e) => {
         let d = e.data;
@@ -584,16 +816,25 @@ const HawaNet = (() => {
         if (!d) return;
         if (d.t === 'lobby') onLobby && onLobby(d.players || []);
         else if (d.t === 'start') onStart && onStart(d);
-        else if (d.t === 'welcome') onWelcome && onWelcome(d);
-        else onMessage && onMessage('host', d);
+        else if (d.t === 'welcome') {
+          // ترحيب رسمي من المضيف — امسح الأكواد وأبلغ الواجهة
+          try { api.clearCodes(); } catch (_) {}
+          onWelcome && onWelcome(Object.assign({ connected: true }, d));
+        } else {
+          onMessage && onMessage('host', d);
+          if (typeof api.onData === 'function') {
+            try { api.onData('host', d); } catch (err) { console.warn(err); }
+          }
+        }
       };
       dc.onclose = () => { onClose && onClose(); };
     };
 
-    // لو العرض جاهز من البداية
-    if (offerCode) await api.makeAnswerFromOffer(offerCode);
+    if (offerText) {
+      api._offerRaw = offerText;
+      await api.makeAnswerFromOffer(offerText);
+    }
 
-    // wrap send for joiner
     api.broadcast = (m) => { try { if (dc && dc.readyState === 'open') dc.send(JSON.stringify(m)); } catch (_) {} };
     api.sendTo = (id, m) => api.broadcast(m);
 
@@ -660,7 +901,7 @@ const HawaPlay = (() => {
     const list = (data && data.objs) || [];
     for (const o of list) {
       if (o.type === 'respawn' || o.type === 'online_spawn') continue;
-      // placeholder simple geometry for launcher runtime (full play uses engine)
+      
       const geo = new T.BoxGeometry(o.scl ? o.scl[0] : 1, o.scl ? o.scl[1] : 1, o.scl ? o.scl[2] : 1);
       const mat = new T.MeshStandardMaterial({ color: o.color || '#888' });
       const m = new T.Mesh(geo, mat);
@@ -671,7 +912,7 @@ const HawaPlay = (() => {
       else if (o.type === 'kill') kills.push({ m, o });
       else bodies.push({ m, o });
     }
-    // ground fallback
+    
     const g = new T.Mesh(new T.BoxGeometry(80, .4, 80), new T.MeshStandardMaterial({ color: '#5d7a5d' }));
     g.position.y = -.2; scene.add(g);
   }
@@ -715,6 +956,5 @@ const HawaPlay = (() => {
   return { start, applyRemote };
 })();
 
-// تصدير للصفحة
 window.HawaNet = HawaNet;
 window.HawaPlay = HawaPlay;

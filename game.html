@@ -2,68 +2,128 @@
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Hawa Game Launcher</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#06050a">
+<title>Hawa · وضع اللعب</title>
 <style>
-:root{--bg:#06050a;--pan:#0e0c14;--card:#1b1726;--tx:#f4efe4;--mu:#a199ae;--tq:#2de2c4;--tq2:#14b8a0;--au:#ffbe3d;--au2:#ff9d1c;
-  --line:rgba(255,214,150,.12);--line2:rgba(255,214,150,.26);--leaf:22px 4px 22px 4px;--leaf-s:12px 3px 12px 3px;
-  --brk:linear-gradient(var(--au),var(--au)) left top/22px 3px no-repeat,linear-gradient(var(--au),var(--au)) left top/3px 22px no-repeat,
-        linear-gradient(var(--tq),var(--tq)) right bottom/22px 3px no-repeat,linear-gradient(var(--tq),var(--tq)) right bottom/3px 22px no-repeat}
+:root{
+  --bg:#06050a;--pan:#0e0c14;--card:#14121c;--tx:#f4efe4;--mu:#a199ae;
+  --tq:#2de2c4;--tq2:#14b8a0;--au:#ffbe3d;--au2:#ff9d1c;--rd:#e8456a;
+  --line:rgba(255,214,150,.12);--line2:rgba(255,214,150,.26);
+  --leaf:22px 4px 22px 4px;--leaf-s:12px 3px 12px 3px;
+  --brk:linear-gradient(var(--au),var(--au)) left top/22px 3px no-repeat,
+        linear-gradient(var(--au),var(--au)) left top/3px 22px no-repeat,
+        linear-gradient(var(--tq),var(--tq)) right bottom/22px 3px no-repeat,
+        linear-gradient(var(--tq),var(--tq)) right bottom/3px 22px no-repeat;
+}
 *{box-sizing:border-box;margin:0;padding:0}
-html,body{min-height:100%}
-body{font:14px/1.55 Cairo,Tahoma,"Segoe UI",sans-serif;color:var(--tx);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px 14px;
-  background:radial-gradient(900px 520px at 10% -10%,rgba(255,190,61,.12),transparent 60%),radial-gradient(900px 560px at 108% 112%,rgba(45,226,196,.13),transparent 60%),
-  repeating-linear-gradient(45deg,rgba(255,214,150,.024) 0 1px,transparent 1px 18px),var(--bg);background-attachment:fixed}
-.wrap{position:relative;width:min(560px,100%);padding:26px 26px 24px;border-radius:var(--leaf);
-  background:var(--brk),linear-gradient(180deg,rgba(255,255,255,.04),transparent 180px),rgba(14,12,20,.94);
-  border:1px solid var(--line2);box-shadow:0 34px 80px rgba(0,0,0,.65);animation:rise .7s cubic-bezier(.16,1,.3,1) both}
-@keyframes rise{from{opacity:0;transform:translateY(26px)}to{opacity:1;transform:none}}
-.top{display:flex;align-items:center;gap:12px;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid var(--line)}
-.home{display:inline-flex;align-items:center;gap:8px;height:42px;padding:0 16px;border-radius:var(--leaf-s);font-weight:800;font-size:13px;color:#ffe2a6;text-decoration:none;
-  background:linear-gradient(180deg,rgba(255,190,61,.18),rgba(255,190,61,.04));border:1px solid rgba(255,190,61,.55);transition:box-shadow .15s,color .15s;flex:none}
-.home:hover{box-shadow:0 0 0 1px var(--au),0 0 22px rgba(255,190,61,.3);color:#fff}
-.home span{font-size:20px;line-height:1;color:var(--au)}
-h1{flex:1;display:flex;align-items:center;gap:12px;font-size:20px;font-weight:900;letter-spacing:.4px}
-h1::before{content:"";width:11px;height:11px;transform:rotate(45deg);background:var(--tq);box-shadow:0 0 14px var(--tq);border-radius:2px;flex:none}
-h1 b{color:var(--tq);font-weight:900}
-.sub{display:none}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--tx);
+  font:14px/1.55 Cairo,Tahoma,"Segoe UI",sans-serif;user-select:none;-webkit-user-select:none}
+a{color:inherit;text-decoration:none}
 
-.modes{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px}
-.modes button{position:relative;display:flex;flex-direction:column;align-items:center;gap:6px;padding:20px 12px 16px;border-radius:var(--leaf-s);
-  border:1px solid var(--line2);background:linear-gradient(180deg,#1b1726,#110e18);color:var(--tx);font:inherit;font-weight:800;font-size:15px;cursor:pointer;transition:.18s;overflow:hidden}
-.modes button::after{content:"";position:absolute;inset-inline:0;bottom:0;height:3px;background:linear-gradient(90deg,transparent,var(--tq),transparent);opacity:0;transition:opacity .15s}
-.modes button:hover{border-color:rgba(45,226,196,.6);transform:translateY(-2px)}
-.modes button.on{border-color:var(--tq);background:linear-gradient(180deg,rgba(45,226,196,.22),rgba(45,226,196,.04));color:#d9fff7;box-shadow:0 0 0 1px var(--tq),0 14px 34px -10px rgba(45,226,196,.55)}
-.modes button.on::after{opacity:1}
+/* خلفية سينمائية */
+.stage{position:fixed;inset:0;z-index:0;overflow:hidden}
+#charCv{position:absolute;inset:0;width:100%;height:100%;display:block}
+.stage-glow{position:absolute;inset:0;pointer-events:none;
+  background:
+    radial-gradient(900px 520px at 18% 10%,rgba(255,190,61,.11),transparent 60%),
+    radial-gradient(900px 560px at 90% 90%,rgba(45,226,196,.10),transparent 60%),
+    radial-gradient(ellipse at 50% 100%,rgba(0,0,0,.55),transparent 55%)}
+.stage-vig{position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(ellipse at center,transparent 42%,rgba(0,0,0,.78) 100%)}
+.stage-grid{position:absolute;inset:0;pointer-events:none;opacity:.035;
+  background:repeating-linear-gradient(45deg,rgba(255,214,150,.9) 0 1px,transparent 1px 22px)}
 
-.panel{display:none;flex-direction:column;gap:12px}
-.panel.on{display:flex}
-label{font-size:12px;color:var(--au);font-weight:800;letter-spacing:.3px}
-input,select{width:100%;padding:10px 14px;border-radius:var(--leaf-s);border:1px solid #3a3150;background:#0a0810;color:var(--tx);font:inherit;transition:border-color .15s,box-shadow .15s}
-input:focus,select:focus{outline:none;border-color:var(--tq);box-shadow:0 0 0 3px rgba(45,226,196,.15)}
-input[type=file]{padding:9px 12px;cursor:pointer;color:var(--mu)}
-input[type=file]::file-selector-button{margin-inline-end:12px;padding:6px 14px;border:1px solid rgba(45,226,196,.5);border-radius:8px 2px 8px 2px;background:rgba(45,226,196,.14);color:#c8fff4;font:inherit;font-weight:700;cursor:pointer}
-input[type=checkbox]{width:18px;height:18px;accent-color:var(--tq)}
-.row{display:flex;gap:8px;flex-wrap:wrap}
-.row button,.btn{flex:1;min-height:44px;padding:11px 16px;border-radius:var(--leaf-s);border:1px solid var(--line2);background:linear-gradient(180deg,#1d1828,#130f1a);color:var(--tx);font:inherit;font-weight:800;cursor:pointer;transition:.15s}
-.row button:hover,.btn:hover{border-color:var(--tq);transform:translateY(-1px)}
-.row button.on{border-color:var(--tq);background:rgba(45,226,196,.16);color:#d9fff7}
-.row button.pri,.btn.pri{background:linear-gradient(135deg,#5bf5da,#14b8a0);border-color:#8bffe8;color:#03211a;box-shadow:0 12px 30px -8px rgba(45,226,196,.6)}
-.row button.pri:hover{filter:brightness(1.08)}
-.row button.red{background:linear-gradient(135deg,#d62f55,#8a1730);border-color:#ff8aa3;color:#fff}
-.msg{font-size:12.5px;color:var(--mu);min-height:0;line-height:1.5}
-.msg:empty{display:none}
-.msg.ok{color:#5ff0a4}.msg.err{color:#ff8aa3}
+/* شريط علوي */
+.topbar{position:fixed;top:0;left:0;right:0;z-index:20;display:flex;align-items:center;justify-content:space-between;
+  padding:max(14px,env(safe-area-inset-top)) 18px 10px;gap:12px;
+  background:linear-gradient(180deg,rgba(6,5,10,.92),rgba(6,5,10,0));pointer-events:none}
+.topbar>*{pointer-events:auto}
+.home{display:inline-flex;align-items:center;gap:8px;height:40px;padding:0 14px;border-radius:var(--leaf-s);
+  font-weight:800;font-size:13px;color:#ffe2a6;
+  background:linear-gradient(180deg,rgba(255,190,61,.16),rgba(255,190,61,.04));
+  border:1px solid rgba(255,190,61,.5);transition:box-shadow .15s,transform .15s}
+.home:hover{box-shadow:0 0 0 1px var(--au),0 0 20px rgba(255,190,61,.28);transform:translateY(-1px)}
+.home span{font-size:18px;color:var(--au)}
+.brand{font-weight:900;font-size:15px;letter-spacing:.6px;opacity:.9}
+.brand b{color:var(--au)}
+.mode-switch{display:flex;gap:6px;background:rgba(14,12,20,.75);border:1px solid var(--line2);
+  border-radius:999px;padding:4px;backdrop-filter:blur(10px)}
+.mode-switch button{border:0;cursor:pointer;font:inherit;font-weight:800;font-size:13px;
+  padding:9px 18px;border-radius:999px;color:var(--mu);background:transparent;transition:all .2s}
+.mode-switch button.on{color:#0a0810;background:linear-gradient(135deg,var(--au),var(--au2));
+  box-shadow:0 4px 18px rgba(255,190,61,.35)}
+.mode-switch button:not(.on):hover{color:var(--tx);background:rgba(255,255,255,.05)}
+
+/* لوحة المحتوى */
+.ui{position:fixed;inset:0;z-index:10;display:flex;align-items:flex-end;justify-content:center;
+  padding:0 16px max(20px,env(safe-area-inset-bottom));pointer-events:none}
+.panel-card{pointer-events:auto;width:min(520px,100%);max-height:min(72vh,640px);overflow-y:auto;
+  padding:22px 22px 18px;border-radius:var(--leaf);
+  background:var(--brk),linear-gradient(180deg,rgba(255,255,255,.045),transparent 160px),rgba(14,12,20,.93);
+  border:1px solid var(--line2);box-shadow:0 30px 70px rgba(0,0,0,.65);
+  animation:rise .65s cubic-bezier(.16,1,.3,1) both;backdrop-filter:blur(14px)}
+@keyframes rise{from{opacity:0;transform:translateY(28px)}to{opacity:1;transform:none}}
+.panel{display:none}.panel.on{display:block}
+.panel-head{display:flex;align-items:center;gap:10px;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--line)}
+.panel-head h2{flex:1;font-size:17px;font-weight:900;letter-spacing:.3px}
+.panel-head .tag{font-size:11px;font-weight:800;padding:4px 10px;border-radius:999px;
+  background:rgba(45,226,196,.12);color:var(--tq);border:1px solid rgba(45,226,196,.3)}
+
+label{display:block;font-size:12px;font-weight:800;color:var(--mu);margin:12px 0 6px;letter-spacing:.2px}
+input[type=text],input[type=file],textarea,input:not([type]){
+  width:100%;padding:11px 14px;border-radius:var(--leaf-s);border:1px solid #2a2538;
+  background:#0a0810;color:var(--tx);font:inherit;outline:none;transition:border .15s,box-shadow .15s}
+input:focus,textarea:focus{border-color:rgba(255,190,61,.55);box-shadow:0 0 0 3px rgba(255,190,61,.1)}
+input[type=file]{padding:10px;cursor:pointer}
+textarea{resize:vertical;min-height:72px}
+
+.row{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+button,.btn{cursor:pointer;border:1px solid #3a3150;background:#16121f;color:var(--tx);
+  font:inherit;font-weight:800;padding:11px 18px;border-radius:var(--leaf-s);transition:all .15s}
+button:hover,.btn:hover{border-color:var(--line2);background:#1c1828}
+button.pri{border-color:rgba(255,190,61,.65);background:linear-gradient(135deg,var(--au),var(--au2));color:#1a1200;
+  box-shadow:0 6px 22px rgba(255,190,61,.28)}
+button.pri:hover{filter:brightness(1.08);transform:translateY(-1px)}
+button.pri:disabled{opacity:.4;cursor:not-allowed;transform:none;filter:none}
+button.tq{border-color:rgba(45,226,196,.55);background:linear-gradient(135deg,var(--tq),var(--tq2));color:#041512}
+button.red{border-color:rgba(232,69,106,.55);background:linear-gradient(135deg,#e8456a,#b01e42);color:#fff}
+button.ghost{background:transparent;border-color:var(--line)}
+button.on{border-color:rgba(45,226,196,.6);background:linear-gradient(180deg,rgba(45,226,196,.18),rgba(45,226,196,.05));color:var(--tq)}
+
+.msg{font-size:12.5px;margin-top:8px;line-height:1.5;color:var(--mu);min-height:1.2em}
+.msg.ok{color:#5ff0a4}.msg.err{color:#ff7b9a}
+.fileok{color:#5ff0a4}
+
+.net-row{display:flex;gap:6px;flex-wrap:wrap}
+.net-row button{flex:1;min-width:100px;font-size:12px;padding:10px 8px}
+
+/* لوبي */
 .lobby{display:none;flex-direction:column;gap:10px;margin-top:8px}
 .lobby.on{display:flex}
-.slots{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-.slot{background:#0a0810;border:1px dashed #3a3150;border-radius:var(--leaf-s);padding:14px 8px;text-align:center;min-height:92px}
-.slot.filled{border-style:solid;border-color:var(--tq);background:linear-gradient(180deg,rgba(45,226,196,.16),rgba(45,226,196,.03))}
+.slots{display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:8px}
+.slot{background:#0a0810;border:1px dashed #3a3150;border-radius:var(--leaf-s);padding:14px 8px;text-align:center;min-height:110px;
+  transition:border .2s,background .2s,transform .2s}
+.slot.filled{border-style:solid;border-color:var(--tq);background:linear-gradient(180deg,rgba(45,226,196,.14),rgba(45,226,196,.03))}
+.slot.ready{border-color:var(--au);background:linear-gradient(180deg,rgba(255,190,61,.16),rgba(255,190,61,.03));
+  box-shadow:0 0 18px rgba(255,190,61,.15)}
 .slot .av{font-size:28px;margin-bottom:4px}
 .slot .nm{font-size:12px;font-weight:800}
 .slot .mut{font-size:11px;color:#7d7690}
-.codebox{background:#0a0810;border:1px solid rgba(255,190,61,.5);border-radius:var(--leaf-s);padding:12px;font-family:Consolas,monospace;font-size:14px;letter-spacing:2px;text-align:center;direction:ltr;color:#ffe2a6}
+.slot .rdy{display:inline-block;margin-top:4px;font-size:10px;font-weight:900;padding:2px 8px;border-radius:999px;
+  background:rgba(255,190,61,.15);color:var(--au);border:1px solid rgba(255,190,61,.35)}
+.slot .rdy.off{background:rgba(125,118,144,.12);color:#7d7690;border-color:#3a3150}
+.codebox{background:#0a0810;border:1px solid rgba(255,190,61,.5);border-radius:var(--leaf-s);padding:12px;
+  font-family:Consolas,monospace;font-size:14px;letter-spacing:2px;text-align:center;direction:ltr;color:#ffe2a6}
 .mic-opt{border-radius:var(--leaf-s)!important;border-color:#3a3150!important;background:#0a0810!important}
+.join-flash{animation:jflash .6s ease;background:linear-gradient(180deg,rgba(45,226,196,.22),rgba(45,226,196,.05))!important;
+  border-color:var(--tq)!important}
+@keyframes jflash{0%{transform:scale(.92);opacity:.5}60%{transform:scale(1.03)}100%{transform:scale(1);opacity:1}}
+
+/* تحميل */
+#hawaLoad{display:none;position:fixed;inset:0;z-index:100000;background:radial-gradient(ellipse at 50% 30%,#1a1530 0%,#08060f 70%);
+  color:#f4efe4;align-items:center;justify-content:center;flex-direction:column;gap:18px;font-family:Cairo,Tahoma,sans-serif}
+#hawaLoad.on{display:flex}
 
 #playRoot{position:fixed;inset:0;display:none;background:#000;z-index:50}
 #playRoot.on{display:block}
@@ -73,127 +133,188 @@ input[type=checkbox]{width:18px;height:18px;accent-color:var(--tq)}
 #hud .hbtns{display:flex;gap:8px}
 #hud button,#hud a{pointer-events:auto;cursor:pointer;border:1px solid rgba(255,138,163,.7);background:linear-gradient(135deg,#d62f55,#8a1730);color:#fff;padding:8px 18px;border-radius:5px 999px 5px 999px;font:inherit;font-weight:800;text-decoration:none;backdrop-filter:blur(6px)}
 #hud a.hh{border-color:rgba(255,190,61,.6);background:linear-gradient(180deg,rgba(255,190,61,.26),rgba(10,8,15,.85));color:#ffe2a6}
-.fileok{color:#5ff0a4;font-size:12px}
-@media (max-width:480px){.wrap{padding:20px 16px}.home i{display:none}}
+
+.upload-zone{border:1px dashed #3a3150;border-radius:var(--leaf-s);padding:18px 14px;text-align:center;
+  background:rgba(10,8,16,.6);cursor:pointer;transition:border .2s,background .2s;position:relative}
+.upload-zone:hover,.upload-zone.drag{border-color:var(--au);background:rgba(255,190,61,.06)}
+.upload-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer}
+.upload-zone .uz-icon{font-size:28px;margin-bottom:6px}
+.upload-zone .uz-t{font-weight:800;font-size:13px}
+.upload-zone .uz-s{font-size:11px;color:var(--mu);margin-top:4px}
+
+.ready-btn{width:100%;margin-top:4px}
+.ready-btn.is-ready{border-color:rgba(255,190,61,.65)!important;background:linear-gradient(135deg,var(--au),var(--au2))!important;color:#1a1200!important}
+
+@media (max-width:480px){
+  .panel-card{max-height:78vh;padding:16px}
+  .mode-switch button{padding:8px 12px;font-size:12px}
+}
 </style>
 <script src="hawa-fx.js"></script>
 </head>
 <body>
-<div class="wrap" id="ui">
-  <div class="top">
-    <a class="home" id="gHome" href="index.html"><span>⌂</span><i>الرئيسية</i></a>
-    <h1><b>HAWA</b> · وضع اللعب</h1>
-  </div>
 
-  <div class="modes">
+<div class="stage">
+  <canvas id="charCv"></canvas>
+  <div class="stage-glow"></div>
+  <div class="stage-grid"></div>
+  <div class="stage-vig"></div>
+</div>
+
+<div class="topbar">
+  <a class="home" href="index.html"><span>⌂</span><i>الرئيسية</i></a>
+  <div class="brand"><b>HAWA</b> · وضع اللعب</div>
+  <div class="mode-switch">
     <button type="button" id="mOff" class="on">🏠 أوفلاين</button>
     <button type="button" id="mOn">🌐 أونلاين</button>
   </div>
+</div>
 
-  <div class="panel on" id="pOff">
-    <label>ملف اللعبة</label>
-    <input type="file" id="offFile" accept=".zip,.json">
-    <div class="msg" id="offMsg"></div>
-    <div class="row"><button type="button" class="pri" id="btnOffPlay">▶ ابدأ أوفلاين</button></div>
-  </div>
+<div class="ui">
+  <div class="panel-card" id="ui">
 
-  <div class="panel" id="pOn">
-    <label>ملف اللعبة</label>
-    <input type="file" id="onFile" accept=".zip,.json">
-    <div class="msg" id="onFileMsg"></div>
-
-    <label>الشبكة</label>
-    <div class="row" id="netTypeRow">
-      <button type="button" id="ntPeer" class="on">🌐 إنترنت (PeerJS)</button>
-      <button type="button" id="ntLan">📡 شبكة محلية (LAN)</button>
-      <button type="button" id="ntCodes">🔑 تبادل الأكواد</button>
-    </div>
-    <div class="msg" id="netTypeHint"></div>
-    <div class="msg ok" id="lanInfo" style="display:none"></div>
-
-    <div class="row">
-      <button type="button" id="btnCreate">إنشاء رووم</button>
-      <button type="button" id="btnJoin">انضمام لرووم</button>
-    </div>
-
-    <div id="createBox" style="display:none;flex-direction:column;gap:10px">
-      <div id="createPeerLanFields" style="display:flex;flex-direction:column;gap:10px">
-        <label>اسم الرووم</label>
-        <input id="roomName" placeholder="مثلاً: غرفة الأصدقاء" maxlength="40">
+    <!-- أوفلاين -->
+    <div class="panel on" id="pOff">
+      <div class="panel-head">
+        <h2>وضع الأوفلاين</h2>
+        <span class="tag">لاعب واحد</span>
       </div>
-      <label>اسمك في اللوبي</label>
-      <input id="hostName" placeholder="المضيف" maxlength="20" value="مضيف">
-      <label class="mic-opt" style="display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none;padding:10px 12px;border-radius:10px;border:1px solid #2a3a5a;background:#0b1424">
-        <input type="checkbox" id="roomMic" checked style="width:18px;height:18px;accent-color:#22c55e;cursor:pointer">
-        <span style="flex:1;line-height:1.4"><b style="color:#e2e8f0">🎙 تفعيل المايك في الرووم</b></span>
-      </label>
-      <div class="msg" id="createMsg"></div>
-      <div class="row"><button type="button" class="pri" id="btnDoCreate">إنشاء وبدء اللوبي</button></div>
-      <div id="hostCodeBox" style="display:none">
-        <label>كود الرووم</label>
-        <div class="codebox" id="hostCode">—</div>
-        <div class="msg" id="hostCodeHelp"></div>
+      <div class="upload-zone" id="offZone">
+        <input type="file" id="offFile" accept=".zip,.json">
+        <div class="uz-icon">📦</div>
+        <div class="uz-t">ارفع ملف اللعبة</div>
+        <div class="uz-s">ZIP أو JSON · اسحب الملف هنا</div>
       </div>
-    </div>
-
-    <div id="joinBox" style="display:none;flex-direction:column;gap:10px">
-      <div id="joinPeerLanFields" style="display:flex;flex-direction:column;gap:10px">
-        <label>اسم الرووم</label>
-        <input id="joinRoomName" placeholder="اسم الرووم" maxlength="40">
-        <label>كود الشبكة</label>
-        <input id="joinCode" placeholder="الصق الكود هنا" maxlength="64" style="direction:ltr;text-align:left">
-        <div class="row"><button type="button" class="pri" id="btnDoJoin">انضمام</button></div>
-      </div>
-      <label>اسمك</label>
-      <input id="joinName" placeholder="لاعب" maxlength="20" value="لاعب">
-      <div class="msg" id="joinMsg"></div>
-      <div id="joinCodesHint" class="msg" style="display:none">في وضع تبادل الأكواد: استخدم الصندوق بالأسفل (كود العرض / كود الرد) — مفيش كود شبكة.</div>
-    </div>
-
-    
-    <div id="codesBox" style="display:none;flex-direction:column;gap:12px;margin-top:8px;padding:12px;border:1px solid #2a3a5a;border-radius:12px;background:#0b1424">
-      <div style="font-weight:800;color:#7ff0dc">تبادل الأكواد (من غير بايثون / من غير PeerJS)</div>
-      <div class="msg" style="opacity:.85">المضيف ينسخ «كود العرض» ويبعتّه للضيف. الضيف يلصقه ويولّد «كود الرد» ويرجّعه للمضيف.</div>
-      <div id="codesHostPane" style="display:none;flex-direction:column;gap:8px">
-        <label>① كود العرض (انسخه وابعتّه للضيف)</label>
-        <textarea id="codesOfferOut" rows="5" readonly style="width:100%;direction:ltr;text-align:left;font:12px/1.4 Consolas,monospace;background:#060a12;color:#e2e8f0;border:1px solid #334;border-radius:8px;padding:8px"></textarea>
-        <div class="row">
-          <button type="button" id="codesCopyOffer">نسخ كود العرض</button>
-          <button type="button" id="codesDlOffer">تحميل ملف</button>
-        </div>
-        <label>② الصق كود الرد من الضيف ثم اضغط تطبيق</label>
-        <textarea id="codesAnswerIn" rows="5" placeholder="SM1. ...." style="width:100%;direction:ltr;text-align:left;font:12px/1.4 Consolas,monospace;background:#060a12;color:#e2e8f0;border:1px solid #334;border-radius:8px;padding:8px"></textarea>
-        <div class="row">
-          <button type="button" class="pri" id="codesApplyAnswer">تطبيق كود الرد</button>
-          <label style="display:inline-flex;align-items:center;padding:8px 12px;cursor:pointer;border-radius:8px;border:1px solid #334">رفع ملف<input type="file" id="codesAnswerFile" accept=".txt,text/plain" hidden></label>
-        </div>
-      </div>
-      <div id="codesJoinPane" style="display:none;flex-direction:column;gap:8px">
-        <label>① الصق كود العرض من المضيف</label>
-        <textarea id="codesOfferIn" rows="5" placeholder="SM1. ...." style="width:100%;direction:ltr;text-align:left;font:12px/1.4 Consolas,monospace;background:#060a12;color:#e2e8f0;border:1px solid #334;border-radius:8px;padding:8px"></textarea>
-        <div class="row">
-          <button type="button" class="pri" id="codesMakeAnswer">توليد كود الرد</button>
-          <label style="display:inline-flex;align-items:center;padding:8px 12px;cursor:pointer;border-radius:8px;border:1px solid #334">رفع ملف<input type="file" id="codesOfferFile" accept=".txt,text/plain" hidden></label>
-        </div>
-        <label>② كود الرد (انسخه وارجعه للمضيف)</label>
-        <textarea id="codesAnswerOut" rows="5" readonly style="width:100%;direction:ltr;text-align:left;font:12px/1.4 Consolas,monospace;background:#060a12;color:#e2e8f0;border:1px solid #334;border-radius:8px;padding:8px"></textarea>
-        <div class="row">
-          <button type="button" id="codesCopyAnswer">نسخ كود الرد</button>
-          <button type="button" id="codesDlAnswer">تحميل ملف</button>
-        </div>
-      </div>
-      <div class="msg" id="codesMsg"></div>
-    </div>
-
-    <div class="lobby" id="lobby">
-      <div class="msg ok" id="lobbyTitle">اللوبي</div>
-      <div class="slots" id="slots"></div>
+      <div class="msg" id="offMsg"></div>
       <div class="row">
-        <button type="button" class="pri" id="btnStart" style="display:none">▶ بدء الرووم</button>
-        <button type="button" class="red" id="btnKick" style="display:none">طرد آخر منضم</button>
-        <button type="button" id="btnLeave">خروج</button>
+        <button type="button" class="pri" id="btnOffPlay" style="flex:1">▶ ابدأ اللعب</button>
       </div>
-      <div class="msg" id="lobbyMsg"></div>
+    </div>
+
+    <!-- أونلاين -->
+    <div class="panel" id="pOn">
+      <div class="panel-head">
+        <h2>وضع الأونلاين</h2>
+        <span class="tag">متعدد اللاعبين</span>
+      </div>
+
+      <div class="upload-zone" id="onZone">
+        <input type="file" id="onFile" accept=".zip,.json">
+        <div class="uz-icon">🌐</div>
+        <div class="uz-t">ارفع ملف لعبة أونلاين</div>
+        <div class="uz-s">لازم يحتوي نقاط أونلاين (online spawns)</div>
+      </div>
+      <div class="msg" id="onFileMsg"></div>
+
+      <label>الشبكة</label>
+      <div class="row net-row" id="netTypeRow">
+        <button type="button" id="ntPeer" class="on">🌐 إنترنت</button>
+        <button type="button" id="ntLan">📡 شبكة محلية</button>
+        <button type="button" id="ntCodes">🔑 تبادل أكواد</button>
+      </div>
+      <div class="msg" id="netTypeHint"></div>
+      <div class="msg ok" id="lanInfo" style="display:none"></div>
+
+      <div class="row">
+        <button type="button" id="btnCreate" class="tq" style="flex:1">＋ إنشاء رووم</button>
+        <button type="button" id="btnJoin" style="flex:1">↗ انضمام</button>
+      </div>
+
+      <div id="createBox" style="display:none;flex-direction:column;gap:10px;margin-top:8px">
+        <div id="createPeerLanFields" style="display:flex;flex-direction:column;gap:10px">
+          <label>اسم الرووم</label>
+          <input id="roomName" placeholder="مثلاً: غرفة الأصدقاء" maxlength="40">
+        </div>
+        <label>اسمك في اللوبي</label>
+        <input id="hostName" placeholder="المضيف" maxlength="20" value="مضيف">
+        <label class="mic-opt" style="display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none;padding:10px 12px">
+          <input type="checkbox" id="roomMic" checked style="width:18px;height:18px;accent-color:#22c55e;cursor:pointer">
+          <span style="flex:1;line-height:1.4"><b style="color:#e2e8f0">🎙 تفعيل المايك في الرووم</b></span>
+        </label>
+        <div class="msg" id="createMsg"></div>
+        <div class="row"><button type="button" class="pri" id="btnDoCreate" style="flex:1">إنشاء وبدء اللوبي</button></div>
+        <div id="hostCodeBox" style="display:none">
+          <label>كود الرووم</label>
+          <div class="codebox" id="hostCode">—</div>
+          <div class="msg" id="hostCodeHelp"></div>
+        </div>
+      </div>
+
+      <div id="joinBox" style="display:none;flex-direction:column;gap:10px;margin-top:8px">
+        <div id="joinPeerLanFields" style="display:flex;flex-direction:column;gap:10px">
+          <label>اسم الرووم</label>
+          <input id="joinRoomName" placeholder="اسم الرووم" maxlength="40">
+          <label>كود الشبكة</label>
+          <input id="joinCode" placeholder="الصق الكود هنا" maxlength="64" style="direction:ltr;text-align:left">
+          <div class="row"><button type="button" class="pri" id="btnDoJoin" style="flex:1">انضمام</button></div>
+        </div>
+        <label>اسمك</label>
+        <input id="joinName" placeholder="اسمك" maxlength="20" value="لاعب">
+        <div class="msg" id="joinMsg"></div>
+        <div id="joinCodesHint" class="msg" style="display:none">في وضع تبادل الأكواد: استخدم الصندوق بالأسفل (كود العرض / كود الرد).</div>
+      </div>
+
+      <!-- تبادل الأكواد -->
+      <div id="codesBox" style="display:none;flex-direction:column;gap:12px;margin-top:8px;padding:12px;border:1px solid #2a3a5a;border-radius:12px;background:#0b1424">
+        <div style="font-weight:800;color:#7ff0dc">تبادل الأكواد (بدون سيرفر)</div>
+        <div class="msg" style="opacity:.85">عدد الردود = عدد نقط الأونلاين − 1. لكل ضيف كود عرض + كود رد + زر تأكيد.</div>
+        <div id="codesHostPane" style="display:none;flex-direction:column;gap:8px">
+          <label>① كود العرض (انسخه وابعتّه للضيف)</label>
+          <textarea id="codesOfferOut" rows="4" readonly style="width:100%;direction:ltr;text-align:left;font:12px/1.4 Consolas,monospace;background:#060a12;color:#e2e8f0;border:1px solid #334;border-radius:8px;padding:8px"></textarea>
+          <div class="row">
+            <button type="button" id="codesCopyOffer">نسخ كود العرض</button>
+            <button type="button" id="codesDlOffer">تحميل ملف</button>
+          </div>
+          <label>② الصق كود الرد من الضيف ثم اضغط تطبيق</label>
+          <textarea id="codesAnswerIn" rows="4" placeholder="SM1. ...." style="width:100%;direction:ltr;text-align:left;font:12px/1.4 Consolas,monospace;background:#060a12;color:#e2e8f0;border:1px solid #334;border-radius:8px;padding:8px"></textarea>
+          <div class="row">
+            <button type="button" class="pri" id="codesApplyAnswer">تطبيق كود الرد</button>
+            <label style="display:inline-flex;align-items:center;padding:8px 12px;cursor:pointer;border-radius:8px;border:1px solid #334;margin:0">رفع ملف<input type="file" id="codesAnswerFile" accept=".txt,text/plain" hidden></label>
+          </div>
+        </div>
+        <div id="codesJoinPane" style="display:none;flex-direction:column;gap:8px">
+          <label>① الصق كود العرض من المضيف</label>
+          <textarea id="codesOfferIn" rows="4" placeholder="SM1. ...." style="width:100%;direction:ltr;text-align:left;font:12px/1.4 Consolas,monospace;background:#060a12;color:#e2e8f0;border:1px solid #334;border-radius:8px;padding:8px"></textarea>
+          <div class="row">
+            <button type="button" class="pri" id="codesMakeAnswer">توليد كود الرد</button>
+            <label style="display:inline-flex;align-items:center;padding:8px 12px;cursor:pointer;border-radius:8px;border:1px solid #334;margin:0">رفع ملف<input type="file" id="codesOfferFile" accept=".txt,text/plain" hidden></label>
+          </div>
+          <label>② كود الرد (انسخه وارجعه للمضيف)</label>
+          <textarea id="codesAnswerOut" rows="4" readonly style="width:100%;direction:ltr;text-align:left;font:12px/1.4 Consolas,monospace;background:#060a12;color:#e2e8f0;border:1px solid #334;border-radius:8px;padding:8px"></textarea>
+          <div class="row">
+            <button type="button" id="codesCopyAnswer">نسخ كود الرد</button>
+            <button type="button" id="codesDlAnswer">تحميل ملف</button>
+          </div>
+        </div>
+        <div class="msg" id="codesMsg"></div>
+      </div>
+
+      <!-- اللوبي -->
+      <div class="lobby" id="lobby">
+        <div class="msg ok" id="lobbyTitle" style="font-size:15px;font-weight:900">اللوبي</div>
+        <div class="msg" id="lobbyCap" style="opacity:.85"></div>
+        <div class="slots" id="slots"></div>
+        <div id="codesAnswersHost" style="display:none;flex-direction:column;gap:8px;margin:8px 0;padding:10px;border:1px solid #2a3a5a;border-radius:10px;background:#0b1424"></div>
+        <div class="row" style="flex-wrap:wrap;gap:8px">
+          <button type="button" class="ready-btn ghost" id="btnReady">✋ أنا مستعد</button>
+          <button type="button" class="pri" id="btnStart" style="display:none">▶ بدء اللعب</button>
+          <label class="mic-opt" id="lobbyMicWrap" style="display:none;align-items:center;gap:8px;cursor:pointer;user-select:none;padding:8px 12px">
+            <input type="checkbox" id="lobbyMic" checked style="width:16px;height:16px;accent-color:#22c55e">
+            <span>🎙 المايك</span>
+          </label>
+          <button type="button" class="red" id="btnLockRoom" style="display:none" title="يقفل الرووم ويخرج الجميع">🔒 قفل الرووم</button>
+          <button type="button" id="btnLeave">خروج</button>
+        </div>
+        <div class="msg" id="lobbyMsg"></div>
+      </div>
+
+      <div id="hawaLoad">
+        <div style="font-size:42px;letter-spacing:.12em;font-weight:900;background:linear-gradient(90deg,#ffe2a6,#7ff0dc,#c4b5fd);-webkit-background-clip:text;background-clip:text;color:transparent">HAWA ENGINE</div>
+        <div style="opacity:.8;font-weight:700;font-size:15px" id="hawaLoadTxt">تهيئة وضع اللعب…</div>
+        <div style="width:min(280px,70vw);height:4px;border-radius:99px;background:#1e1a2e;overflow:hidden">
+          <div id="hawaLoadBar" style="height:100%;width:0%;background:linear-gradient(90deg,#7ff0dc,#ffe2a6);transition:width .25s"></div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -208,10 +329,98 @@ input[type=checkbox]{width:18px;height:18px;accent-color:var(--tq)}
 <script src="three.min.js"></script>
 <script src="jszip.min.js"></script>
 <script src="peerjs.min.js"></script>
+<script src="player-preview.js"></script>
 <script src="play-runtime.js"></script>
 <script src="game-data.js"></script>
 <script>
+/* ===== شخصيات الخلفية ثلاثية الأبعاد ===== */
+(function(){
+  var T = window.THREE;
+  if (!T || !window.HawaPlayerPreview) return;
+  var cv = document.getElementById('charCv');
+  if (!cv) return;
+  var renderer = new T.WebGLRenderer({ canvas: cv, antialias: true, alpha: true, powerPreference: 'low-power' });
+  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+  renderer.setClearColor(0x000000, 0);
+  var scene = new T.Scene();
+  var camera = new T.PerspectiveCamera(28, 1, 0.05, 50);
+  camera.position.set(0, 1.35, 5.4);
+  camera.lookAt(0, 1.05, 0);
+  var amb = new T.AmbientLight(0xb8b0c8, 0.55);
+  scene.add(amb);
+  var key = new T.DirectionalLight(0xffe8c0, 1.05);
+  key.position.set(2.2, 4.5, 3.2);
+  scene.add(key);
+  var fill = new T.DirectionalLight(0x7ff0dc, 0.35);
+  fill.position.set(-3, 1.5, -1);
+  scene.add(fill);
+  var rim = new T.DirectionalLight(0xffbe3d, 0.25);
+  rim.position.set(0, 2, -4);
+  scene.add(rim);
 
+  var chars = [];
+  var COLORS = [
+    { jacket: '#34415e', pants: '#34415e', tie: '#c0392b', shirt: '#f1f1ee' },
+    { jacket: '#1a5c4a', pants: '#163d34', tie: '#2de2c4', shirt: '#e8fff8' },
+    { jacket: '#5c2a1a', pants: '#3d1e14', tie: '#ffbe3d', shirt: '#fff5e8' }
+  ];
+  function buildChars(n) {
+    chars.forEach(function(c){ scene.remove(c.root); });
+    chars = [];
+    for (var i = 0; i < n; i++) {
+      var cfg = Object.assign({}, window.HawaPlayerPreview.PLAYER_DEF, COLORS[i % COLORS.length]);
+      var rig = window.HawaPlayerPreview.make(cfg);
+      var spread = n === 1 ? 0 : (i - (n - 1) / 2) * 1.15;
+      rig.root.position.set(spread, 0, n > 1 ? -0.15 * Math.abs(i - (n-1)/2) : 0);
+      if (n > 1) rig.root.rotation.y = -spread * 0.12;
+      scene.add(rig.root);
+      chars.push(rig);
+    }
+  }
+  buildChars(1);
+
+  var modeNow = 'off';
+  window.__setCharMode = function(m) {
+    if (m === modeNow) return;
+    modeNow = m;
+    buildChars(m === 'on' ? 3 : 1);
+  };
+
+  var t0 = performance.now();
+  function resize() {
+    var w = cv.clientWidth || innerWidth, h = cv.clientHeight || innerHeight;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+  }
+  addEventListener('resize', resize);
+  resize();
+
+  function tick(now) {
+    var t = (now - t0) / 1000;
+    var dt = 0.016;
+    chars.forEach(function(rig, i) {
+      var st = rig.st;
+      st.t += dt;
+      /* idle breathe */
+      if (rig.chest) rig.chest.position.y = 0.02 * Math.sin(st.t * 1.6 + i);
+      if (rig.head) {
+        rig.head.rotation.y = Math.sin(st.t * 0.35 + i * 1.2) * 0.08;
+        rig.head.rotation.x = Math.sin(st.t * 0.5 + i) * 0.03;
+      }
+      if (rig.AL && rig.AL.sh) rig.AL.sh.rotation.z = 0.08 + Math.sin(st.t * 1.1 + i) * 0.03;
+      if (rig.AR && rig.AR.sh) rig.AR.sh.rotation.z = -0.08 - Math.sin(st.t * 1.1 + i + 1) * 0.03;
+    });
+    camera.position.x = Math.sin(t * 0.09) * 0.18;
+    camera.position.y = 1.35 + Math.sin(t * 0.07) * 0.04;
+    camera.lookAt(0, 1.05, 0);
+    renderer.render(scene, camera);
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+})();
+
+/* ===== منطق اللعبة الأصلي + جاهزية + تحسينات ===== */
 // FILE_PROTOCOL_WARN
 (function(){
   if (location.protocol === 'file:') {
@@ -225,7 +434,6 @@ input[type=checkbox]{width:18px;height:18px;accent-color:var(--tq)}
 
 let mode = 'off';
 let gameData = null;
-// لو اللعبة متصدرة وفيها game-data.js مدمج
 if (typeof window.HAWA_EMBEDDED_GAME === 'object' && window.HAWA_EMBEDDED_GAME) {
   gameData = window.HAWA_EMBEDDED_GAME;
   setTimeout(() => {
@@ -240,13 +448,27 @@ let net = null;
 let isHost = false;
 let mySlot = 1;
 let roomPlayers = [];
-let netType = 'peerjs'; // 'peerjs' | 'lan' | 'codes'
+let netType = 'peerjs';
 let roomVoice = true;
+let myReady = false;
 
 const $ = s => document.querySelector(s);
+function el(id){ return document.getElementById(id); }
+function showEl(id, disp){ const e = el(id); if (e) e.style.display = disp; return e; }
 function show(el, on) { el.classList.toggle('on', !!on); el.style.display = on ? (el.classList.contains('panel') || el.classList.contains('lobby') ? '' : '') : ''; }
-$('#mOff').onclick = () => { mode='off'; $('#mOff').classList.add('on'); $('#mOn').classList.remove('on'); $('#pOff').classList.add('on'); $('#pOn').classList.remove('on'); };
-$('#mOn').onclick = () => { mode='on'; $('#mOn').classList.add('on'); $('#mOff').classList.remove('on'); $('#pOn').classList.add('on'); $('#pOff').classList.remove('on'); };
+
+$('#mOff').onclick = () => {
+  mode='off';
+  $('#mOff').classList.add('on'); $('#mOn').classList.remove('on');
+  $('#pOff').classList.add('on'); $('#pOn').classList.remove('on');
+  if (window.__setCharMode) window.__setCharMode('off');
+};
+$('#mOn').onclick = () => {
+  mode='on';
+  $('#mOn').classList.add('on'); $('#mOff').classList.remove('on');
+  $('#pOn').classList.add('on'); $('#pOff').classList.remove('on');
+  if (window.__setCharMode) window.__setCharMode('on');
+};
 
 async function loadGameFile(file) {
   if (!file) return null;
@@ -272,7 +494,6 @@ function detectGamePlayNet(data) {
   if ((data.objs || []).some(o => o && o.type === 'online_spawn')) return 'online';
   return 'offline';
 }
-
 
 $('#offFile').onchange = async e => {
   const f = e.target.files[0]; if (!f) return;
@@ -308,12 +529,12 @@ $('#onFile').onchange = async e => {
     if (!(data.onlineSpawns && data.onlineSpawns.length)) {
       gameData = null;
       $('#onFileMsg').className = 'msg err';
-      $('#onFileMsg').textContent = '⛔ ملف أونلاين من غير نقاط أونلاين — أضف نقاط أونلاين في المحرّر ثم حوّل اللعبة من جديد.';
+      $('#onFileMsg').textContent = '⛔ مفيش نقاط أونلاين في الملف — لازم onlineSpawns.';
       return;
     }
     gameData = data;
-    $('#onFileMsg').className = 'msg ok fileok';
-    $('#onFileMsg').textContent = '✔ تم التعرف (أونلاين): «' + (gameData.name || 'بدون اسم') + '» · نقاط أونلاين: ' + ((gameData.onlineSpawns||[]).length);
+    $('#onFileMsg').className = 'msg ok';
+    $('#onFileMsg').textContent = '✔ تم التعرف (أونلاين): «' + (gameData.name || 'بدون اسم') + '» · ' + data.onlineSpawns.length + ' نقطة أونلاين';
   } catch (err) {
     gameData = null;
     $('#onFileMsg').className = 'msg err';
@@ -321,23 +542,20 @@ $('#onFile').onchange = async e => {
   }
 };
 
-$('#btnOffPlay').onclick = async () => {
+$('#btnOffPlay').onclick = () => {
   if (!gameData) {
-    // حاول من localStorage مشروع البناء
-    try {
-      const d = JSON.parse(localStorage.getItem('hawa2') || 'null');
-      if (d && d.objs) gameData = { name: 'مشروع محلي', objs: d.objs, scripts: d.scripts||[], sdefs: d.sdefs||[], offlineSpawns: (d.objs||[]).filter(o=>o.type==='respawn').map(o=>({pos:o.pos,name:o.name})), onlineSpawns: [] };
-    } catch(_){}
+    $('#offMsg').className='msg err';
+    $('#offMsg').textContent='⚠ حمّل ملف اللعبة الأول';
+    return;
   }
-  if (!gameData) { $('#offMsg').className='msg err'; $('#offMsg').textContent='⚠ ارفع ملف اللعبة أو ابنِ مشروع في وضع البناء أولاً'; return; }
-  if (detectGamePlayNet(gameData) === 'online') {
+  const pn = detectGamePlayNet(gameData);
+  if (pn === 'online') {
     $('#offMsg').className='msg err';
     $('#offMsg').textContent='⛔ الملف أونلاين — مش هيتشغّل هنا. استخدم تبويب الأونلاين.';
     return;
   }
   startPlay({ mode: 'offline', data: gameData, slot: 1, players: [{id:'local', name:'لاعب', slot:1}] });
 };
-
 
 /* نوع الشبكة */
 netType = 'peerjs';
@@ -353,7 +571,6 @@ function setNetType(t) {
   const peerLanJoin = document.getElementById('joinPeerLanFields');
   const peerLanCreate = document.getElementById('createPeerLanFields');
   const codesHint = document.getElementById('joinCodesHint');
-  const btnDoJoin = document.getElementById('btnDoJoin');
   if (t === 'peerjs') {
     if (hint) hint.textContent = 'يحتاج إنترنت — كود قصير عبر PeerJS';
     if (lanInfo) lanInfo.style.display = 'none';
@@ -386,144 +603,347 @@ function setNetType(t) {
     if (codesHint) codesHint.style.display = 'block';
   }
 }
-if ($('#ntPeer')) $('#ntPeer').onclick = () => setNetType('peerjs');
-if ($('#ntLan')) $('#ntLan').onclick = () => setNetType('lan');
-if ($('#ntCodes')) $('#ntCodes').onclick = () => setNetType('codes');
+$('#ntPeer').onclick = () => setNetType('peerjs');
+$('#ntLan').onclick = () => setNetType('lan');
+$('#ntCodes').onclick = () => setNetType('codes');
+setNetType('peerjs');
 
 $('#btnCreate').onclick = () => {
-  if (!gameData) { $('#onFileMsg').className='msg err'; $('#onFileMsg').textContent='⚠ ارفع ملف اللعبة أولاً قبل إنشاء رووم'; return; }
-  $('#createBox').style.display='flex'; $('#joinBox').style.display='none';
+  showEl('createBox', 'flex'); showEl('joinBox', 'none');
   if (netType === 'codes') {
-    const box = document.getElementById('codesBox'); if (box) box.style.display='flex';
-    const h = document.getElementById('codesHostPane'); if (h) h.style.display='flex';
-    const j = document.getElementById('codesJoinPane'); if (j) j.style.display='none';
+    if ($('#codesBox')) $('#codesBox').style.display = 'flex';
+    if ($('#codesHostPane')) $('#codesHostPane').style.display = 'flex';
+    if ($('#codesJoinPane')) $('#codesJoinPane').style.display = 'none';
   }
 };
 $('#btnJoin').onclick = () => {
-  if (!gameData) { $('#onFileMsg').className='msg err'; $('#onFileMsg').textContent='⚠ ارفع ملف اللعبة أولاً قبل الانضمام'; return; }
-  $('#joinBox').style.display='flex'; $('#createBox').style.display='none';
+  showEl('joinBox', 'flex'); showEl('createBox', 'none');
   if (netType === 'codes') {
-    const box = document.getElementById('codesBox'); if (box) box.style.display='flex';
-    const h = document.getElementById('codesHostPane'); if (h) h.style.display='none';
-    const j = document.getElementById('codesJoinPane'); if (j) j.style.display='flex';
+    if ($('#codesBox')) $('#codesBox').style.display = 'flex';
+    if ($('#codesHostPane')) $('#codesHostPane').style.display = 'none';
+    if ($('#codesJoinPane')) $('#codesJoinPane').style.display = 'flex';
   }
 };
 
+function maxSlots() {
+  const n = (gameData && gameData.onlineSpawns && gameData.onlineSpawns.length) || 0;
+  return Math.min(8, Math.max(1, n || 1));
+}
+function roomFull() {
+  return roomPlayers.filter(Boolean).length >= maxSlots();
+}
+function allReady() {
+  if (!roomPlayers.length) return false;
+  return roomPlayers.every(p => p && p.ready);
+}
 function renderSlots() {
-  const max = Math.min(3, Math.max(1, (gameData.onlineSpawns||[]).length || 3));
-  const box = $('#slots'); box.innerHTML = '';
+  const max = maxSlots();
+  const box = $('#slots'); if (!box) return; box.innerHTML = '';
+  const cap = document.getElementById('lobbyCap');
+  const readyCount = roomPlayers.filter(p => p && p.ready).length;
+  if (cap) {
+    cap.textContent = 'سعة: ' + roomPlayers.length + ' / ' + max
+      + (roomFull() ? ' · مكتمل ✔' : ' · بانتظار لاعبين')
+      + ' · مستعدين: ' + readyCount + '/' + roomPlayers.length;
+  }
   for (let i=1;i<=max;i++) {
     const p = roomPlayers.find(x => x.slot === i);
     const d = document.createElement('div');
-    d.className = 'slot' + (p ? ' filled' : '');
+    d.className = 'slot' + (p ? ' filled' : '') + (p && p.ready ? ' ready' : '');
+    let kick = '';
+    if (p && isHost && !p.host) {
+      kick = '<button type="button" class="red" data-kick="'+esc(p.id)+'" style="margin-top:6px;padding:4px 10px;font-size:12px">طرد</button>';
+    }
+    const rdyBadge = p
+      ? (p.ready ? '<div class="rdy">✔ مستعد</div>' : '<div class="rdy off">… غير مستعد</div>')
+      : '';
     d.innerHTML = p
-      ? `<div class="av">🧍</div><div class="nm">${esc(p.name)}</div><div class="mut">سلوت ${i}${p.host?' · مضيف':''}</div>`
-      : `<div class="av">⬜</div><div class="nm mut">فاضي</div><div class="mut">سلوت ${i}</div>`;
+      ? '<div class="av">🧍</div><div class="nm">'+esc(p.name)+'</div><div class="mut">سلوت '+i+(p.host?' · مضيف':'')+'</div>'+rdyBadge+kick
+      : '<div class="av">⬜</div><div class="nm mut">فاضي</div><div class="mut">سلوت '+i+'</div>';
+    if (p && p._justJoined) {
+      d.classList.add('join-flash');
+      p._justJoined = false;
+    }
     box.appendChild(d);
   }
+  box.querySelectorAll('[data-kick]').forEach(btn => {
+    btn.onclick = () => {
+      const id = btn.getAttribute('data-kick');
+      const pl = roomPlayers.find(p => p.id === id);
+      if (!pl || !net) return;
+      try { net.sendTo(id, { t: 'kick', slot: pl.slot }); } catch (_) {}
+      roomPlayers = roomPlayers.filter(p => p.id !== id);
+      renderSlots(); broadcastLobby();
+      updStartBtn();
+      $('#lobbyMsg').textContent = 'تم طرد ' + (pl.name || '');
+    };
+  });
+  updStartBtn();
+  updReadyBtn();
 }
+function updStartBtn() {
+  const b = document.getElementById('btnStart');
+  if (!b || !isHost) return;
+  b.style.display = 'block';
+  const full = roomFull();
+  const ready = allReady();
+  const can = full && ready;
+  b.disabled = !can;
+  b.style.opacity = can ? '1' : '.45';
+  if (!full) b.textContent = '▶ انتظار اكتمال الرووم ('+roomPlayers.length+'/'+maxSlots()+')';
+  else if (!ready) b.textContent = '▶ انتظار استعداد الجميع ('+roomPlayers.filter(p=>p.ready).length+'/'+roomPlayers.length+')';
+  else b.textContent = '▶ بدء اللعب';
+  const mic = document.getElementById('lobbyMicWrap');
+  if (mic) mic.style.display = isHost ? 'inline-flex' : 'none';
+  const lock = document.getElementById('btnLockRoom');
+  if (lock) lock.style.display = isHost ? '' : 'none';
+}
+function updReadyBtn() {
+  const b = document.getElementById('btnReady');
+  if (!b) return;
+  b.style.display = $('#lobby').classList.contains('on') ? 'block' : 'none';
+  if (myReady) {
+    b.classList.add('is-ready');
+    b.textContent = '✔ مستعد — اضغط للإلغاء';
+  } else {
+    b.classList.remove('is-ready');
+    b.textContent = '✋ أنا مستعد';
+  }
+}
+function setPlayerReady(id, ready) {
+  const p = roomPlayers.find(x => x.id === id);
+  if (p) p.ready = !!ready;
+  renderSlots();
+}
+function broadcastLobby() {
+  if (!net || !isHost) return;
+  net.broadcast({ t: 'lobby', players: roomPlayers });
+}
+function broadcastReady() {
+  if (!net) return;
+  const msg = { t: 'ready', id: isHost ? 'host' : (net.peerId || net.id), ready: myReady, slot: mySlot };
+  if (isHost) {
+    setPlayerReady(msg.id === 'host' ? (roomPlayers.find(p=>p.host)||{}).id : msg.id, myReady);
+    /* host also updates own */
+    const me = roomPlayers.find(p => p.host) || roomPlayers.find(p => p.slot === 1);
+    if (me) me.ready = myReady;
+    broadcastLobby();
+    renderSlots();
+  } else {
+    try { net.sendToHost ? net.sendToHost(msg) : net.broadcast(msg); } catch(_) {
+      try { net.broadcast(msg); } catch(__){}
+    }
+  }
+}
+
+$('#btnReady').onclick = () => {
+  myReady = !myReady;
+  const me = roomPlayers.find(p => (isHost && p.host) || p.slot === mySlot || p.id === (net && (net.peerId||net.id)));
+  if (me) me.ready = myReady;
+  updReadyBtn();
+  renderSlots();
+  if (isHost) {
+    broadcastLobby();
+  } else if (net) {
+    try {
+      const msg = { t: 'ready', slot: mySlot, ready: myReady, name: me && me.name };
+      if (typeof net.send === 'function') net.send(msg);
+      else if (typeof net.broadcast === 'function') net.broadcast(msg);
+      else if (typeof net.sendToHost === 'function') net.sendToHost(msg);
+    } catch (e) { console.warn('ready send', e); }
+  }
+  $('#lobbyMsg').textContent = myReady ? '✔ أنت مستعد' : 'تم إلغاء الاستعداد';
+};
+
 function esc(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
+/* ===== إنشاء رووم ===== */
 $('#btnDoCreate').onclick = async () => {
-  const rn = $('#roomName').value.trim();
-  const hn = $('#hostName').value.trim() || 'مضيف';
   if (!gameData) { $('#createMsg').className='msg err'; $('#createMsg').textContent='⚠ حمّل ملف اللعبة الأول'; return; }
+  const rn = ($('#roomName') && $('#roomName').value || '').trim();
+  const hn = ($('#hostName') && $('#hostName').value || 'مضيف').trim() || 'مضيف';
   if (!rn && netType !== 'codes') { $('#createMsg').className='msg err'; $('#createMsg').textContent='⚠ اكتب اسم الرووم'; return; }
+  roomVoice = !!(document.getElementById('roomMic') && document.getElementById('roomMic').checked);
   isHost = true;
-  mySlot = 1;
-  roomPlayers = [{ id: 'host', name: hn, slot: 1, host: true }];
+  myReady = false;
+  roomPlayers = [{ id: 'host', name: hn, slot: 1, host: true, ready: false }];
   $('#createMsg').className='msg'; $('#createMsg').textContent = netType === 'lan' ? 'جاري إنشاء رووم LAN…' : (netType === 'codes' ? 'جاري تجهيز كود العرض…' : 'جاري إنشاء رووم PeerJS…');
   try {
     const onPeerJoin = (peer) => {
-      const max = Math.min(3, Math.max(1, (gameData.onlineSpawns||[]).length || 3));
       const used = new Set(roomPlayers.map(p=>p.slot));
-      let slot = 0; for (let i=1;i<=max;i++) if (!used.has(i)) { slot=i; break; }
-      if (!slot) { peer.send({t:'full'}); peer.close(); return; }
-      const pl = { id: peer.id, name: peer.playerName || ('لاعب '+slot), slot, host: false };
+      let slot = (peer && peer.slot && !used.has(+peer.slot)) ? +peer.slot : 0;
+      if (!slot) { for (let i=1;i<=maxSlots();i++) if (!used.has(i)) { slot=i; break; } }
+      if (!slot) { try { peer.send({t:'full'}); peer.close(); } catch(_){} return; }
+      const pl = { id: peer.id, name: peer.playerName || ('لاعب '+slot), slot, host: false, ready: false, _justJoined: true };
       roomPlayers.push(pl);
-      renderSlots();
-      peer.send({ t:'welcome', slot, players: roomPlayers, roomName: rn, gameName: gameData.name });
-      broadcastLobby();
+      try { peer.send({ t:'welcome', slot, players: roomPlayers, roomName: rn, gameName: gameData.name }); } catch(_){}
+      renderSlots(); broadcastLobby();
+      $('#lobbyMsg').className = 'msg ok';
+      $('#lobbyMsg').textContent = '✔ تم انضمام اللاعب «' + pl.name + '»';
+      /* إخفاء عرض/رد لهذا السلوت إن وُجد */
+      hideCodesForSlot(slot, pl.name);
     };
     const onPeerLeave = (id) => {
       roomPlayers = roomPlayers.filter(p => p.id !== id);
       renderSlots(); broadcastLobby();
     };
+    const onMessageHost = (from, msg) => {
+      if (msg && msg.t === 'ready') {
+        const p = roomPlayers.find(x => x.id === from || x.slot === msg.slot);
+        if (p) { p.ready = !!msg.ready; renderSlots(); broadcastLobby(); }
+      }
+      if (msg && msg.t === 'state' && window.HawaPlay) HawaPlay.applyRemote(from, msg);
+    };
+
     if (netType === 'codes') {
       net = await HawaNet.createHostCodes({
-        roomName: rn || 'CODES',
-        hostName: hn,
+        playerName: hn,
+        maxGuests: Math.max(0, maxSlots() - 1),
         onPeerJoin,
-        onPeerLeave: (id) => { roomPlayers = roomPlayers.filter(p => p.id !== id); renderSlots(); broadcastLobby(); },
-        onMessage(from, msg) {
-          if (msg && msg.t === 'state') try { HawaPlay.applyRemote(from, msg); } catch(_){}
-        }
-      });
-      $('#hostCodeBox').style.display = 'none';
-      if ($('#codesBox')) $('#codesBox').style.display = 'flex';
-      if ($('#codesHostPane')) $('#codesHostPane').style.display = 'flex';
-      if ($('#codesJoinPane')) $('#codesJoinPane').style.display = 'none';
-      if (net.offerCode) if ($('#codesOfferOut') && net.offerCode) $('#codesOfferOut').value = net.offerCode;
-      $('#createMsg').className = 'msg ok';
-      $('#createMsg').textContent = '✔ انسخ كود العرض وابعته للضيف — لما يرجّع كود الرد اضغط «تطبيق كود الرد»';
-      $('#lobby').classList.add('on');
-      $('#btnStart').style.display = '';
-      $('#btnKick').style.display = '';
-      renderSlots();
-      $('#lobbyTitle').textContent = 'لوبي (تبادل أكواد) · انتظر اتصال الضيف';
-    } else if (netType === 'lan') {
-      net = await HawaNet.createHostLan({
-        roomName: rn, hostName: hn,
-        onPeerJoin, onPeerLeave,
-        onPlayers(players) {
-          // حدّث الأسماء/السلوتات من السيرفر مع الإبقاء على اتصال WebRTC
-          if (Array.isArray(players) && players.length) {
-            roomPlayers = players.map(p => ({ id: p.id, name: p.name, slot: p.slot, host: !!p.host }));
-            renderSlots();
-          }
+        onPeerLeave: (id) => {
+          roomPlayers = roomPlayers.filter(p => p.id !== id);
+          renderSlots(); broadcastLobby();
         },
-        onMessage() {}
+        onMessage: onMessageHost
       });
-      roomPlayers = [{ id: net.peerId, name: hn, slot: 1, host: true }];
-    } else {
-      net = await HawaNet.createHost({
-        roomName: rn, gameName: gameData.name,
-        onPeerJoin, onPeerLeave, onMessage() {}
-      });
-    }
-    if (netType !== 'codes') {
-      $('#hostCode').textContent = net.code;
-      $('#hostCodeBox').style.display = 'block';
-      $('#createMsg').className='msg ok';
-      $('#createMsg').textContent = (netType === 'lan' ? '✔ رووم LAN جاهزة · الكود: ' : '✔ رووم PeerJS جاهزة · الكود: ') + net.code + ' — ابعت الكود لأصحابك';
+      if ($('#codesBox')) $('#codesBox').style.display = 'flex';
+      if ($('#codesHostPane')) $('#codesHostPane').style.display = 'none';
+      if ($('#codesJoinPane')) $('#codesJoinPane').style.display = 'none';
+      if (net.offerCode && $('#codesOfferOut')) $('#codesOfferOut').value = net.offerCode;
+      const guests = Math.max(0, maxSlots() - 1);
+      $('#createMsg').textContent = '✔ جاهز · '+guests+' رد. انسخ كود العرض لكل سلوت وابعته للضيف، وبعدين الصق الرد واضغط تأكيد.';
       $('#lobby').classList.add('on');
+      showEl('createBox', 'none');
+      showEl('btnStart', '');
+      renderSlots();
+      $('#lobbyTitle').textContent = 'لوبي (تبادل أكواد) · سعة '+maxSlots()+' · ضيوف '+guests;
+      buildCodesAnswersHost();
+    } else {
+      const common = {
+        roomName: rn || 'Room',
+        playerName: hn,
+        onPeerJoin, onPeerLeave,
+        onMessage: onMessageHost
+      };
+      if (netType === 'lan') {
+        net = await HawaNet.createHostLan(common);
+      } else {
+        net = await HawaNet.createHost(common);
+      }
+      roomPlayers = [{ id: net.peerId || 'host', name: hn, slot: 1, host: true, ready: false }];
+      showEl('createBox', 'none');
+      showEl('hostCodeBox', 'block');
+      if ($('#hostCode')) $('#hostCode').textContent = net.code || net.peerId || '—';
+      if ($('#hostCodeHelp')) $('#hostCodeHelp').textContent = 'ابعث الكود واسم الرووم لأصدقائك لينضموا';
+      $('#lobby').classList.add('on');
+      showEl('btnStart', 'block');
       $('#lobbyTitle').textContent = 'لوبي «' + rn + '» · ' + (gameData.name||'');
-      $('#btnStart').style.display = 'block';
+      renderSlots();
+      $('#createMsg').className='msg ok';
+      $('#createMsg').textContent = '✔ الرووم جاهز';
     }
-    $('#btnKick').style.display = 'block';
-    renderSlots();
   } catch (e) {
     $('#createMsg').className = 'msg err';
-    $('#createMsg').textContent = '⚠ فشل إنشاء الشبكة: ' + (e.message||e);
+    $('#createMsg').textContent = '⚠ ' + (e.message||e);
   }
 };
 
+function hideCodesForSlot(slot, name) {
+  const hostBox = document.getElementById('codesAnswersHost');
+  if (hostBox) {
+    const card = hostBox.querySelector('[data-slot="'+slot+'"]');
+    if (card) {
+      // امسح أي عرض/رد ظاهر لهذا السلوت واستبدله بتأكيد انضمام فقط
+      card.innerHTML = '<div style="padding:10px;border-radius:8px;background:rgba(45,226,196,.1);border:1px solid rgba(45,226,196,.35);font-weight:800;color:#5ff0a4">✔ تم انضمام اللاعب «'+esc(name||('سلوت '+slot))+'» — اتشال العرض والرد</div>';
+    }
+  }
+  // امسح حقول الرد العامة لو كانت مستخدمة
+  const ans = document.getElementById('codesAnswerIn');
+  if (ans) ans.value = '';
+  const ansSlot = document.getElementById('codesAns'+slot);
+  if (ansSlot) ansSlot.value = '';
+  const offSlot = document.getElementById('codesOffer'+slot);
+  if (offSlot) offSlot.value = '';
+  const msg = $('#codesMsg');
+  if (msg) { msg.className='msg ok'; msg.textContent = '✔ تم انضمام اللاعب «'+(name||'')+'» — اتشال العرض والرد'; }
+}
+
+function buildCodesAnswersHost() {
+  const box = document.getElementById('codesAnswersHost');
+  if (!box || !net) return;
+  box.style.display = 'flex';
+  const guests = Math.max(0, maxSlots() - 1);
+  let html = '';
+  for (let slot = 2; slot <= maxSlots(); slot++) {
+    const filled = roomPlayers.some(p => p.slot === slot);
+    const offer = (net.getOfferForSlot && net.getOfferForSlot(slot)) || net.offerCode || '';
+    html += '<div data-slot="'+slot+'" style="padding:10px;border:1px solid #2a3a5a;border-radius:10px;background:#0a0e18;margin-bottom:6px">';
+    if (filled) {
+      const pl = roomPlayers.find(p => p.slot === slot);
+      html += '<div style="font-weight:800;color:#5ff0a4">✔ تم انضمام اللاعب «'+esc(pl && pl.name || ('سلوت '+slot))+'»</div>';
+    } else {
+      html += '<div style="font-weight:800;color:#7ff0dc;margin-bottom:6px">سلوت '+slot+' — كود العرض / الرد</div>';
+      html += '<label style="font-size:11px">كود العرض</label>';
+      html += '<textarea id="codesOffer'+slot+'" rows="3" readonly style="width:100%;direction:ltr;text-align:left;font:11px/1.35 Consolas,monospace;background:#060a12;color:#e2e8f0;border:1px solid #334;border-radius:8px;padding:6px">'+esc(offer)+'</textarea>';
+      html += '<div class="row" style="margin-top:6px"><button type="button" data-copy-offer="'+slot+'">نسخ العرض</button></div>';
+      html += '<label style="font-size:11px;margin-top:8px">كود الرد</label>';
+      html += '<textarea id="codesAns'+slot+'" rows="3" placeholder="SM1. …" style="width:100%;direction:ltr;text-align:left;font:11px/1.35 Consolas,monospace;background:#060a12;color:#e2e8f0;border:1px solid #334;border-radius:8px;padding:6px"></textarea>';
+      html += '<div class="row" style="margin-top:6px"><button type="button" class="pri" data-apply-ans="'+slot+'">تأكيد الانضمام</button></div>';
+    }
+    html += '</div>';
+  }
+  box.innerHTML = html;
+  box.querySelectorAll('[data-copy-offer]').forEach(btn => {
+    btn.onclick = () => {
+      const slot = btn.getAttribute('data-copy-offer');
+      const ta = document.getElementById('codesOffer'+slot);
+      if (ta && ta.value) {
+        if (navigator.clipboard) navigator.clipboard.writeText(ta.value).then(()=>{
+          $('#codesMsg').className='msg ok';
+          $('#codesMsg').textContent='✔ تم نسخ كود عرض سلوت '+slot;
+        }).catch(()=>{});
+      }
+    };
+  });
+  box.querySelectorAll('[data-apply-ans]').forEach(btn => {
+    btn.onclick = async () => {
+      const slot = +btn.getAttribute('data-apply-ans');
+      const ta = document.getElementById('codesAns'+slot);
+      const raw = ta && ta.value || '';
+      if (!raw.trim()) { $('#codesMsg').className='msg err'; $('#codesMsg').textContent='⚠ الصق كود الرد لسلوت '+slot; return; }
+      try {
+        if (net.applyAnswerForSlot) await net.applyAnswerForSlot(slot, raw.trim());
+        else if (net.applyAnswer) await net.applyAnswer(raw.trim());
+        if (ta) ta.value = '';
+        const off = document.getElementById('codesOffer'+slot);
+        // نسيب العرض لحد ما القناة تتأكد — بعد onPeerJoin hideCodesForSlot بيمسح الاتنين
+        $('#codesMsg').className='msg ok';
+        $('#codesMsg').textContent = '✔ تم تطبيق رد سلوت '+slot+' — بانتظار اكتمال القناة…';
+      } catch (e) {
+        $('#codesMsg').className='msg err';
+        $('#codesMsg').textContent = '⚠ '+(e.message||e);
+      }
+    };
+  });
+}
+
+/* ===== انضمام ===== */
 $('#btnDoJoin').onclick = async () => {
-  const rn = $('#joinRoomName').value.trim();
-  const code = $('#joinCode').value.trim();
-  const jn = ($('#joinName') && $('#joinName').value.trim()) || 'لاعب';
   if (!gameData) { $('#joinMsg').className='msg err'; $('#joinMsg').textContent='⚠ حمّل ملف اللعبة الأول'; return; }
   if (netType === 'codes') {
     $('#joinMsg').className='msg';
     $('#joinMsg').textContent='استخدم صندوق «تبادل الأكواد» بالأسفل: الصق كود العرض ثم «توليد كود الرد»';
-    $('#codesBox').style.display='flex';
-    $('#codesHostPane').style.display='none';
-    $('#codesJoinPane').style.display='flex';
+    if ($('#codesBox')) $('#codesBox').style.display = 'flex';
+    if ($('#codesJoinPane')) showEl('codesJoinPane', 'flex');
     return;
   }
+  const rn = ($('#joinRoomName') && $('#joinRoomName').value || '').trim();
+  const code = ($('#joinCode') && $('#joinCode').value || '').trim();
+  const jn = ($('#joinName') && $('#joinName').value || 'لاعب').trim() || 'لاعب';
   if (netType === 'peerjs' && (!rn || !code)) { $('#joinMsg').className='msg err'; $('#joinMsg').textContent='⚠ اسم الرووم والكود مطلوبين'; return; }
   if (netType === 'lan' && !code) { $('#joinMsg').className='msg err'; $('#joinMsg').textContent='⚠ الصق كود الرووم من المضيف'; return; }
   isHost = false;
+  myReady = false;
   $('#joinMsg').className='msg'; $('#joinMsg').textContent = netType === 'lan' ? 'جاري الانضمام عبر LAN…' : 'جاري الانضمام عبر PeerJS…';
   try {
     const common = {
@@ -532,20 +952,36 @@ $('#btnDoJoin').onclick = async () => {
       playerName: jn,
       onWelcome(msg) {
         mySlot = msg.slot || 2;
-        roomPlayers = msg.players || [];
-        $('#createBox').style.display='none'; $('#joinBox').style.display='none';
+        roomPlayers = (msg.players || []).map(p => Object.assign({ ready: !!p.ready }, p));
+        showEl('createBox', 'none'); showEl('joinBox', 'none');
         $('#lobby').classList.add('on');
-        $('#btnStart').style.display='none'; $('#btnKick').style.display='none';
+        const _bs = document.getElementById('btnStart'); if (_bs) _bs.style.display='none';
         renderSlots();
         $('#lobbyTitle').textContent = 'لوبي «' + (msg.roomName||rn||'LAN') + '» · سلوتك ' + mySlot;
         $('#joinMsg').className = 'msg ok';
-        $('#joinMsg').textContent = '✔ انضمّيت · استنى المضيف يبدأ';
+        $('#joinMsg').textContent = '✔ انضمّيت · اضغط «أنا مستعد» وانتظر المضيف';
+        updReadyBtn();
       },
-      onLobby(players) { roomPlayers = players; renderSlots(); },
-      onStart(msg) { const v = (msg && msg.voice != null) ? !!msg.voice : true; startPlay({ mode:'online', data: gameData, slot: mySlot, players: roomPlayers, net, isHost: false, transport: netType, voice: v }); },
+      onLobby(players) {
+        roomPlayers = (players || []).map(p => Object.assign({ ready: !!p.ready }, p));
+        renderSlots();
+      },
+      onStart(msg) {
+        const v = (msg && msg.voice != null) ? !!msg.voice : true;
+        startPlay({ mode:'online', data: gameData, slot: mySlot, players: roomPlayers, net, isHost: false, transport: netType, voice: v });
+      },
       onMessage(from, msg) {
-        if (msg.t === 'state') HawaPlay.applyRemote(from, msg);
+        if (msg.t === 'state' && window.HawaPlay) HawaPlay.applyRemote(from, msg);
         if (msg.t === 'kick' && msg.slot === mySlot) { alert('تم طردك من الرووم'); location.reload(); }
+        if (msg.t === 'lock') { alert('المضيف قفل الرووم'); location.reload(); }
+        if (msg.t === 'ready') {
+          const p = roomPlayers.find(x => x.id === from || x.slot === msg.slot);
+          if (p) { p.ready = !!msg.ready; renderSlots(); }
+        }
+        if (msg.t === 'lobby' && msg.players) {
+          roomPlayers = msg.players.map(p => Object.assign({ ready: !!p.ready }, p));
+          renderSlots();
+        }
       },
       onClose() { $('#joinMsg').className='msg err'; $('#joinMsg').textContent='⚠ انقطع الاتصال'; }
     };
@@ -560,37 +996,49 @@ $('#btnDoJoin').onclick = async () => {
   }
 };
 
-function broadcastLobby() {
-  if (!net || !isHost) return;
-  net.broadcast({ t: 'lobby', players: roomPlayers });
-}
-
-$('#btnStart').onclick = async () => {
+$('#btnLockRoom') && ($('#btnLockRoom').onclick = () => {
   if (!isHost || !net) return;
-  const micEl = document.getElementById('roomMic');
-  roomVoice = micEl ? !!micEl.checked : true;
-  if (netType === 'lan') {
-    try {
-      await fetch('/api/lan/start', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ code: net.code }) });
-    } catch (_) {}
-  }
-  net.broadcast({ t: 'start', voice: roomVoice });
-  startPlay({ mode:'online', data: gameData, slot: mySlot, players: roomPlayers, net, isHost: true, transport: netType, voice: roomVoice });
-};
-$('#btnKick').onclick = () => {
-  if (!isHost || !net) return;
-  const guests = roomPlayers.filter(p => !p.host);
-  if (!guests.length) { $('#lobbyMsg').textContent = 'مفيش حد يتطرد'; return; }
-  const last = guests[guests.length-1];
-  net.sendTo(last.id, { t: 'kick', slot: last.slot });
-  roomPlayers = roomPlayers.filter(p => p.id !== last.id);
-  renderSlots(); broadcastLobby();
-  $('#lobbyMsg').textContent = 'تم طرد ' + last.name;
-};
+  try { net.broadcast({ t: 'lock' }); } catch (_) {}
+  try { net.destroy(); } catch (_) {}
+  alert('تم قفل الرووم — الجميع خارج');
+  location.reload();
+});
 $('#btnLeave').onclick = () => location.reload();
 $('#btnExit').onclick = () => { if (net) try { net.destroy(); } catch(_){ } location.reload(); };
 
-
+/** من منظور المنضم: امسح العرض والرد نهائياً بعد نجاح الاتصال */
+function clearJoinerCodesUI() {
+  try {
+    const offerIn = document.getElementById('codesOfferIn');
+    const answerOut = document.getElementById('codesAnswerOut');
+    const offerOut = document.getElementById('codesOfferOut');
+    const answerIn = document.getElementById('codesAnswerIn');
+    if (offerIn) offerIn.value = '';
+    if (answerOut) answerOut.value = '';
+    // المنضم ما يستخدمش عرض المضيف — بس نمسح أي بقايا
+    const joinPane = document.getElementById('codesJoinPane');
+    if (joinPane) joinPane.style.display = 'none';
+    const codesBox = document.getElementById('codesBox');
+    if (codesBox) codesBox.style.display = 'none';
+    if (net && typeof net.clearCodes === 'function') net.clearCodes();
+  } catch (_) {}
+}
+function clearHostAnswerForJoined(slot) {
+  try {
+    const answerIn = document.getElementById('codesAnswerIn');
+    if (answerIn) answerIn.value = '';
+    // بطاقة السلوت في اللوبي: شيل حقول العرض/الرد لو كانت ظاهرة
+    const hostBox = document.getElementById('codesAnswersHost');
+    if (hostBox && slot != null) {
+      const card = hostBox.querySelector('[data-slot="'+slot+'"]');
+      if (card) {
+        card.querySelectorAll('textarea').forEach(t => { t.value = ''; t.style.display = 'none'; });
+        const labs = card.querySelectorAll('label, .codes-offer, .codes-answer, button');
+        // سيب بس رسالة الانضمام
+      }
+    }
+  } catch (_) {}
+}
 function codesCopy(id) {
   const ta = document.getElementById(id);
   if (!ta || !ta.value) return;
@@ -618,110 +1066,151 @@ function codesLoadFile(input, targetId) {
   r.readAsText(f);
 }
 
+if ($('#codesCopyOffer')) $('#codesCopyOffer').onclick = () => codesCopy('codesOfferOut');
+if ($('#codesDlOffer')) $('#codesDlOffer').onclick = () => codesDownload('codesOfferOut', 'hawa-offer.txt');
+if ($('#codesCopyAnswer')) $('#codesCopyAnswer').onclick = () => codesCopy('codesAnswerOut');
+if ($('#codesDlAnswer')) $('#codesDlAnswer').onclick = () => codesDownload('codesAnswerOut', 'hawa-answer.txt');
+if ($('#codesAnswerFile')) $('#codesAnswerFile').onchange = e => codesLoadFile(e.target, 'codesAnswerIn');
+if ($('#codesOfferFile')) $('#codesOfferFile').onchange = e => codesLoadFile(e.target, 'codesOfferIn');
 
-(function wireCodesUi(){
-  const byId = id => document.getElementById(id);
-  const on = (id, fn) => { const el = byId(id); if (el) el.onclick = fn; };
-  on('codesCopyOffer', () => codesCopy('codesOfferOut'));
-  on('codesDlOffer', () => codesDownload('codesOfferOut', 'hawa-offer.txt'));
-  on('codesCopyAnswer', () => codesCopy('codesAnswerOut'));
-  on('codesDlAnswer', () => codesDownload('codesAnswerOut', 'hawa-answer.txt'));
-  const af = byId('codesAnswerFile');
-  if (af) af.onchange = function(){ codesLoadFile(this, 'codesAnswerIn'); };
-  const of = byId('codesOfferFile');
-  if (of) of.onchange = function(){ codesLoadFile(this, 'codesOfferIn'); };
-  on('codesApplyAnswer', async () => {
-    if (!net || net.transport !== 'codes' || !net.applyAnswer) return;
-    const raw = (byId('codesAnswerIn') && byId('codesAnswerIn').value) || '';
-    try {
-      await net.applyAnswer(raw);
-      const m = byId('codesMsg'); if (m) { m.className = 'msg ok'; m.textContent = '✔ تم تطبيق الرد — في انتظار اكتمال الاتصال…'; }
-    } catch (e) {
-      const m = byId('codesMsg'); if (m) { m.className = 'msg err'; m.textContent = '⚠ ' + (e.message || e); }
-    }
-  });
-  on('codesMakeAnswer', async () => {
-    const raw = (byId('codesOfferIn') && byId('codesOfferIn').value) || '';
-    const jn = ($('#joinName') && $('#joinName').value.trim()) || 'لاعب';
-    if (!gameData) { const m=byId('codesMsg'); if(m){m.className='msg err';m.textContent='⚠ حمّل ملف اللعبة أولاً';} return; }
-    if (!raw.trim()) { const m=byId('codesMsg'); if(m){m.className='msg err';m.textContent='⚠ الصق كود العرض من المضيف';} return; }
-    try {
-      const m0 = byId('codesMsg'); if (m0) { m0.className='msg'; m0.textContent='جاري توليد كود الرد…'; }
-      isHost = false;
-      net = await HawaNet.joinHostCodes({
-        offerCode: raw,
-        playerName: jn,
-        onWelcome(msg) {
-          mySlot = msg.slot || 2;
-          roomPlayers = msg.players || roomPlayers;
-          $('#lobby').classList.add('on');
-          $('#btnStart').style.display='none'; $('#btnKick').style.display='none';
-          renderSlots();
-          $('#lobbyTitle').textContent = 'لوبي (تبادل أكواد) · سلوتك ' + mySlot;
-        },
-        onLobby(players) { roomPlayers = players; renderSlots(); },
-        onStart(msg) {
-          const v = (msg && msg.voice != null) ? !!msg.voice : true;
-          startPlay({ mode:'online', data: gameData, slot: mySlot, players: roomPlayers, net, isHost: false, transport: 'codes', voice: v });
-        },
-        onMessage(from, msg) {
-          if (msg && msg.t === 'state') try { HawaPlay.applyRemote(from, msg); } catch(_){}
-          if (msg && msg.t === 'kick' && msg.slot === mySlot) { alert('تم طردك'); location.reload(); }
-        },
-        onClose() { const m=byId('codesMsg'); if(m){m.className='msg err';m.textContent='⚠ انقطع الاتصال';} }
-      });
-      if (net.answerCode) {
-        byId('codesAnswerOut').value = net.answerCode;
-        const m = byId('codesMsg'); if (m) { m.className = 'msg ok'; m.textContent = '✔ انسخ كود الرد وابعته للمضيف ثم انتظر يبدأ'; }
-      }
-    } catch (e) {
-      const m = byId('codesMsg'); if (m) { m.className = 'msg err'; m.textContent = '⚠ ' + (e.message || e); }
-    }
-  });
-})();
-
-async function startPlay(opts) {
-  let stored = false;
-  try { sessionStorage.setItem('hawa_game', JSON.stringify(opts.data)); stored = true; } catch (e) { console.warn('sessionStorage full → IndexedDB', e); }
-  if (!stored) {
-    // الألعاب اللي فيها وسائط كبيرة بتعدّي حد sessionStorage → نخزّنها في IndexedDB
-    try {
-      await new Promise((res, rej) => {
-        const r = indexedDB.open('hawa_play_tmp', 1);
-        r.onupgradeneeded = () => r.result.createObjectStore('g');
-        r.onsuccess = () => { const tx = r.result.transaction('g', 'readwrite'); tx.objectStore('g').put(opts.data, 'game'); tx.oncomplete = res; tx.onerror = () => rej(tx.error); };
-        r.onerror = () => rej(r.error);
-      });
-      try { sessionStorage.removeItem('hawa_game'); } catch (_) {}
-      stored = true;
-    } catch (e) { alert('مش قادر أجهّز اللعبة للتشغيل: ' + (e.message || e)); return; }
-  } else {
-    try { const r = indexedDB.open('hawa_play_tmp', 1); r.onsuccess = () => { try { r.result.close(); indexedDB.deleteDatabase('hawa_play_tmp'); } catch (_) {} }; r.onupgradeneeded = () => r.result.createObjectStore('g'); } catch (_) {}
-  }
-  const netCfg = {
-    mode: opts.mode || 'offline',
-    transport: opts.transport || (opts.net && opts.net.transport) || netType || 'peerjs',
-    slot: opts.slot || 1,
-    isHost: !!opts.isHost,
-    playerName: (opts.players && opts.players.find(p => p.slot === (opts.slot||1))) ? (opts.players.find(p => p.slot === (opts.slot||1)).name) : 'لاعب',
-    code: null,
-    players: opts.players || [],
-    voice: opts.voice != null ? !!opts.voice : true
-  };
-  // كود الغرفة = peer id بتاع المضيف
+if ($('#codesApplyAnswer')) $('#codesApplyAnswer').onclick = async () => {
+  const raw = ($('#codesAnswerIn') && $('#codesAnswerIn').value || '').trim();
+  if (!raw) { $('#codesMsg').className='msg err'; $('#codesMsg').textContent='⚠ الصق كود الرد'; return; }
   try {
-    if (opts.net) {
-      netCfg.code = opts.net.code || opts.net.peerId || 'CODES';
-      // اقفل الاتصال القديم قبل الانتقال عشان نعيده في play.html
-      if (!((opts.transport==='codes')||(opts.net&&opts.net.transport==='codes')||netCfg.transport==='codes')) { try { opts.net.destroy(opts.transport === 'lan' || (opts.net && opts.net.transport === 'lan')); } catch (e) {} }
-    }
-  } catch (e) {}
-  try { sessionStorage.setItem('hawa_play_meta', JSON.stringify(netCfg)); } catch (e) {}
-  if ((opts.transport || netCfg.transport) === 'codes' && opts.net) {
-    try {
-      window.__HAWA_LIVE_NET__ = opts.net;
-      window.top.__HAWA_LIVE_NET__ = opts.net;
-    } catch (_) {}
+    if (net && net.applyAnswer) await net.applyAnswer(raw);
+    // امسح كود الرد من واجهة المضيف بعد التطبيق (العرض يتشال لما القناة تتأكد عبر hideCodesForSlot)
+    if ($('#codesAnswerIn')) $('#codesAnswerIn').value = '';
+    $('#codesMsg').className='msg ok';
+    $('#codesMsg').textContent = '✔ تم تطبيق الرد — بانتظار اكتمال القناة…';
+  } catch (e) {
+    $('#codesMsg').className='msg err';
+    $('#codesMsg').textContent = '⚠ '+(e.message||e);
+  }
+};
+if ($('#codesMakeAnswer')) $('#codesMakeAnswer').onclick = async () => {
+  const raw = ($('#codesOfferIn') && $('#codesOfferIn').value || '').trim();
+  const jn = ($('#joinName') && $('#joinName').value || 'لاعب').trim() || 'لاعب';
+  if (!raw) { $('#codesMsg').className='msg err'; $('#codesMsg').textContent='⚠ الصق كود العرض'; return; }
+  if (!gameData) { $('#codesMsg').className='msg err'; $('#codesMsg').textContent='⚠ حمّل ملف اللعبة الأول'; return; }
+  try {
+    isHost = false; myReady = false;
+    net = await HawaNet.joinHostCodes({
+      offer: raw,
+      offerCode: raw,
+      playerName: jn,
+      onWelcome(msg) {
+        mySlot = msg.slot || 2;
+        roomPlayers = (msg.players || []).map(p => Object.assign({ ready: !!p.ready }, p));
+        showEl('createBox','none'); showEl('joinBox','none');
+        // من منظور المنضم: اتشال العرض والرد بعد ما القائد طبّق الرد واتصلت القناة
+        clearJoinerCodesUI();
+        $('#lobby').classList.add('on');
+        const _bs = document.getElementById('btnStart'); if (_bs) _bs.style.display='none';
+        renderSlots();
+        $('#lobbyTitle').textContent = 'لوبي · سلوتك ' + mySlot;
+        const cm = $('#codesMsg');
+        if (cm) { cm.className='msg ok'; cm.textContent = '✔ انضمّيت · اضغط «أنا مستعد»'; }
+        const lm = $('#lobbyMsg');
+        if (lm) { lm.className='msg ok'; lm.textContent = '✔ تم الانضمام — أكواد العرض والرد اتشالت'; }
+        updReadyBtn();
+      },
+      onConnected() {
+        clearJoinerCodesUI();
+      },
+      onLobby(players) {
+        roomPlayers = (players||[]).map(p => Object.assign({ ready: !!p.ready }, p));
+        renderSlots();
+      },
+      onStart(msg) {
+        const v = (msg && msg.voice != null) ? !!msg.voice : true;
+        startPlay({ mode:'online', data: gameData, slot: mySlot, players: roomPlayers, net, isHost: false, transport: 'codes', voice: v });
+      },
+      onMessage(from, msg) {
+        if (msg.t === 'state' && window.HawaPlay) HawaPlay.applyRemote(from, msg);
+        if (msg.t === 'kick' && msg.slot === mySlot) { alert('تم طردك'); location.reload(); }
+        if (msg.t === 'lock') { alert('المضيف قفل الرووم'); location.reload(); }
+        if (msg.t === 'ready') {
+          const p = roomPlayers.find(x => x.id === from || x.slot === msg.slot);
+          if (p) { p.ready = !!msg.ready; renderSlots(); }
+        }
+        if (msg.t === 'lobby' && msg.players) {
+          roomPlayers = msg.players.map(p => Object.assign({ ready: !!p.ready }, p));
+          renderSlots();
+        }
+      },
+      onAnswer(answer) {
+        if ($('#codesAnswerOut')) $('#codesAnswerOut').value = answer;
+        $('#codesMsg').className='msg ok';
+        $('#codesMsg').textContent = '✔ تم توليد كود الرد — انسخه وابعته للمضيف';
+      }
+    });
+  } catch (e) {
+    $('#codesMsg').className='msg err';
+    $('#codesMsg').textContent = '⚠ '+(e.message||e);
+  }
+};
+
+$('#btnStart').onclick = async () => {
+  if (!isHost || !net) return;
+  if (!roomFull()) {
+    $('#lobbyMsg').className = 'msg err';
+    $('#lobbyMsg').textContent = '⚠ الرووم مش مكتمل (' + roomPlayers.length + '/' + maxSlots() + ')';
+    return;
+  }
+  if (!allReady()) {
+    $('#lobbyMsg').className = 'msg err';
+    $('#lobbyMsg').textContent = '⚠ كل اللاعبين لازم يكونوا مستعدين قبل البدء';
+    return;
+  }
+  const voice = !!(document.getElementById('lobbyMic') && document.getElementById('lobbyMic').checked);
+  try { net.broadcast({ t: 'start', voice, players: roomPlayers }); } catch(_){}
+  startPlay({ mode:'online', data: gameData, slot: 1, players: roomPlayers, net, isHost: true, transport: netType, voice });
+};
+
+function startPlay(opts) {
+  try {
+    const plist = opts.players || [];
+    const me = plist.find(p => p && (+p.slot === +opts.slot)) || plist.find(p => p && p.host) || null;
+    const playerName = (me && me.name) || (opts.isHost ? (($('#hostName')&&$('#hostName').value)||'مضيف') : (($('#joinName')&&$('#joinName').value)||'لاعب'));
+    const meta = {
+      mode: opts.mode,
+      slot: opts.slot || 1,
+      players: plist.map(p => ({ id: p.id, name: p.name, slot: p.slot, host: !!p.host, ready: !!p.ready })),
+      isHost: !!opts.isHost,
+      transport: opts.transport || '',
+      voice: opts.voice !== false,
+      gameName: (opts.data && opts.data.name) || '',
+      playerName: String(playerName || 'لاعب').slice(0, 32),
+      code: (opts.net && (opts.net.code || opts.net.peerId)) || ''
+    };
+    sessionStorage.setItem('hawa_play_meta', JSON.stringify(meta));
+    sessionStorage.setItem('hawa_play', JSON.stringify(meta));
+  } catch(_){}
+  if (opts.data) {
+    try { sessionStorage.setItem('hawa_game_data', JSON.stringify(opts.data)); } catch(_){}
+  }
+  const load = document.getElementById('hawaLoad');
+  if (load) {
+    load.classList.add('on');
+    load.style.display = 'flex';
+    const bar = document.getElementById('hawaLoadBar');
+    const txt = document.getElementById('hawaLoadTxt');
+    let p = 0;
+    const iv = setInterval(() => {
+      p = Math.min(100, p + 12 + Math.random()*10);
+      if (bar) bar.style.width = p + '%';
+      if (txt) txt.textContent = p < 40 ? 'تحميل الأصول…' : p < 80 ? 'تهيئة الشبكة…' : 'جاري الدخول…';
+      if (p >= 100) {
+        clearInterval(iv);
+        goPlay(opts);
+      }
+    }, 90);
+  } else {
+    goPlay(opts);
+  }
+}
+function goPlay(opts) {
+  if (opts.mode === 'online' && opts.net && (opts.transport === 'codes' || netType === 'codes')) {
     let fr = document.getElementById('hawaCodesFrame');
     if (!fr) {
       fr = document.createElement('iframe');
@@ -730,7 +1219,6 @@ async function startPlay(opts) {
       fr.style.cssText = 'position:fixed;inset:0;border:0;width:100%;height:100%;z-index:99999;background:#09070d';
       document.body.appendChild(fr);
     }
-    // بعد تحميل play.html نحقن الاتصال مباشرة في نافذته (أضمن من parent lookup)
     fr.onload = function () {
       try {
         const w = fr.contentWindow;
@@ -738,13 +1226,12 @@ async function startPlay(opts) {
         w.__HAWA_LIVE_NET__ = opts.net;
         w.__HAWA_CODES_READY = true;
         try { w.postMessage({ t: 'hawa_codes_net' }, '*'); } catch (_) {}
-      } catch (e) { console.error('inject codes net', e); }
+      } catch (e) { console.error('inject live net', e); }
     };
     fr.src = 'play.html';
     return;
   }
   location.href = 'play.html';
-
 }
 </script>
 </body>

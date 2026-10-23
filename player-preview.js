@@ -1,11 +1,11 @@
-/* شخصية اللاعب الحقيقية من المحرك — للعرض في الشاشة الرئيسية فقط */
+
 (function (W) {
   'use strict';
   var T = W.THREE;
   if (!T) { console.warn('THREE missing'); return; }
 
   const PLAYER_DEF = {
-  style: 'suit',                  // 'suit' = شاب بالبدلة (الافتراضي) | 'soldier' = جندي لوباي | 'lowpoly' = لوباي كيوت قديم | 'realistic' = واقعية | 'armor' = مدرّع
+  style: 'suit',                  
   skin: '#f5c08f', skinD: '#e0a070', hair: '#3a2616', iris: '#2a3f5a',
   shirt: '#f1f1ee', pants: '#34415e', jacket: '#34415e', tie: '#c0392b', shoes: '#1d1b1b', belt: '#1d1b1b',
   vest: '#4f5f2e', helmet: '#6a8040', glove: '#33353a', scarf: '#e0483c', pack: '#9c8553',
@@ -18,7 +18,7 @@
   function makeManRig() {
   const P = PCFG, root = new T.Group();
   const dk = (hex, f) => new T.Color(hex).multiplyScalar(f);
-  const RND = P.rounded === true;   // v2.16: حواف مدوّرة + تظليل ناعم (rounded:false يرجّع الشكل المكعّب القديم)
+  const RND = P.rounded === true;   
   const flat = (c, r = .8, m = 0) => new T.MeshStandardMaterial({color: c, roughness: r, metalness: m, flatShading: !RND});
   const jacketC = P.jacket || '#27324a', tieC = P.tie || '#c0392b';
   const C = {
@@ -58,43 +58,43 @@
     const m = new T.Mesh(rGeo(2 * aTop, h, 2 * aTop, r != null ? r : .05, yy => (aBot + (aTop - aBot) * (yy + h / 2) / h) / aTop), mt);
     m.scale.z = dz; return place(m, par, x, y, z, rot);
   };
-  const disc = (par, rx, ry, dp, mt, x, y, z) => {   // عين/قزحية بيضاوية بدل المستطيل
+  const disc = (par, rx, ry, dp, mt, x, y, z) => {   
     if (!RND) return bx(par, rx * 2, ry * 2, dp, mt, x, y, z);
     const g = new T.CylinderGeometry(1, 1, dp, 24); g.rotateX(Math.PI / 2);
     const m = new T.Mesh(g, mt); m.scale.set(rx, ry, 1); return place(m, par, x, y, z);
   };
   const cy = (par, rt, rb, h, mt, x, y, z, seg, rot) => place(new T.Mesh(new T.CylinderGeometry(rt, rb, h, seg || 8), mt), par, x, y, z, rot);
-  const HIP = .80, sec = [];   // رجل: حوض أعلى (رجلين أطول)
+  const HIP = .80, sec = [];   
   const spring = (o, o2) => { sec.push(Object.assign({o, m: 1, sg: 1, k: 90, d: 8, rx: o.rotation.x, rz: o.rotation.z, py: o.position.y, ly: 0}, o2 || {})); };
 
   const pelvis = jt(root, 0, HIP, 0);
   rbx(pelvis, .29, .14, .19, C.pants, 0, -.01, 0, null, .05);
-  rbx(pelvis, .315, .12, .205, C.jacket, 0, .06, 0, null, .05);                                    // ذيل الجاكت
+  rbx(pelvis, .315, .12, .205, C.jacket, 0, .06, 0, null, .05);                                    
   bx(pelvis, .315, .02, .21, C.jacketD, 0, .005, 0);
-  bx(pelvis, .012, .1, .212, C.jacketD, 0, .06, 0);                                    // خط الضهر
+  bx(pelvis, .012, .1, .212, C.jacketD, 0, .06, 0);                                    
 
   const waist = jt(pelvis, 0, .08, 0);
   rbx(waist, .29, .16, .195, C.jacket, 0, .08, 0, null, .06);
   const chest = jt(waist, 0, .16, 0);
-  rfru(chest, .2, .175, .28, .825, C.jacket, 0, .14, 0, null, .07);                                // كتاف الجاكت (أعرض من فوق)
-  bx(chest, .1, .24, .02, C.shirt, 0, .16, .142);                                      // القميص من قدام
+  rfru(chest, .2, .175, .28, .825, C.jacket, 0, .14, 0, null, .07);                                
+  bx(chest, .1, .24, .02, C.shirt, 0, .16, .142);                                      
   for (const sd of [-1, 1]) {
-    bx(chest, .1, .26, .03, C.jacketD, sd * .1, .14, .145, [0, 0, sd * -.2]);          // ياقة الجاكت (لابل)
-    bx(chest, .03, .03, .015, C.dark, sd * .02, .0, .168);                             // زراير
+    bx(chest, .1, .26, .03, C.jacketD, sd * .1, .14, .145, [0, 0, sd * -.2]);          
+    bx(chest, .03, .03, .015, C.dark, sd * .02, .0, .168);                             
   }
-  bx(chest, .05, .03, .012, C.shirt, .12, .15, .145);                                  // منديل الجيب
+  bx(chest, .05, .03, .012, C.shirt, .12, .15, .145);                                  
   bx(chest, .07, .014, .02, C.jacketD, .12, .125, .15);
-  const tie = jt(chest, 0, .25, .15);                                                  // الكرافتة (نابض)
+  const tie = jt(chest, 0, .25, .15);                                                  
   bx(tie, .045, .04, .035, C.tieD, 0, 0, 0);
   bx(tie, .05, .17, .018, C.tie, 0, -.12, .004);
   bx(tie, .05, .04, .018, C.tieD, 0, -.215, .004, [0, 0, Math.PI / 4]);
   spring(tie, {m: .7, sg: 1, k: 120, d: 7, lo: -.9, hi: .04});
 
   const neck = jt(chest, 0, .28, 0);
-  /* الرقبة بلون الجلد — واضحة مش بيضاء */
+  
   cy(neck, .07, .08, .11, C.skin, 0, .04, 0, 10);
   cy(neck, .072, .082, .04, C.skinD, 0, .01, 0, 10);
-  /* ياقة قميص رفيعة عند القاعدة فقط */
+  
   cy(neck, .095, .105, .028, C.shirt, 0, -.02, 0, 10);
   for (const sd of [-1, 1]) bx(neck, .04, .035, .018, C.shirtD, sd * .04, -.025, .1, [.15, sd * .3, sd * .15]);
 
@@ -102,12 +102,12 @@
   const aTop = .184, aBot = .148, hy0 = -.02, hy1 = .30;
   const zAt = y => aBot + (aTop - aBot) * (y - hy0) / (hy1 - hy0);
   rfru(head, aTop, aBot, hy1 - hy0, .96, C.skin, 0, (hy0 + hy1) / 2, 0, null, .07);
-  const fz = y => zAt(y) * .96;                                                        // سطح الوش الفعلي عند ارتفاع
+  const fz = y => zAt(y) * .96;                                                        
   for (const sd of [-1, 1]) {
-    rbx(head, .03, .075, .055, C.skinD, sd * (aTop + .002), .1, -.005, null, .013);                 // ودان (ملزوقة)
-    /* خدود وردية تحت العين: مُزالة */
+    rbx(head, .03, .075, .055, C.skinD, sd * (aTop + .002), .1, -.005, null, .013);                 
+    
   }
-  rbx(head, .04, .045, .035, C.skinD, 0, .09, fz(.09) + .012, null, .014);                          // الأنف
+  rbx(head, .04, .045, .035, C.skinD, 0, .09, fz(.09) + .012, null, .014);                          
   const brows = [];
   for (const sd of [-1, 1]) brows.push(rbx(head, .065, .016, .022, C.hair, sd * .07, .165, fz(.165) + .004, [0, 0, sd * -.14], .007));
   const lipU = rbx(head, .07, .012, .02, C.lip, 0, .052, fz(.05) + .005, null, .0058);
@@ -125,26 +125,26 @@
   }
   for (const l of lids) l.scale.y = .0001;
   const hs = P.hairStyle || 'short';
-  rbx(head, .4, .085, .385, C.hair, 0, .305, -.004, null, .04);                                    // فوق
-  rbx(head, .4, .2, .08, C.hair, 0, .2, -.165, null, .035);                                         // ورا
-  for (const sd of [-1, 1]) rbx(head, .04, .14, .3, C.hair, sd * .183, .225, -.02, null, .018);     // جوانب
-  rbx(head, .26, .05, .06, C.hair, -.04, .275, .165, [0, 0, .07], .022);                      // غُرّة
+  rbx(head, .4, .085, .385, C.hair, 0, .305, -.004, null, .04);                                    
+  rbx(head, .4, .2, .08, C.hair, 0, .2, -.165, null, .035);                                         
+  for (const sd of [-1, 1]) rbx(head, .04, .14, .3, C.hair, sd * .183, .225, -.02, null, .018);     
+  rbx(head, .26, .05, .06, C.hair, -.04, .275, .165, [0, 0, .07], .022);                      
   rbx(head, .12, .05, .05, C.hair, .13, .285, .155, [0, 0, -.25], .02);
   if (hs === 'long') { rbx(head, .4, .34, .08, C.hair, 0, .02, -.18, null, .035); for (const sd of [-1, 1]) rbx(head, .05, .26, .1, C.hair, sd * .185, .08, -.05, null, .022); }
   if (hs === 'bun') { place(new T.Mesh(new T.IcosahedronGeometry(.085, RND ? 2 : 0), C.hair), head, 0, .37, -.08); }
   if (P.beard) { bx(head, .15, .06, .05, C.hair, 0, .005, fz(.01)); bx(head, .11, .02, .03, C.hair, 0, .066, fz(.066) + .012); }
-  if (P.glasses) {                                                                     // نظارة ملزوقة بالراس (الوش + الودان)
+  if (P.glasses) {                                                                     
     const gz = fz(.12) + .03;
     for (const sd of [-1, 1]) {
       const cx = sd * .075;
       bx(head, .105, .012, .014, C.dark, cx, .162, gz); bx(head, .105, .012, .014, C.dark, cx, .082, gz);
       bx(head, .012, .08, .014, C.dark, cx - .0465, .122, gz); bx(head, .012, .08, .014, C.dark, cx + .0465, .122, gz);
       bx(head, .09, .068, .008, C.glass, cx, .122, gz);
-      bx(head, .012, .012, .2, C.dark, sd * .1, .13, gz - .1);                          // دراع النظارة لحد الودن
+      bx(head, .012, .012, .2, C.dark, sd * .1, .13, gz - .1);                          
     }
     bx(head, .03, .012, .014, C.dark, 0, .135, gz);
   }
-  head.scale.setScalar((+P.headScale > 0 ? +P.headScale : 1.0) * .88);   // راس بنسبة رجل حقيقي
+  head.scale.setScalar((+P.headScale > 0 ? +P.headScale : 1.0) * .88);   
 
   const cape = [jt(chest, 0, .3, -.13)];
 
@@ -152,14 +152,14 @@
   for (const sd of [-1, 1]) {
     const nm = sd < 0 ? 'L' : 'R', hip = jt(pelvis, sd * .1, -.02, 0);
     rbx(hip, .155, .37, .17, C.pants, 0, -.175, 0, null, .06);
-    bx(hip, .012, .33, .172, C.pantsD, 0, -.185, 0);                                     // كسرة البنطلون
+    bx(hip, .012, .33, .172, C.pantsD, 0, -.185, 0);                                     
     const knee = jt(hip, 0, -.37, 0);
     rfru(knee, .07, .06, .34, 1.05, C.pants, 0, -.17, 0, null, .04);
     const ank = jt(knee, 0, -.35, 0);
-    rbx(ank, .16, .08, .175, C.pants, 0, .045, 0, null, .03);                                      // طرف البنطلون
+    rbx(ank, .16, .08, .175, C.pants, 0, .045, 0, null, .03);                                      
     rbx(ank, .15, .06, .17, C.boot, 0, -.005, .035, null, .028);
-    bx(ank, .14, .04, .07, C.sole, 0, -.04, -.075);                                    // كعب
-    bx(ank, .155, .025, .29, C.sole, 0, -.0475, .045);                                 // نعل
+    bx(ank, .14, .04, .07, C.sole, 0, -.04, -.075);                                    
+    bx(ank, .155, .025, .29, C.sole, 0, -.0475, .045);                                 
     const toe = jt(ank, 0, -.02, .13);
     rbx(toe, .15, .06, .1, C.boot, 0, .005, .045, null, .028);
     bx(toe, .155, .025, .1, C.sole, 0, -.0275, .05);
@@ -168,7 +168,7 @@
 
   for (const sd of [-1, 1]) {
     const nm = sd < 0 ? 'L' : 'R', sh = jt(chest, sd * .225, .205, 0);
-    rbx(sh, .13, .065, .13, C.jacket, sd * .012, .04, 0, [0, 0, sd * -.14], .03);            // كتف
+    rbx(sh, .13, .065, .13, C.jacket, sd * .012, .04, 0, [0, 0, sd * -.14], .03);            
     rbx(sh, .115, .32, .12, C.jacket, 0, -.145, 0, null, .05);
     const el = jt(sh, 0, -.27, 0);
     rbx(el, .1, .055, .1, C.jacket, 0, .0, 0, null, .025);
@@ -198,7 +198,6 @@
   const st = {t: Math.random() * 10, blink: 2.5, blinkT: 0, land: 0, wasAir: false, pvy: 0, cw: cape.map(() => ({a: .1, v: 0, z: 0, zv: 0})), neutral: false, hip: 0, eyeTx: 0, eyeTy: 0, eyeNext: 1 + Math.random() * 2};
   return {root, pelvis, waist, chest, neck, head, eyes, lids, brows, lipU, lipD, fs: null, cape, L: legs.L, R: legs.R, AL: arms.L, AR: arms.R, st, hipY: HIP, sec, blob, tie};
 }
-
 
   W.HawaPlayerPreview = {
     PLAYER_DEF: PLAYER_DEF,

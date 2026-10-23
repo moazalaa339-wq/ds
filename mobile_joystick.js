@@ -1,5 +1,4 @@
-// جوystick لمس + قفز — يحرّك اللاعب عبر مدخل المحرك الافتراضي (زي الكيبورد)
-// ضع الملف في قسم البرمجة وفعّله (أخضر) ثم اضغط «اختبر»
+
 
 function onStart(self, game) {
   if (typeof document === "undefined") return;
@@ -175,7 +174,7 @@ function onUpdate(self, game, dt) {
   var left = nx < -dead;
   var right = nx > dead;
 
-  // يمرّر للمحرك كمدخل كيبورد افتراضي — يحرّك اللاعب من نظام الحركة الرسمي
+  
   if (typeof game.forcePlayerInput === "function") {
     game.forcePlayerInput(0, {
       up: up,
