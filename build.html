@@ -27,21 +27,17 @@
 <!-- ================= طبقة البناء (Build) ================= -->
 <div id="app">
   <header id="bar">
-    <a id="bHome" class="home-btn" href="index.html" title="الرئيسية"><span>⌂</span><i>الرئيسية</i></a>
-    <div class="brand"><span class="logo"><img src="logo.png" alt="Hawa"></span><div><b>Hawa</b> Engine<small>v2.20 · بناء</small></div></div>
+    <a id="bHome" class="home-btn hawa-icon-btn" href="index.html" title="الرئيسية"><span class="hawa-ico-frame" data-ic="home"></span><i>الرئيسية</i></a>
+    <div class="brand"><span class="logo"><img src="logo.png" alt="Hawa"></span><div><b>Hawa</b> Engine<small>v2.25 · بناء</small></div></div>
 
     <nav class="tabs" id="secs">
-      <button data-sec="objects" class="on"><span>🏛</span>الكائنات</button>
-      <button data-sec="prog"><span>⚙</span>البرمجة</button>
-      <button data-sec="sobj"><span>🎮</span>الكائنات البرمجية</button>
+      <button data-sec="objects" class="on"><span data-ic="objects"></span>الكائنات</button>
+      <button data-sec="prog"><span data-ic="prog"></span>البرمجة</button>
+      <button data-sec="sobj"><span data-ic="sobj"></span>الكائنات البرمجية</button>
     </nav>
 
     <div class="grow"></div>
 
-    <div class="seg seg-net">
-      <button id="bPlayNet" type="button" title="أونلاين / أوفلاين">❓<i>أونلاين / أوفلاين</i></button>
-      <button id="bMyFiles" type="button" title="ملفاتي">📁<i>ملفاتي</i></button>
-    </div>
     <div class="seg seg-proj">
       <button id="bSave" title="حفظ"><span data-ic="save"></span><i>حفظ</i></button>
       <button id="bProjDown" title="تحميل المشروع"><span data-ic="save"></span><i>تحميل</i></button>
@@ -50,11 +46,13 @@
     <details class="menu" id="barMenu">
       <summary title="المزيد"><span>⋯</span><i>المزيد</i></summary>
       <div class="menu-pop">
+        <button id="bPlayNet" type="button" title="أونلاين / أوفلاين">❓<i>أونلاين / أوفلاين</i></button>
+        <button id="bMyFiles" type="button" title="ملفاتي">📁<i>ملفاتي</i></button>
         <button id="bStorage" title="عرض التخزين">💾<i>عرض التخزين</i></button>
+        <button id="bConvert" class="go convert-btn" type="button" title="تحويل إلى لعبة">📦<i>تحويل إلى لعبة</i></button>
         <button id="bWipe" class="danger-btn" title="حذف الكلي">🗑<i>حذف الكلي</i></button>
       </div>
     </details>
-    <button id="bConvert" class="go convert-btn" type="button" title="تحويل إلى لعبة">📦<i>تحويل إلى لعبة</i></button>
     <button id="bTest" class="go" title="اختبر (P)"><span data-ic="play"></span>اختبر</button>
     <button id="bFullscreen" type="button" title="ملء الشاشة">⛶</button>
   </header>
@@ -82,9 +80,9 @@
   <aside id="dock">
     <div class="dock-head"><span id="dockTitle">الكائنات</span><button type="button" class="m-close" data-m-close aria-label="إغلاق">✕</button></div>
     <div id="mSecs" class="m-secs">
-      <button type="button" data-sec="objects" class="on"><span>🏛</span>الكائنات</button>
-      <button type="button" data-sec="prog"><span>⚙</span>البرمجة</button>
-      <button type="button" data-sec="sobj"><span>🎮</span>برمجية</button>
+      <button type="button" data-sec="objects" class="on"><span data-ic="objects"></span>الكائنات</button>
+      <button type="button" data-sec="prog"><span data-ic="prog"></span>البرمجة</button>
+      <button type="button" data-sec="sobj"><span data-ic="sobj"></span>برمجية</button>
     </div>
 
     <div id="catP">
@@ -135,7 +133,7 @@
           <button id="gVis" data-a="vis" title="إظهار / إخفاء"><span class="ico" data-ic="eye"></span><i id="gVisT">إخفاء</i></button>
         </div>
         <div class="gseg">
-          <button id="gParams" title="بارامترات" style="display:none"><span class="ico">⚙</span><i>بارامترات</i></button>
+          <button id="gParams" title="بارامترات" style="display:none"><span class="ico" data-ic="prog"></span><i>بارامترات</i></button>
           <button id="gDup" title="نسخ"><span class="ico" data-ic="copy"></span><i>نسخ</i></button>
           <button id="gDel" class="red" title="حذف"><span class="ico" data-ic="trash"></span><i>حذف</i></button>
         </div>
@@ -228,7 +226,7 @@
 <div id="mMore">
   <div class="mm-hd"><b>المزيد</b><button type="button" data-m-close aria-label="إغلاق">✕</button></div>
   <div class="mm-grid">
-    <a id="mmHome" class="mm-home" href="index.html"><span>⌂</span>الرئيسية</a>
+    <a id="mmHome" class="mm-home hawa-icon-btn" href="index.html"><span class="hawa-ico-frame" data-ic="home"></span>الرئيسية</a>
     <button type="button" data-proxy="bPlayNet"><span>🌐</span>أونلاين / أوفلاين</button>
     <button type="button" data-proxy="bSave"><span>💾</span>حفظ</button>
     <button type="button" data-proxy="bStorage"><span>🗂</span>عرض التخزين</button>
@@ -285,8 +283,24 @@
           <button type="button" class="go" id="spOnPlace">وضع نقطة أونلاين</button>
         </section>
       </div>
-      <div class="sp-ft">
-        <label class="sp-ai"><input type="checkbox" id="spAllowScript"> السماح للسكربت بتحديد مكان اللاعب</label>
+      <div class="sp-ft" style="flex-direction:column;align-items:stretch;gap:10px">
+        <div id="spRoomSettings" class="sp-room-set" hidden>
+          <div style="font-weight:800;font-size:12px;margin-bottom:6px;color:#c4b5fd">إعدادات الرووم (أونلاين)</div>
+          <label class="sp-ai" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <input type="checkbox" id="spMinEnable"> تفعيل حد أدنى للانضمام
+            <span class="mut small" id="spMinHint"></span>
+          </label>
+          <label class="sp-ai" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:4px">
+            حد أدنى للاعبين
+            <input type="number" id="spMinPlayers" min="2" max="7" value="2" style="width:64px;padding:4px 6px;border-radius:6px;border:1px solid #3a3150;background:#0a0810;color:#f4efe4">
+            <span class="mut small">(من 2 وأقل من عدد نقاط البداية — 1 = أوفلاين)</span>
+          </label>
+          <label class="sp-ai" style="display:flex;align-items:center;gap:8px;margin-top:4px">
+            <input type="checkbox" id="spFillExact"> الحد = عدد النقاط
+            <span class="mut small">الرووم لازم يتملي بكل نقاط البداية</span>
+          </label>
+          <div class="mut small" id="spRoomSummary" style="margin-top:4px;color:#a5b4fc"></div>
+        </div>
       </div>
     </div>
   </div>

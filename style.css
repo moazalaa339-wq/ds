@@ -23,7 +23,7 @@ body.noside #side{display:none}
 #side{grid-area:side}
 
 /* ---- الشريط العلوي ---- */
-#bar{display:flex;align-items:center;gap:14px;padding:0 14px;background:linear-gradient(180deg,#17121f,#0b0910);border-bottom:1px solid var(--line);white-space:nowrap;overflow:hidden}
+#bar{display:flex;align-items:center;gap:10px;padding:0 12px;background:linear-gradient(180deg,#17121f,#0b0910);border-bottom:1px solid var(--line);white-space:nowrap;overflow-x:auto;overflow-y:visible}
 .grow{flex:1;min-width:8px}
 .brand{display:flex;align-items:center;gap:10px}
 .brand .logo{width:36px;height:36px;display:grid;place-items:center;border-radius:10px;background:transparent;border:0;color:var(--gold);font-size:18px;overflow:hidden;padding:0}
@@ -556,7 +556,7 @@ body.is-mobile .param-panel{
 
 
 /* حوارات المحرك الداخلية */
-#hawaDialog{
+#hawaDialog{z-index:100050;
   position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center;
   padding:16px;
 }
@@ -878,7 +878,12 @@ body.is-mobile #introSkip{min-height:46px;padding:10px 22px;bottom:calc(13vh + 1
 .sp-half{padding:12px;display:flex;flex-direction:column;gap:8px}
 .sp-half + .sp-half{border-right:1px solid rgba(255,214,150,.15)}
 .sp-half h4{margin:0 0 4px;font-size:13px}
-.sp-list{flex:1;display:flex;flex-direction:column;gap:6px;min-height:60px}
+.sp-list{flex:1;display:flex;flex-direction:column;gap:6px;min-height:60px;max-height:min(42vh,320px);overflow-y:auto;overflow-x:hidden;padding-inline-end:4px;scrollbar-width:thin;scrollbar-color:#3d3454 transparent}
+.sp-list::-webkit-scrollbar{width:8px}
+.sp-list::-webkit-scrollbar-thumb{background:#3d3454;border-radius:8px}
+.sp-body{align-items:stretch}
+.sp-half{display:flex;flex-direction:column;min-height:0;max-height:min(52vh,420px)}
+.sp-half .go{flex-shrink:0;margin-top:8px}
 .sp-item{
   display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:8px 10px;border-radius:10px;
   background:rgba(255,255,255,.04);border:1px solid rgba(255,214,150,.15);font-size:12px;
@@ -940,7 +945,7 @@ body.is-mobile #introSkip{min-height:46px;padding:10px 22px;bottom:calc(13vh + 1
 #convOv .cv-btns button.pri{background:#14b8a0;border-color:#14b8a0;color:#032a24}
 
 /* نوافذ الكتابة/التأكيد فوق أي نافذة تانية (نافذة التحويل z=99990) */
-#hawaDialog{z-index:100000 !important}
+#hawaDialog{z-index:100050;z-index:100000 !important}
 
 
 /* ============================================================================
@@ -998,17 +1003,25 @@ body.intro-on:not(.is-mobile) #vp::before{display:none}
 
 /* ---------- الشريط العلوي: جزر عائمة ---------- */
 body:not(.is-mobile) #bar{
-  background:none;border:0;padding:0 12px;gap:8px;overflow-x:auto;overflow-y:hidden;
+  background:none;border:0;padding:0 10px;gap:6px;overflow-x:auto;overflow-y:visible;
   position:relative;z-index:40;align-items:center;-webkit-overflow-scrolling:touch;
   scrollbar-width:none;min-height:0}
 body:not(.is-mobile) #bar::-webkit-scrollbar{display:none}
 /* لا نفرض ارتفاع ثابت على كل الأبناء — سفاري كان يقصّ الأزرار ويحشرها */
-body:not(.is-mobile) #bar > *{
+body:not(.is-mobile) #bar > *:not(.menu){
   height:auto;min-height:44px;max-height:52px;flex:0 0 auto;
   display:flex;align-items:center;box-sizing:border-box}
-body:not(.is-mobile) #bar .grow{flex:1 1 auto;min-width:6px;max-height:none;height:auto;overflow:hidden}
+body:not(.is-mobile) #bar .grow{flex:1 1 auto;min-width:4px;max-height:none;height:auto;overflow:hidden}
 body:not(.is-mobile) #bar .tabs{flex:0 1 auto;min-width:0}
 body:not(.is-mobile) #bar .seg{flex:0 0 auto}
+/* قائمة المزيد: ممنوع القص بـ max-height/overflow على الشريط */
+body:not(.is-mobile) #bar > .menu{
+  height:auto;min-height:44px;max-height:none!important;flex:0 0 auto;
+  display:block;position:relative;z-index:50;overflow:visible!important;box-sizing:border-box}
+body:not(.is-mobile) #bar > .menu > summary{
+  height:48px;min-height:48px;display:flex;align-items:center}
+body:not(.is-mobile) #bar .menu[open]{z-index:80}
+body:not(.is-mobile) #bar .menu-pop{z-index:90;max-height:none}
 .brand{
   padding:0 14px 0 16px;height:48px;border-radius:var(--leaf);
   background:var(--brk),linear-gradient(135deg,#1b1424,#0e0b15);
@@ -1045,23 +1058,26 @@ body:not(.is-mobile) #bar .seg{flex:0 0 auto}
 .seg button i{font-weight:700;letter-spacing:.2px}
 
 /* قائمة «المزيد» */
-.menu{position:relative}
+.menu{position:relative;overflow:visible!important;z-index:50}
 .menu summary{
-  list-style:none;cursor:pointer;height:48px;padding:0 12px;display:flex;align-items:center;gap:6px;border-radius:var(--leaf);
+  list-style:none;cursor:pointer;height:48px;padding:0 14px;display:flex;align-items:center;gap:6px;border-radius:var(--leaf);
   background:linear-gradient(180deg,#141019,#0b0910);border:1px solid var(--line);font-weight:700;color:#e6dcc9;
-  transition:border-color .15s,color .15s;box-sizing:border-box;flex:0 0 auto}
+  transition:border-color .15s,color .15s;box-sizing:border-box;flex:0 0 auto;user-select:none}
 .menu summary::-webkit-details-marker{display:none}
 .menu summary span{font-size:20px;line-height:1;color:var(--au)}
 .menu summary i{font-style:normal;font-size:12px}
-.menu summary:hover,.menu[open] summary{border-color:var(--au);color:#fff}
+.menu summary:hover,.menu[open] summary{border-color:var(--au);color:#fff;background:linear-gradient(180deg,#1c1628,#120f1a)}
+.menu[open]{z-index:80}
 .menu-pop{
-  position:absolute;top:calc(100% + 10px);inset-inline-end:0;min-width:210px;padding:8px;display:flex;flex-direction:column;gap:3px;
+  position:absolute;top:calc(100% + 8px);inset-inline-end:0;min-width:220px;padding:8px;display:flex;flex-direction:column;gap:3px;
   background:var(--brk),#0f0c16;border:1px solid var(--line2);border-radius:var(--leaf);
-  box-shadow:0 26px 60px rgba(0,0,0,.65);animation:popIn .16s ease-out}
-.menu-pop button{width:100%;justify-content:flex-start;height:42px;padding:0 14px;gap:10px;border-radius:var(--leaf-s);color:#efe8da}
+  box-shadow:0 26px 60px rgba(0,0,0,.65);animation:popIn .16s ease-out;z-index:90;
+  pointer-events:auto}
+.menu-pop button{width:100%;justify-content:flex-start;height:42px;padding:0 14px;gap:10px;border-radius:var(--leaf-s);color:#efe8da;pointer-events:auto;cursor:pointer}
 .menu-pop button i{display:inline!important;font-size:12.5px}
 .menu-pop button:hover{background:rgba(45,226,196,.1);border-color:rgba(45,226,196,.35)}
 .menu-pop .danger-btn{margin-top:4px;border-top:1px dashed var(--badbd)!important;border-radius:3px 3px var(--leaf-s) var(--leaf-s)}
+.menu-pop .convert-btn{margin-top:2px;background:linear-gradient(180deg,rgba(45,226,196,.18),rgba(45,226,196,.05));border-color:rgba(45,226,196,.4)!important;color:#9ff5e8}
 @keyframes popIn{from{opacity:0;transform:translateY(-6px) scale(.98)}to{opacity:1;transform:none}}
 
 #bTest{
@@ -1289,22 +1305,17 @@ body.is-mobile .m-close{border-radius:3px 12px 3px 12px}
 body.is-mobile .menu-pop{inset-inline-end:auto}
 
 /* ---------- شاشات أضيق ---------- */
-@media (max-width:1400px){
+@media (max-width:1200px){
+  body:not(.is-mobile) #bar .brand small{display:none}
+  body:not(.is-mobile) .seg-proj button i{display:none}
+  body:not(.is-mobile) #bar{gap:5px;padding:0 8px}
+}
+@media (max-width:1000px){
   body:not(.is-mobile) #bar button i{display:none}
   body:not(.is-mobile) .menu summary i{display:none}
-  body:not(.is-mobile) #bar .brand small{display:none}
-  body:not(.is-mobile) .tabs button{padding:0 10px}
-  body:not(.is-mobile) #bar{gap:6px;padding:0 8px}
-}
-@media (max-width:1100px){
-  body:not(.is-mobile) .seg-net button i,
-  body:not(.is-mobile) .seg-proj button i{display:none}
   body:not(.is-mobile) .tabs button span{display:none}
-  body:not(.is-mobile) #bConvert{padding:0 12px}
-}
-@media (max-width:1100px){
+  body:not(.is-mobile) .tabs button{padding:0 10px;font-size:12px}
   body:not(.is-mobile) #app{grid-template-columns:62px 250px 1fr 250px}
-  body:not(.is-mobile) .tabs button{font-size:12px}
   #grid .g{grid-template-columns:repeat(2,1fr)}
 }
 @media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
@@ -1589,4 +1600,84 @@ body.play-on #mTouch {
 #pHelp:empty,
 #pHelp[hidden] {
   display: none !important;
+}
+
+.sp-room-set{padding:10px 12px;border-radius:10px;background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.25);margin-top:4px}
+.sp-room-set input[type=number]{font-weight:700}
+
+
+/* ===== أيقونات Hawa بإطار ستايل المحرك ===== */
+.hawa-ico-frame,[data-ic]{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:28px;height:28px;flex-shrink:0;
+  border-radius:8px 14px 8px 14px;
+  border:1px solid rgba(255,190,61,.35);
+  background:linear-gradient(160deg,rgba(255,190,61,.14),rgba(12,10,20,.85));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 4px 12px rgba(0,0,0,.25);
+  color:#ffe2a6;
+}
+.hawa-ico-frame .hawa-ico,span[data-ic] svg.hawa-ico,span[data-ic] svg{
+  width:16px;height:16px;display:block;
+}
+button .hawa-ico-frame,button [data-ic],.tabs [data-ic],.m-secs [data-ic],.rail-group [data-ic]{
+  width:26px;height:26px;
+}
+.home-btn .hawa-ico-frame,.mm-home .hawa-ico-frame,#playHome .hawa-ico-frame,a.home .hawa-ico-frame{
+  width:30px;height:30px;border-radius:10px 16px 10px 16px;
+  border-color:rgba(255,190,61,.55);
+  background:linear-gradient(160deg,rgba(255,190,61,.22),rgba(10,8,15,.9));
+  color:#ffbe3d;
+}
+#playHome{
+  gap:10px;padding:8px 16px 8px 10px;
+}
+#playHome .hawa-ico-frame{margin-inline-end:2px}
+#playHome i{font-style:normal;font-weight:800}
+
+/* المايك جنب أيقونة القائمة أعلى اليسار بإطار حلو */
+#pOnlineBar{
+  display:none;position:fixed;top:12px;inset-inline-start:12px;z-index:9990;
+  align-items:center;gap:10px;padding:6px 8px;
+  border-radius:14px 22px 14px 22px;
+  border:1px solid rgba(255,190,61,.28);
+  background:linear-gradient(180deg,rgba(20,16,32,.92),rgba(8,6,14,.88));
+  backdrop-filter:blur(10px);
+  box-shadow:0 10px 28px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.05);
+}
+#pOnlineBar.show{display:flex}
+#pOnlineBar #pMenuBtn{
+  width:40px;height:40px;padding:0;border-radius:12px 18px 12px 18px;
+  border:1px solid rgba(255,190,61,.45);
+  background:linear-gradient(160deg,rgba(255,190,61,.18),rgba(12,10,20,.9));
+  overflow:hidden;display:flex;align-items:center;justify-content:center;
+  box-shadow:0 4px 14px rgba(0,0,0,.3);
+}
+#pOnlineBar #pMenuBtn img{width:28px;height:28px;object-fit:contain;border-radius:50%}
+#pOnlineBar #pMic,#pMic.online-compact{
+  position:static!important;bottom:auto!important;right:auto!important;left:auto!important;
+  transform:none!important;
+  width:40px;height:40px;min-width:40px;padding:0;margin:0;
+  border-radius:12px 18px 12px 18px!important;
+  border:1px solid rgba(255,190,61,.4)!important;
+  background:linear-gradient(160deg,rgba(255,190,61,.12),rgba(12,10,20,.9))!important;
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 4px 14px rgba(0,0,0,.3);
+}
+#pMic.online-compact .mic-bar,
+#pMic.online-compact kbd,
+#pMic.online-compact .mic-lbl{display:none!important}
+#pMic.online-compact .mic-ico{width:22px;height:22px}
+#pMic.online-compact.on{
+  border-color:rgba(34,197,94,.65)!important;
+  background:linear-gradient(160deg,rgba(34,197,94,.22),rgba(12,10,20,.9))!important;
+  box-shadow:0 0 0 2px rgba(34,197,94,.25),0 4px 16px rgba(34,197,94,.15);
+}
+#pMic.online-compact.live{
+  border-color:rgba(239,68,68,.7)!important;
+  box-shadow:0 0 0 2px rgba(239,68,68,.3),0 4px 16px rgba(239,68,68,.2);
+}
+
+/* منع ومضة البناء في وضع اللعب فقط */
+html.pure-play #app,body.pure-play #app,#app[hidden]{
+  display:none!important;visibility:hidden!important;pointer-events:none!important;
 }

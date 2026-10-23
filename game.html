@@ -176,7 +176,7 @@ button.on{border-color:rgba(45,226,196,.6);background:linear-gradient(180deg,rgb
 </div>
 
 <div class="topbar">
-  <a class="home" href="index.html"><span>⌂</span><i>الرئيسية</i></a>
+  <a class="home hawa-icon-btn" href="index.html"><span class="hawa-ico-frame"><svg class="hawa-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11.5L12 4l8 7.5"/><path d="M6.5 10.5V20h11V10.5"/><path d="M10 20v-5h4v5"/></svg></span><i>الرئيسية</i></a>
   <div class="brand"><img src="logo-64.png" alt="Hawa" class="gbrand-logo"><b>HAWA</b> · وضع اللعب</div>
   <div class="mode-switch">
     <button type="button" id="mOff" class="on">🏠 أوفلاين</button>
@@ -322,13 +322,7 @@ button.on{border-color:rgba(45,226,196,.6);background:linear-gradient(180deg,rgb
         <div class="msg" id="lobbyMsg"></div>
       </div>
 
-      <div id="hawaLoad"><img src="logo-256.png" alt="Hawa Engine" style="width:108px;height:108px;object-fit:contain;border-radius:50%;filter:drop-shadow(0 0 28px rgba(255,190,61,.55)) drop-shadow(0 0 48px rgba(255,190,61,.2));margin-bottom:10px">
-        <div style="font-size:42px;letter-spacing:.12em;font-weight:900;background:linear-gradient(90deg,#ffe2a6,#7ff0dc,#c4b5fd);-webkit-background-clip:text;background-clip:text;color:transparent">HAWA ENGINE</div>
-        <div style="opacity:.8;font-weight:700;font-size:15px" id="hawaLoadTxt">تهيئة وضع اللعب…</div>
-        <div style="width:min(280px,70vw);height:4px;border-radius:99px;background:#1e1a2e;overflow:hidden">
-          <div id="hawaLoadBar" style="height:100%;width:0%;background:linear-gradient(90deg,#7ff0dc,#ffe2a6);transition:width .25s"></div>
-        </div>
-      </div>
+
     </div>
   </div>
 </div>
@@ -336,7 +330,7 @@ button.on{border-color:rgba(45,226,196,.6);background:linear-gradient(180deg,rgb
 <div id="playRoot">
   <div id="hud">
     <div class="chip" id="pName">—</div>
-    <div class="hbtns"><a class="hh" href="index.html">⌂ الرئيسية</a><button type="button" id="btnExit">خروج</button></div>
+    <div class="hbtns"><a class="hh hawa-icon-btn" href="index.html"><span class="hawa-ico-frame"><svg class="hawa-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11.5L12 4l8 7.5"/><path d="M6.5 10.5V20h11V10.5"/><path d="M10 20v-5h4v5"/></svg></span> الرئيسية</a><button type="button" id="btnExit">خروج</button></div>
   </div>
 </div>
 
@@ -447,13 +441,38 @@ button.on{border-color:rgba(45,226,196,.6);background:linear-gradient(180deg,rgb
 })();
 
 let mode = 'off';
+
+function hawaAlert(msg) {
+  return new Promise(resolve => {
+    let el = document.getElementById('hawaDialog');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'hawaDialog';
+      el.innerHTML = '<div class="hd-backdrop"></div><div class="hd-box" role="dialog"><div class="hd-msg" id="hdMsg"></div><div class="hd-actions" id="hdActions"></div></div>';
+      document.body.appendChild(el);
+    }
+    el.classList.add('on'); el.hidden = false;
+    const msgEl = el.querySelector('#hdMsg'); if (msgEl) msgEl.textContent = String(msg || '');
+    const actions = el.querySelector('#hdActions'); if (actions) actions.innerHTML = '';
+    const ok = document.createElement('button');
+    ok.type = 'button'; ok.className = 'hd-ok'; ok.textContent = 'حسنًا';
+    ok.onclick = () => { el.classList.remove('on'); el.hidden = true; resolve(); };
+    if (actions) actions.appendChild(ok);
+    setTimeout(() => ok.focus(), 20);
+  });
+}
+try { window.alert = function(m){ hawaAlert(String(m)); }; } catch(_){}
 let gameData = null;
+
 if (typeof window.HAWA_EMBEDDED_GAME === 'object' && window.HAWA_EMBEDDED_GAME) {
   gameData = window.HAWA_EMBEDDED_GAME;
   setTimeout(() => {
     const m1 = document.getElementById('offMsg');
     const m2 = document.getElementById('onFileMsg');
-    const txt = '✔ لعبة مدمجة: «' + (gameData.name || '') + '» · ' + ((gameData.objs||[]).length) + ' كائن · جاهزة للعب';
+    const pn = detectGamePlayNet(gameData);
+    const txt = pn === 'online'
+      ? ('✔ لعبة مدمجة: «' + (gameData.name || '') + '» · ' + playersLabel() + ' · جاهزة للعب')
+      : ('✔ لعبة مدمجة: «' + (gameData.name || '') + '» · جاهزة للعب');
     if (m1) { m1.className = 'msg ok'; m1.textContent = txt; }
     if (m2) { m2.className = 'msg ok fileok'; m2.textContent = txt; }
   }, 50);
@@ -522,7 +541,7 @@ $('#offFile').onchange = async e => {
     }
     gameData = data;
     $('#offMsg').className = 'msg ok';
-    $('#offMsg').textContent = '✔ تم التعرف (أوفلاين): «' + (gameData.name || 'بدون اسم') + '» · ' + (gameData.objs||[]).length + ' كائن';
+    $('#offMsg').textContent = '✔ تم التعرف (أوفلاين): «' + (gameData.name || 'بدون اسم') + '»';
   } catch (err) {
     gameData = null;
     $('#offMsg').className = 'msg err';
@@ -548,7 +567,7 @@ $('#onFile').onchange = async e => {
     }
     gameData = data;
     $('#onFileMsg').className = 'msg ok';
-    $('#onFileMsg').textContent = '✔ تم التعرف (أونلاين): «' + (gameData.name || 'بدون اسم') + '» · ' + data.onlineSpawns.length + ' نقطة أونلاين';
+    $('#onFileMsg').textContent = '✔ تم التعرف (أونلاين): «' + (gameData.name || 'بدون اسم') + '» · ' + playersLabel() + ' · سعة الرووم ' + maxSlots();
   } catch (err) {
     gameData = null;
     $('#onFileMsg').className = 'msg err';
@@ -693,11 +712,36 @@ $('#btnJoin').onclick = () => {
 };
 
 function maxSlots() {
+  if (gameData && gameData.roomMaxPlayers != null) return Math.max(1, +gameData.roomMaxPlayers || 1);
+  if (gameData && gameData.meta && gameData.meta.roomMaxPlayers != null) return Math.max(1, +gameData.meta.roomMaxPlayers || 1);
   const n = (gameData && gameData.onlineSpawns && gameData.onlineSpawns.length) || 0;
-  return Math.min(8, Math.max(1, n || 1));
+  return Math.max(1, n);
+}
+function minSlots() {
+  const max = maxSlots();
+  let min = max;
+  if (gameData) {
+    if (gameData.roomMinPlayers != null) min = +gameData.roomMinPlayers;
+    else if (gameData.meta && gameData.meta.roomMinPlayers != null) min = +gameData.meta.roomMinPlayers;
+  }
+  min = Math.floor(min);
+  // لاعب واحد = أوفلاين — الأونلاين من 2
+  if (max >= 2 && min < 2) min = 2;
+  if (!min || min < 1) min = max;
+  if (min > max) min = max;
+  return min;
+}
+function playersLabel() {
+  if (gameData && gameData.meta && gameData.meta.playersLabel) return gameData.meta.playersLabel;
+  const min = minSlots(), max = maxSlots();
+  if (min >= max) return 'عدد اللاعبين: ' + max;
+  return 'عدد اللاعبين من ' + min + ' لـ ' + max;
 }
 function roomFull() {
   return roomPlayers.filter(Boolean).length >= maxSlots();
+}
+function roomReadyToStart() {
+  return roomPlayers.filter(Boolean).length >= minSlots();
 }
 function allReady() {
   if (!roomPlayers.length) return false;
@@ -712,8 +756,9 @@ function renderSlots() {
   const cap = document.getElementById('lobbyCap');
   const readyCount = roomPlayers.filter(p => p && p.ready).length;
   if (cap) {
-    cap.textContent = 'سعة: ' + roomPlayers.length + ' / ' + max
-      + (roomFull() ? ' · مكتمل ✔' : ' · بانتظار لاعبين')
+    cap.textContent = 'لاعبين: ' + roomPlayers.length + ' / ' + max
+      + ' · حد أدنى ' + minSlots()
+      + (roomFull() ? ' · مكتمل ✔' : (roomReadyToStart() ? ' · جاهز للبدء' : ' · بانتظار لاعبين'))
       + ' · مستعدين: ' + readyCount + '/' + roomPlayers.length;
   }
   for (let i=1;i<=max;i++) {
@@ -757,13 +802,15 @@ function updStartBtn() {
   b.style.display = 'block';
   const full = roomFull();
   const ready = allReady();
-  const can = full && ready;
+  const enough = roomReadyToStart();
+  const can = enough && ready;
   b.disabled = !can;
   b.style.opacity = can ? '1' : '.45';
   const guests = roomPlayers.filter(p => p && !p.host);
   const guestsReady = guests.filter(p => p.ready).length;
-  if (!full) b.textContent = '▶ انتظار اكتمال الرووم ('+roomPlayers.length+'/'+maxSlots()+')';
+  if (!enough) b.textContent = '▶ انتظار الحد الأدنى ('+roomPlayers.length+'/'+minSlots()+') · سعة '+maxSlots();
   else if (!ready) b.textContent = '▶ انتظار استعداد الضيوف ('+guestsReady+'/'+guests.length+')';
+  else if (!full) b.textContent = '▶ بدء اللعب ('+roomPlayers.length+'/'+maxSlots()+') — يمكن البدء';
   else b.textContent = '▶ بدء اللعب';
   const mic = document.getElementById('lobbyMicWrap');
   if (mic) mic.style.display = isHost ? 'inline-flex' : 'none';
@@ -1058,8 +1105,8 @@ $('#btnDoJoin').onclick = async () => {
       },
       onMessage(from, msg) {
         if (msg.t === 'state' && window.HawaPlay) HawaPlay.applyRemote(from, msg);
-        if (msg.t === 'kick' && msg.slot === mySlot) { alert('تم طردك من الرووم'); location.reload(); }
-        if (msg.t === 'lock') { alert('المضيف قفل الرووم'); location.reload(); }
+        if (msg.t === 'kick' && msg.slot === mySlot) { hawaAlert('تم طردك من الرووم').then(() => location.reload()); }
+        if (msg.t === 'lock') { hawaAlert('المضيف قفل الرووم').then(() => location.reload()); }
         if (msg.t === 'ready') {
           const p = roomPlayers.find(x => x.id === from || x.slot === msg.slot);
           if (p) { p.ready = !!msg.ready; renderSlots(); }
@@ -1086,7 +1133,7 @@ $('#btnLockRoom') && ($('#btnLockRoom').onclick = () => {
   if (!isHost || !net) return;
   try { net.broadcast({ t: 'lock' }); } catch (_) {}
   try { net.destroy(); } catch (_) {}
-  alert('تم قفل الرووم — الجميع خارج');
+  hawaAlert('تم قفل الرووم — الجميع خارج');
   location.reload();
 });
 $('#btnLeave').onclick = () => location.reload();
@@ -1217,8 +1264,8 @@ if ($('#codesMakeAnswer')) $('#codesMakeAnswer').onclick = async () => {
       },
       onMessage(from, msg) {
         if (msg.t === 'state' && window.HawaPlay) HawaPlay.applyRemote(from, msg);
-        if (msg.t === 'kick' && msg.slot === mySlot) { alert('تم طردك'); location.reload(); }
-        if (msg.t === 'lock') { alert('المضيف قفل الرووم'); location.reload(); }
+        if (msg.t === 'kick' && msg.slot === mySlot) { hawaAlert('تم طردك').then(() => location.reload()); }
+        if (msg.t === 'lock') { hawaAlert('المضيف قفل الرووم').then(() => location.reload()); }
         if (msg.t === 'ready') {
           const p = roomPlayers.find(x => x.id === from || x.slot === msg.slot);
           if (p) { p.ready = !!msg.ready; renderSlots(); }
@@ -1242,9 +1289,9 @@ if ($('#codesMakeAnswer')) $('#codesMakeAnswer').onclick = async () => {
 
 $('#btnStart').onclick = async () => {
   if (!isHost || !net) return;
-  if (!roomFull()) {
+  if (!roomReadyToStart()) {
     $('#lobbyMsg').className = 'msg err';
-    $('#lobbyMsg').textContent = '⚠ الرووم مش مكتمل (' + roomPlayers.length + '/' + maxSlots() + ')';
+    $('#lobbyMsg').textContent = '⚠ محتاجين على الأقل ' + minSlots() + ' لاعب (حالياً ' + roomPlayers.length + '/' + maxSlots() + ')';
     return;
   }
   if (!allReady()) {
@@ -1333,11 +1380,11 @@ async function startPlay(opts) {
   if (opts.data) {
     const saved = await saveGameForPlay(opts.data);
     if (!saved) {
-      alert('⚠ مش قادر أحفظ بيانات اللعبة قبل التشغيل (المساحة ممتلئة أو المتصفح منع التخزين).\nجرّب ترفع ملف اللعبة تاني أو استخدم لعبة أصغر.');
+      hawaAlert('⚠ مش قادر أحفظ بيانات اللعبة قبل التشغيل (المساحة ممتلئة أو المتصفح منع التخزين).\nجرّب ترفع ملف اللعبة تاني أو استخدم لعبة أصغر.');
       return;
     }
   } else {
-    alert('⚠ مفيش بيانات لعبة. ارفع ملف اللعبة من صفحة فتح اللعبة أولاً.');
+    hawaAlert('⚠ مفيش بيانات لعبة. ارفع ملف اللعبة من صفحة فتح اللعبة أولاً.');
     return;
   }
   const load = document.getElementById('hawaLoad');
@@ -1403,5 +1450,14 @@ function goPlay(opts) {
   location.href = 'play.html';
 }
 </script>
+
+<!-- شاشة تحميل كاملة فوق كل شيء -->
+<div id="hawaLoad"><img src="logo-256.png" alt="Hawa Engine" style="width:108px;height:108px;object-fit:contain;border-radius:50%;filter:drop-shadow(0 0 28px rgba(255,190,61,.55)) drop-shadow(0 0 48px rgba(255,190,61,.2));margin-bottom:10px">
+  <div style="font-size:42px;letter-spacing:.12em;font-weight:900;background:linear-gradient(90deg,#ffe2a6,#7ff0dc,#c4b5fd);-webkit-background-clip:text;background-clip:text;color:transparent">HAWA ENGINE</div>
+  <div style="opacity:.8;font-weight:700;font-size:15px" id="hawaLoadTxt">تهيئة وضع اللعب…</div>
+  <div style="width:min(280px,70vw);height:4px;border-radius:99px;background:#1e1a2e;overflow:hidden">
+    <div id="hawaLoadBar" style="height:100%;width:0%;background:linear-gradient(90deg,#7ff0dc,#ffe2a6);transition:width .25s"></div>
+  </div>
+</div>
 </body>
 </html>

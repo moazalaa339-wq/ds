@@ -27,7 +27,7 @@
 <script src="hawa-fx.js"></script>
 </head>
 <body>
-<a id="playHome" href="index.html"><span>⌂</span>الرئيسية</a>
+<a id="playHome" class="hawa-icon-btn" href="index.html" title="الرئيسية"><span class="hawa-ico-frame" data-ic="home"></span><i>الرئيسية</i></a>
 
 <!-- ================= طبقة البناء (Build) ================= -->
 <div id="app">
@@ -35,9 +35,9 @@
     <div class="brand"><span class="logo"><img src="logo.png" alt="Hawa"></span><div><b>Hawa</b> Engine<small>v2.3 · بناء</small></div></div>
 
     <nav class="tabs" id="secs">
-      <button data-sec="objects" class="on"><span>🏛</span>الكائنات</button>
-      <button data-sec="prog"><span>⚙</span>البرمجة</button>
-      <button data-sec="sobj"><span>🎮</span>الكائنات البرمجية</button>
+      <button data-sec="objects" class="on"><span data-ic="objects"></span>الكائنات</button>
+      <button data-sec="prog"><span data-ic="prog"></span>البرمجة</button>
+      <button data-sec="sobj"><span data-ic="sobj"></span>الكائنات البرمجية</button>
     </nav>
 
     <div class="grow"></div>
@@ -160,12 +160,11 @@
   </div>
   <div id="pOnlineBar">
     <button type="button" id="pMenuBtn" title="قائمة الأونلاين"><img src="logo-64.png" alt="Hawa"></button>
-    <button type="button" id="pMic" class="online-compact" title="المايك (B)">
+    <button type="button" id="pMic" class="online-compact" title="المايك">
       <span class="mic-ico" aria-hidden="true">
         <svg class="r" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/><line x1="4" y1="4" x2="20" y2="20"/></svg>
         <svg class="g" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
       </span>
-      <kbd>B</kbd>
       <span class="mic-lbl">مكتوم</span>
       <span class="mic-bar"><i></i></span>
     </button>
@@ -189,15 +188,15 @@
     </div>
     <div class="pom-list">
       <button type="button" class="pom-item" id="pMuteAll">
-        <span class="ic">🔇</span>
+        <span class="hawa-ico-frame" data-ic="mute"></span>
         <span id="pMuteAllLbl">كتم أصوات جميع اللاعبين</span>
       </button>
       <button type="button" class="pom-item danger" id="pLeaveOnline">
-        <span class="ic">🚪</span>
+        <span class="hawa-ico-frame" data-ic="leave"></span>
         <span>الخروج من الأونلاين والرجوع للرئيسية</span>
       </button>
     </div>
-    <div class="pom-hint">المايك من الأيقونة أعلى اليسار · B للتبديل</div>
+    <div class="pom-hint">المايك من الأيقونة أعلى اليسار</div>
   </div>
 </div>
 <div id="pOnlineConfirm" aria-hidden="true">

@@ -1,6 +1,18 @@
 'use strict';
 
 (() => {
+// إخفاء واجهة البناء فوراً في وضع اللعب فقط — يمنع ومضة البناء قبل اللعب
+try {
+  if (window.HAWA_PLAY_ONLY) {
+    const st = document.createElement('style');
+    st.id = 'pure-play-boot';
+    st.textContent = '#app{display:none!important;visibility:hidden!important}body.pure-play #app{display:none!important}#play{visibility:visible}body{background:#08060f}';
+    document.documentElement.appendChild(st);
+    document.documentElement.classList.add('pure-play');
+    if (document.body) document.body.classList.add('pure-play','play-on');
+    else document.addEventListener('DOMContentLoaded',()=>{try{document.body.classList.add('pure-play','play-on')}catch(_){}});
+  }
+} catch(_){}
 const T = THREE, $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const D2R = Math.PI / 180, clamp = (v, a, b) => Math.max(a, Math.min(b, v)), E = .02;
 const esc = s => String(s).replace(/[&<>"']/g, c => '&#' + c.charCodeAt(0) + ';');
@@ -33,9 +45,20 @@ const ICO = {
   pen: '<path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
   export: '<path d="M12 3v12M8 11l4 4 4-4M4 19h16"/>',
   marquee: '<rect x="3" y="3" width="18" height="18" rx="1" stroke-dasharray="3 2" fill="none"/><path d="M3 3h4M17 3h4M3 21h4M17 21h4M3 3v4M3 17v4M21 3v4M21 17v4"/>',
-  users: '<circle cx="9" cy="8" r="3.5"/><path d="M2 19c0-3.5 3-5.5 7-5.5s7 2 7 5.5"/><circle cx="17" cy="9" r="2.5"/><path d="M17 14c2.5.4 4.5 1.8 4.5 4"/>'
+  users: '<circle cx="9" cy="8" r="3.5"/><path d="M2 19c0-3.5 3-5.5 7-5.5s7 2 7 5.5"/><circle cx="17" cy="9" r="2.5"/><path d="M17 14c2.5.4 4.5 1.8 4.5 4"/>',
+  home: '<path d="M4 11.5L12 4l8 7.5"/><path d="M6.5 10.5V20h11V10.5"/><path d="M10 20v-5h4v5"/>',
+  objects: '<rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/>',
+  prog: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1L7 17M17 7l2.1-2.1"/>',
+  sobj: '<rect x="5" y="7" width="14" height="12" rx="2"/><path d="M9 7V5a3 3 0 0 1 6 0v2"/><circle cx="9.5" cy="13" r="1"/><circle cx="14.5" cy="13" r="1"/>',
+  mic: '<path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 11v1a7 7 0 0 1-14 0v-1M12 19v3M8 22h8"/>',
+  micoff: '<path d="M3 3l18 18"/><path d="M9 9v3a3 3 0 0 0 5.1 2.1"/><path d="M15 5v6"/><path d="M12 2a3 3 0 0 0-3 3"/><path d="M19 11v1a7 7 0 0 1-9.5 6.5"/><path d="M5 11v1a7 7 0 0 0 3 5.7"/><path d="M12 19v3M8 22h8"/>',
+  leave: '<path d="M10 6H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h4"/><path d="M15 16l5-4-5-4"/><path d="M20 12H10"/>',
+  mute: '<path d="M11 5L6 9H3v6h3l5 4V5z"/><path d="M22 9l-6 6M16 9l6 6"/>',
+  unmute: '<path d="M11 5L6 9H3v6h3l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18 6a8 8 0 0 1 0 12"/>',
+  box: '<path d="M3 7.5L12 3l9 4.5v9L12 21l-9-4.5v-9z"/><path d="M3 7.5L12 12l9-4.5M12 12v9"/>'
 };
-const ic = n => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICO[n] || ''}</svg>`;
+const ic = n => `<svg class="hawa-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICO[n] || ''}</svg>`;
+const icFramed = n => `<span class="hawa-ico-frame" data-ico="${n}">${ic(n)}</span>`;
 
 const DEF = {
   cube:   {n:'مكعب',i:'🧊',c:'#8fa3b8',s:[1,1,1],g:'cube',solid:1},
@@ -185,6 +208,12 @@ const HawaUI = {
 function uiAlert(msg) { return HawaUI.alert(msg); }
 function uiConfirm(msg) { return HawaUI.confirm(msg); }
 function uiPrompt(msg, def) { return HawaUI.prompt(msg, def); }
+try {
+  window.alert = function(m) { try { HawaUI.alert(String(m)); } catch(_){} };
+  window.confirm = function(m) { console.warn('native confirm blocked — use uiConfirm'); return false; };
+  window.prompt = function(m, d) { console.warn('native prompt blocked — use uiPrompt'); return d != null ? d : null; };
+} catch(_){}
+
 
 function parseParams(code) {
   const o = {}, re = /^\s*\/\/\s*@param\s+(\w+)\s*=\s*(.+?)\s*$/gm; let m;
@@ -238,8 +267,10 @@ function applyFileParamsToObject(o) {
 
 const S = {objs:[], scripts:[], sdefs:[], sel:null, mode:'build', tool:'select', gz:'move', item:'cube', section:'objects',
   snap:.5, nid:1, sid:1, did:1, mid:1, dirty:1, err:[], hr:null, fly:false, media:{}, mediaOrder:[], paramOpen:false,
-  allowScriptSpawn:false,
-  
+  allowScriptSpawn:true, // دائماً مسموح — الخيار اتشال من الواجهة
+  roomMinEnabled:false,   // تفعيل حد أدنى مخصص
+  roomMinPlayers:1,       // الحد الأدنى (لازم < عدد نقاط الأونلاين)
+  roomFillExact:false,    // الحد = عدد النقاط (min=max=spawns)
   playNet: null};
 const OBJ = new Map(), MESH = new Map(), K = {};
 
@@ -515,9 +546,29 @@ function phInfo() {
   return {bt: S.item, sc: [...DEF[S.item].s], base: false};
 }
 function countOnlineSpawns() { return S.objs.filter(o => o.type === 'online_spawn').length; }
+/** أقصى لاعبين = عدد نقاط الأونلاين */
+function roomMaxPlayers() { return countOnlineSpawns(); }
+/** الحد الأدنى: لو «الحد=عدد النقاط» أو مفيش تفعيل → = الأقصى؛ وإلا الرقم المخصص (أقل من الأقصى، على الأقل 1) */
+function roomMinPlayers() {
+  const max = roomMaxPlayers();
+  if (max < 1) return 0;
+  // لاعب واحد = أوفلاين — الأونلاين يبدأ من 2 على الأقل
+  if (max < 2) return max;
+  if (S.roomFillExact || !S.roomMinEnabled) return max;
+  let m = Math.floor(+S.roomMinPlayers || 2);
+  if (m < 2) m = 2;
+  if (m >= max) m = Math.max(2, max - 1);
+  return m;
+}
+function roomPlayersLabel() {
+  const max = roomMaxPlayers(), min = roomMinPlayers();
+  if (max < 1) return 'مفيش نقاط أونلاين';
+  if (min >= max) return 'عدد اللاعبين: ' + max;
+  return 'عدد اللاعبين من ' + min + ' لـ ' + max;
+}
 function nextOnlineSlot() {
   const used = new Set(S.objs.filter(o => o.type === 'online_spawn').map(o => +(o.p && o.p.slot) || 1));
-  for (let i = 1; i <= 3; i++) if (!used.has(i)) return i;
+  for (let i = 1; i <= 8; i++) if (!used.has(i)) return i;
   return 0;
 }
 function countOfflineSpawns() { return S.objs.filter(o => o.type === 'respawn').length; }
@@ -543,8 +594,7 @@ function openSpawnsPanel() {
   m.removeAttribute('hidden');
   m.style.display = 'flex';
   m.classList.add('open');
-  const ai = document.getElementById('spAllowScript');
-  if (ai) ai.checked = !!S.allowScriptSpawn;
+  S.allowScriptSpawn = true;
   refreshSpawnsPanel();
   bindSpawnsPanelOnce();
 }
@@ -585,14 +635,49 @@ function refreshSpawnsPanel() {
   if (cnt) cnt.textContent = '(' + ons.length + '/8)';
   const placeOn = document.getElementById('spOnPlace');
   if (placeOn) {
-    const offline = S.playNet === 'offline';
-    placeOn.disabled = !!offline || ons.length >= 8;
+    placeOn.disabled = ons.length >= 8;
     placeOn.style.opacity = placeOn.disabled ? '.4' : '';
-    placeOn.title = offline ? 'المشروع أوفلاين' : (ons.length >= 8 ? 'الحد الأقصى 8' : 'ضع نقطة أونلاين');
+    placeOn.title = ons.length >= 8 ? 'الحد الأقصى 8' : 'ضع نقطة أونلاين (يحوّل لأونلاين تلقائياً)';
   }
   const placeOff = document.getElementById('spOffPlace');
   if (placeOff) {
     placeOff.textContent = offs.length ? 'إعادة وضع نقطة أوفلاين' : 'وضع نقطة أوفلاين';
+  }
+  // إعدادات الرووم — تظهر في مشروع أونلاين فقط
+  const rs = document.getElementById('spRoomSettings');
+  if (rs) {
+    const show = S.playNet === 'online';
+    rs.hidden = !show;
+    if (show) {
+      const max = ons.length;
+      const en = document.getElementById('spMinEnable');
+      const inp = document.getElementById('spMinPlayers');
+      const fill = document.getElementById('spFillExact');
+      const sum = document.getElementById('spRoomSummary');
+      const hint = document.getElementById('spMinHint');
+      if (en) en.checked = !!S.roomMinEnabled && !S.roomFillExact;
+      if (fill) fill.checked = !!S.roomFillExact;
+      if (inp) {
+        inp.min = 2;
+        inp.max = Math.max(2, max - 1);
+        let v = Math.floor(+S.roomMinPlayers || 2);
+        if (v < 2) v = 2;
+        if (max > 2 && v >= max) v = max - 1;
+        if (max <= 2) v = 2;
+        inp.value = String(v);
+        S.roomMinPlayers = v;
+        inp.disabled = !!S.roomFillExact || !S.roomMinEnabled || max < 3;
+      }
+      if (en) en.disabled = !!S.roomFillExact || max < 3;
+      if (hint) {
+        if (max < 2) hint.textContent = 'حط نقطتين أونلاين على الأقل (لاعب واحد = أوفلاين)';
+        else if (max < 3) hint.textContent = 'حد أدنى مخصص يحتاج 3 نقاط فأكثر · حالياً الحد = ' + max;
+        else if (S.roomFillExact) hint.textContent = 'الرووم لازم يتملي (' + max + ')';
+        else if (!S.roomMinEnabled) hint.textContent = 'الافتراضي = عدد النقاط (' + max + ')';
+        else hint.textContent = 'الأقصى ' + max + ' · الأدنى من 2 إلى ' + (max - 1);
+      }
+      if (sum) sum.textContent = 'ملخص: ' + roomPlayersLabel() + ' · سعة الرووم ' + max;
+    }
   }
 }
 function bindSpawnsPanelOnce() {
@@ -603,8 +688,36 @@ function bindSpawnsPanelOnce() {
   const cbtn = document.getElementById('spClose');
   if (cbtn) cbtn.onclick = close;
   m.addEventListener('click', e => { if (e.target === m) close(); });
-  const ai = document.getElementById('spAllowScript');
-  if (ai) ai.onchange = () => { S.allowScriptSpawn = !!ai.checked; chg(); tip(S.allowScriptSpawn ? '✔ السكربتات تقدر تحدد مكان اللاعب' : 'نقطة البداية ثابتة للسكربتات'); };
+  // spAllowScript اتشال — السكربتات مسموح لها دائماً
+  S.allowScriptSpawn = true;
+  const syncRoom = () => {
+    const en = document.getElementById('spMinEnable');
+    const inp = document.getElementById('spMinPlayers');
+    const fill = document.getElementById('spFillExact');
+    const max = countOnlineSpawns();
+    if (fill && fill.checked) {
+      S.roomFillExact = true;
+      S.roomMinEnabled = false;
+      if (en) en.checked = false;
+    } else {
+      S.roomFillExact = false;
+      S.roomMinEnabled = !!(en && en.checked);
+      let v = inp ? Math.floor(+inp.value || 2) : 2;
+      if (v < 2) v = 2;
+      if (max > 2 && v >= max) v = max - 1;
+      S.roomMinPlayers = v;
+      if (inp) inp.value = String(v);
+    }
+    chg();
+    try { refreshSpawnsPanel(); } catch (_) {}
+    tip('✔ ' + roomPlayersLabel());
+  };
+  const en = document.getElementById('spMinEnable');
+  const inp = document.getElementById('spMinPlayers');
+  const fill = document.getElementById('spFillExact');
+  if (en) en.onchange = syncRoom;
+  if (inp) { inp.onchange = syncRoom; inp.oninput = () => { /* live clamp later on change */ }; }
+  if (fill) fill.onchange = syncRoom;
   
   const hideKeepTool = () => {
     m.hidden = true; m.setAttribute('hidden', ''); m.style.display = 'none'; m.classList.remove('open');
@@ -618,8 +731,8 @@ function bindSpawnsPanelOnce() {
   };
   const pn = document.getElementById('spOnPlace');
   if (pn) pn.onclick = () => {
-    if (S.playNet === 'offline') { tip('⚠ المشروع أوفلاين'); return; }
     if (countOnlineSpawns() >= 8) { tip('⚠ الحد 8 نقاط أونلاين'); return; }
+    // التحويل لأونلاين يحصل تلقائياً عند وضع النقطة
     hideKeepTool();
     setTool('online_spawn');
     tipNow('', 1);
@@ -726,32 +839,39 @@ function uiPlayNetChoice() {
     setTimeout(() => on.focus(), 30);
   });
 }
+/** يحدّد أونلاين/أوفلاين تلقائياً من نقاط الأونلاين — من غير ما يسأل المستخدم */
+function autoDetectPlayNet() {
+  try {
+    const nOn = typeof countOnlineSpawns === 'function' ? countOnlineSpawns() : (S.objs || []).filter(o => o && o.type === 'online_spawn').length;
+    return nOn > 0 ? 'online' : 'offline';
+  } catch (_) {
+    return 'offline';
+  }
+}
 async function ensurePlayNetChosen(forceAsk) {
-  if (window.HAWA_PLAY_ONLY) return S.playNet || 'offline';
+  if (window.HAWA_PLAY_ONLY) return S.playNet || autoDetectPlayNet();
+  // لو محدد مسبقاً — رجّعه بس (من غير تنبيهات)
   if (S.playNet === 'online' || S.playNet === 'offline') {
-    if (forceAsk) {
-      await uiAlert('هذا المشروع مُفعَّل كـ «' + (S.playNet === 'online' ? 'أونلاين' : 'أوفلاين') + '».\nلا يمكن التغيير. احذف المشروع بالكامل إن أردت اختياراً جديداً.');
-    }
     syncPlayNetUI();
     return S.playNet;
   }
-  if (!forceAsk) {
-    await uiAlert('لاحظ: هذا المشروع لم يُسأل بعد عن وضع اللعب (أونلاين / أوفلاين).\nاختر الآن — الاختيار مرة واحدة فقط.');
-  }
-  const choice = await uiPlayNetChoice();
-  if (choice !== 'online' && choice !== 'offline') {
-    syncPlayNetUI();
-    return null;
-  }
-  applyPlayNetMode(choice);
+  // تلقائي: وجود نقطة أونلاين = أونلاين، غير كده أوفلاين
+  const choice = autoDetectPlayNet();
+  applyPlayNetMode(choice, { silent: !forceAsk });
+  syncPlayNetUI();
   return S.playNet;
 }
 async function onPlayNetBtn() {
-  if (S.playNet === 'online' || S.playNet === 'offline') {
-    await uiAlert('المشروع مُفعَّل كـ «' + (S.playNet === 'online' ? 'أونلاين' : 'أوفلاين') + '».\nالاختيار مرة واحدة فقط — احذف المشروع بالكامل لو حابب تغيّر.');
-    return;
-  }
-  await ensurePlayNetChosen(true);
+  // إعادة كشف تلقائي + تلميح بالحالة الحالية
+  const prev = S.playNet;
+  const mode = autoDetectPlayNet();
+  if (prev !== mode) applyPlayNetMode(mode, { silent: true });
+  else syncPlayNetUI();
+  try {
+    tip(mode === 'online'
+      ? '🌐 أونلاين تلقائي (فيه نقاط أونلاين)'
+      : '📴 أوفلاين تلقائي (مفيش نقاط أونلاين — حط نقطة أونلاين عشان يتحوّل)');
+  } catch (_) {}
 }
 
 function buildSpawnGhostMesh(o) {
@@ -884,23 +1004,35 @@ function placeNow(info, pos) {
     return o;
   }
   if (info.bt === 'online_spawn') {
-    if (S.playNet === 'offline') { tip('⚠ المشروع أوفلاين — نقاط الأونلاين غير متاحة'); return null; }
+    // وضع نقطة أونلاين يحوّل المشروع لأونلاين تلقائياً
+    if (S.playNet !== 'online') {
+      try { applyPlayNetMode('online', { silent: true }); } catch (_) { S.playNet = 'online'; }
+    }
     if (countOnlineSpawns() >= 8) { tip('⚠ الحد الأقصى 8 نقاط أونلاين'); return null; }
     const slot = nextOnlineSlot();
     if (!slot) { tip('⚠ مفيش سلو متاح'); return null; }
     const o = add('online_spawn', pos, { name: 'أونلاين ' + slot, color: '#ef4444', p: { slot }, scl: [1, 1, 1] });
     tip('✔ تم وضع نقطة أونلاين · سلوت ' + slot);
-    try { refreshSpawnsPanel(); updSpawnBtn(); } catch (_) {}
+    try { refreshSpawnsPanel(); updSpawnBtn(); syncPlayNetUI(); } catch (_) {}
     setTool('select');
     return o;
   }
   return add(info.bt, pos);
 }
 function delObj(id) {
+  const wasOn = (() => { try { const o = OBJ.get(id); return o && o.type === 'online_spawn'; } catch (_) { return false; } })();
   removePreview(id);
   const m = MESH.get(id); if (m) scene.remove(m);
   MESH.delete(id); OBJ.delete(id); S.objs = S.objs.filter(o => o.id !== id);
   if (S.sel === id) sel(null); hier(); chg(); updOnRsBtn();
+  // لو اتشالت آخر نقطة أونلاين → أوفلاين تلقائي
+  if (wasOn) {
+    try {
+      const n = countOnlineSpawns();
+      if (n === 0 && S.playNet === 'online') applyPlayNetMode('offline', { silent: true });
+      else syncPlayNetUI();
+    } catch (_) {}
+  }
 }
 function dup() {
   const s = OBJ.get(S.sel); if (!s) return;
@@ -1449,11 +1581,7 @@ addEventListener('keydown', e => {
     if (e.code === 'Space') e.preventDefault();
     
     if (e.code === 'KeyP') playStop();
-    if (e.code === 'KeyB' && !e.repeat) {
-      e.preventDefault();
-      const m = onlinePlayMeta();
-      if (m && (m.voice == null || m.voice)) VoiceChat.toggle();
-    }
+    
     return;
   }
   if (e.key === 'Control') { ctrlPend = true; return; }
@@ -1585,7 +1713,12 @@ function packGameData(name) {
     engine: 'Hawa Engine',
     name: name || '',
     playNet: netMode,
-    allowScriptSpawn: !!S.allowScriptSpawn,
+    allowScriptSpawn: true,
+    roomMinEnabled: !!S.roomMinEnabled,
+    roomMinPlayers: roomMinPlayers(),
+    roomMinPlayersSetting: Math.max(2, Math.floor(+S.roomMinPlayers || 2)),
+    roomFillExact: !!S.roomFillExact,
+    roomMaxPlayers: roomMaxPlayers(),
     objs,
     scripts,
     sdefs,
@@ -1612,7 +1745,12 @@ function packGameData(name) {
       sdefCount: sdefs.length,
       onlineSlots: objs.filter(o => o.type === 'online_spawn').length,
       offlineSpawns: objs.filter(o => o.type === 'respawn').length,
-      playNet: netMode
+      playNet: netMode,
+      roomMinPlayers: roomMinPlayers(),
+      roomMaxPlayers: roomMaxPlayers(),
+      roomFillExact: !!S.roomFillExact,
+      roomMinEnabled: !!S.roomMinEnabled,
+      playersLabel: roomPlayersLabel()
     },
     exportedAt: new Date().toISOString()
   };
@@ -1788,7 +1926,7 @@ async function convertToGameImpl() {
     data.media = JSON.parse(JSON.stringify(mediaMap));
     data.mediaOrder = Array.isArray(S.mediaOrder) ? S.mediaOrder.slice() : Object.keys(mediaMap);
     data.meta.mediaCount = Object.keys(mediaMap).length;
-    ui.step('pack', 'تجميع بيانات المشروع — ' + data.objs.length + ' كائن · ' + data.scripts.length + ' سكربت · ' + data.sdefs.length + ' كائن برمجي · ' + data.meta.mediaCount + ' ملف', 'ok');
+    ui.step('pack', 'تجميع بيانات المشروع — ' + data.scripts.length + ' سكربت · ' + data.sdefs.length + ' كائن برمجي · ' + (data.meta.mediaCount || 0) + ' ملف' + (mode === 'online' ? (' · ' + roomPlayersLabel()) : ''), 'ok');
     ui.pct(8);
     if (!alive()) return;
 
@@ -1941,8 +2079,10 @@ async function convertToGameImpl() {
     ui.step('dl', 'اتحمّل: ' + ui.fname, 'ok');
     ui.pct(100);
     const rep = ['«' + data.name + '» · ' + (blob.size / 1024 / 1024).toFixed(2) + ' MB · ' + included.length + ' ملف',
-      'كائنات ' + data.objs.length + ' · سكربتات ' + data.scripts.length + ' · كائنات برمجية ' + data.sdefs.length + ' · وسائط ' + mids.length,
-      'وضع اللعب: ' + (mode === 'online' ? 'أونلاين' : 'أوفلاين')]
+      (mode === 'online'
+        ? ('أونلاين · ' + roomPlayersLabel() + ' · سعة الرووم ' + roomMaxPlayers())
+        : 'أوفلاين'),
+      'سكربتات ' + data.scripts.length + ' · كائنات برمجية ' + data.sdefs.length + ' · وسائط ' + mids.length]
       .concat(au.warnings.map(w => '⚠ ' + w));
     ui.report(rep, au.warnings.length ? 'warn' : 'ok');
     ui.finish('اللعبة جاهزة واتحمّلت', true, [
@@ -3826,7 +3966,10 @@ const StoreFS = {
         : (Array.isArray(S.mediaOrder) ? S.mediaOrder.slice() : Object.keys((data && data.media) || S.media || {})),
       playNet: (data && (data.playNet === 'online' || data.playNet === 'offline')) ? data.playNet
         : (S.playNet === 'online' || S.playNet === 'offline' ? S.playNet : null),
-      allowScriptSpawn: !!(data && data.allowScriptSpawn != null ? data.allowScriptSpawn : S.allowScriptSpawn),
+      allowScriptSpawn: true,
+      roomMinEnabled: !!(data && data.roomMinEnabled != null ? data.roomMinEnabled : S.roomMinEnabled),
+      roomFillExact: !!(data && data.roomFillExact != null ? data.roomFillExact : S.roomFillExact),
+      roomMinPlayers: (data && data.roomMinPlayers != null) ? +data.roomMinPlayers : S.roomMinPlayers,
       player: (data && data.player) || null,
       exportedAt: new Date().toISOString()
     };
@@ -3962,11 +4105,11 @@ const StoreFS = {
   async ensureFolderOrPrompt(force) {
     if (this.mode === 'server' && this.handle) return true;
     if (this.handle && !force) return true;
-    if (!this.supportsFolder()) {
-      await uiAlert('المتصفح لا يدعم تخزين المجلدات.\nاستخدم Chrome أو Edge على الكمبيوتر.\nبدون مجلد لن يتم حفظ المشروع.');
-      return false;
-    }
-    await uiAlert('أول استخدام / لا يوجد مكان تخزين.\nاختَر مجلدًا على الجهاز لحفظ المشروع بالكامل (ملفات + وسائط).');
+    // سيرفر أو localStorage يكفي — مفيش إجبار على اختيار مجلد
+    if (this.mode === 'server' || this.mode === 'local') return true;
+    if (!force) return !!this.handle;
+    if (!this.supportsFolder()) return false;
+    // force فقط من «عرض التخزين» لما المستخدم يطلب بنفسه
     return await this.pickAndMigrate();
   },
   async pickAndMigrate() {
@@ -4003,7 +4146,18 @@ const StoreFS = {
 };
 
 function save() {
-  
+  // نسخة محلية دائماً (إعدادات الرووم + كل المشروع) عشان متضيعش
+  try {
+    const snap = packProjectSnapshot((S && S._projName) || 'مشروع');
+    localStorage.setItem('hawa2-project', JSON.stringify(snap));
+    localStorage.setItem('hawa2-room', JSON.stringify({
+      roomMinEnabled: !!S.roomMinEnabled,
+      roomMinPlayers: Math.max(2, Math.floor(+S.roomMinPlayers || 2)),
+      roomFillExact: !!S.roomFillExact,
+      playNet: S.playNet,
+      allowScriptSpawn: true
+    }));
+  } catch (e) { console.warn('local save', e); }
   if (!StoreFS.isFolderLike()) return;
   StoreFS.saveAll().catch(e => console.warn(e));
 }
@@ -4105,7 +4259,22 @@ function loadData(d, append) {
     } else {
       S.playNet = null;
     }
-    S.allowScriptSpawn = !!(d.allowScriptSpawn);
+    S.allowScriptSpawn = true;
+    S.roomMinEnabled = !!(d.roomMinEnabled);
+    S.roomFillExact = !!(d.roomFillExact);
+    let _rmp = d.roomMinPlayersSetting != null ? d.roomMinPlayersSetting : d.roomMinPlayers;
+    S.roomMinPlayers = Math.max(2, Math.floor(+(_rmp) || 2));
+    // لو الملف القديم مفيهوش إعدادات رووم — حاول من النسخة المحلية
+    if (d.roomMinEnabled == null && d.roomFillExact == null) {
+      try {
+        const loc = JSON.parse(localStorage.getItem('hawa2-room') || 'null');
+        if (loc) {
+          if (loc.roomMinEnabled != null) S.roomMinEnabled = !!loc.roomMinEnabled;
+          if (loc.roomFillExact != null) S.roomFillExact = !!loc.roomFillExact;
+          if (loc.roomMinPlayers != null) S.roomMinPlayers = Math.max(2, Math.floor(+loc.roomMinPlayers || 2));
+        }
+      } catch (_) {}
+    }
     try {
       const ai = document.getElementById('spAllowScript');
       if (ai) ai.checked = !!S.allowScriptSpawn;
@@ -4135,7 +4304,10 @@ function packProjectSnapshot(name) {
     mediaOrder: Array.isArray(S.mediaOrder) ? S.mediaOrder.slice() : Object.keys(S.media || {}),
     nid: S.nid, sid: S.sid, did: S.did, mid: S.mid || 1,
     playNet: S.playNet === 'online' || S.playNet === 'offline' ? S.playNet : null,
-    allowScriptSpawn: !!S.allowScriptSpawn,
+    allowScriptSpawn: true,
+    roomMinEnabled: !!S.roomMinEnabled,
+    roomMinPlayers: Math.max(2, Math.floor(+S.roomMinPlayers || 2)),
+    roomFillExact: !!S.roomFillExact,
     player: (typeof PCFG !== 'undefined') ? JSON.parse(JSON.stringify(PCFG)) : null,
     builderCam: getBuilderCam(),
     exportedAt: new Date().toISOString()
@@ -4254,27 +4426,16 @@ async function wipeProjectTotal() {
   try { save(); } catch (_) {}
   try { tip('✔ المشروع اتصفر'); } catch (_) {}
   
-  try { await ensurePlayNetChosen(true); } catch (_) {}
+  try { await ensurePlayNetChosen(false); } catch (_) {}
   if (StoreFS.mode === 'server') {
     try { await fetch('/api/fs/wipe', { method: 'POST' }); StoreFS._fp.clear(); } catch (_) {}
     try { await StoreFS.saveAll(); } catch (_) {}
-    await uiAlert('تم حذف المشروع بالكامل. التخزين تلقائي — ابدأ من جديد.');
+    try { tip('✔ المشروع اتمسح · التخزين تلقائي'); } catch (_) {}
     return;
   }
-  await uiAlert('تم حذف المشروع بالكامل.\nالآن اختر مجلد التخزين للمشروع الجديد.');
-  
-  try {
-    const ok = await StoreFS.pickAndMigrate();
-    if (!ok) {
-      await uiAlert('لازم تختار مجلد تخزين عشان المشروع الجديد.\nافتح «عرض التخزين» واضغط تحديد مكان التخزين.');
-      try { showStorageInfo(); } catch (_) {}
-    } else {
-      try { await StoreFS.saveAll(); } catch (_) {}
-    }
-  } catch (e) {
-    console.warn(e);
-    try { showStorageInfo(); } catch (_) {}
-  }
+  // مفيش إجبار على اختيار مجلد — localStorage أو المجلد الحالي يكفي
+  try { await StoreFS.saveAll(); } catch (_) {}
+  try { tip('✔ المشروع اتمسح'); } catch (_) {}
 }
 function showStorageInfo() {
   const modal = document.getElementById('storageModal');
@@ -4393,6 +4554,68 @@ const _storageClose = document.getElementById('storageClose');
 if (_storageClose) _storageClose.onclick = () => { const m = document.getElementById('storageModal'); if (m) m.hidden = true; };
 const _storageModal = document.getElementById('storageModal');
 if (_storageModal) _storageModal.addEventListener('click', e => { if (e.target === _storageModal) _storageModal.hidden = true; });
+
+/* قائمة «المزيد» في الشريط: fixed فوق كل شيء + إغلاق عند اختيار/برّه */
+(function setupBarMenu() {
+  const menu = document.getElementById('barMenu');
+  if (!menu) return;
+  const pop = menu.querySelector('.menu-pop');
+  const summary = menu.querySelector('summary');
+
+  function placePop() {
+    if (!pop || !menu.open) return;
+    const r = (summary || menu).getBoundingClientRect();
+    pop.style.position = 'fixed';
+    pop.style.top = Math.round(r.bottom + 8) + 'px';
+    const right = Math.max(8, window.innerWidth - r.right);
+    pop.style.left = 'auto';
+    pop.style.right = right + 'px';
+    pop.style.insetInlineEnd = right + 'px';
+    pop.style.insetInlineStart = 'auto';
+    pop.style.zIndex = '100000';
+    pop.style.minWidth = '220px';
+  }
+  function clearPopPos() {
+    if (!pop) return;
+    pop.style.position = '';
+    pop.style.top = '';
+    pop.style.left = '';
+    pop.style.right = '';
+    pop.style.insetInlineEnd = '';
+    pop.style.insetInlineStart = '';
+    pop.style.zIndex = '';
+  }
+  function closeMenu() {
+    try { menu.open = false; menu.removeAttribute('open'); } catch (_) {}
+    clearPopPos();
+  }
+
+  menu.addEventListener('toggle', () => {
+    if (menu.open) {
+      placePop();
+      requestAnimationFrame(placePop);
+    } else {
+      clearPopPos();
+    }
+  });
+  window.addEventListener('resize', () => { if (menu.open) placePop(); });
+  window.addEventListener('scroll', () => { if (menu.open) placePop(); }, true);
+
+  if (pop) {
+    pop.addEventListener('click', e => {
+      const btn = e.target && e.target.closest && e.target.closest('button');
+      if (btn) setTimeout(closeMenu, 0);
+    });
+  }
+  document.addEventListener('click', e => {
+    if (!menu.open) return;
+    if (menu.contains(e.target) || (pop && pop.contains(e.target))) return;
+    closeMenu();
+  }, true);
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && menu.open) closeMenu();
+  });
+})();
 
 $('#fl').onchange = async e => {
   const m = e.target.dataset.m;
@@ -4895,8 +5118,8 @@ const VoiceChat = {
     let b = document.getElementById('pMic');
     if (!b) {
       b = document.createElement('button');
-      b.id = 'pMic'; b.type = 'button'; b.title = 'تفعيل/إيقاف المايك (B)';
-      b.innerHTML = '<span class="mic-ico" aria-hidden="true"><svg class="r" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/><line x1="4" y1="4" x2="20" y2="20"/></svg><svg class="g" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></span><kbd>B</kbd><span class="mic-lbl">مايك</span><span class="mic-bar"><i></i></span>';
+      b.id = 'pMic'; b.type = 'button'; b.title = 'المايك';
+      b.innerHTML = '<span class="mic-ico" aria-hidden="true"><svg class="r" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/><line x1="4" y1="4" x2="20" y2="20"/></svg><svg class="g" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></span><span class="mic-lbl">مايك</span><span class="mic-bar"><i></i></span>';
       const bar = document.getElementById('pOnlineBar');
       const play = document.getElementById('play');
       if (bar) { b.classList.add('online-compact'); bar.appendChild(b); }
@@ -4923,7 +5146,7 @@ const VoiceChat = {
     b.classList.toggle('on', !!this.on);
     b.classList.toggle('live', !!this.on && this.level > 0.05);
     const lbl = b.querySelector('.mic-lbl');
-    if (lbl) { const t = this.on ? (this.level > 0.05 ? 'يتكلم' : 'مفتوح') : 'مكتوم'; if (lbl.textContent !== t) lbl.textContent = t; }
+    if (lbl) { const t = this.on ? 'مفتوح' : 'مكتوم'; if (lbl.textContent !== t) lbl.textContent = t; }
     const bar = b.querySelector('.mic-bar i');
     if (bar) bar.style.width = Math.round(Math.min(1, this.level * 1.4) * 100) + '%';
   },
@@ -4974,7 +5197,7 @@ const VoiceChat = {
       this.on = true;
       this._syncBtn();
       this._shareStream();
-      say('🎙 المايك مفعّل · تكلم عشان الفم يهتز', 2200);
+      say('تم تفعيل المايك', 1800);
       return true;
     } catch (e) {
       this._wantOn = false;
@@ -4997,7 +5220,7 @@ const VoiceChat = {
   },
   off() {
     this._wantOn = false;
-    this.on = false;
+    try { say('تم إلغاء المايك', 1600); } catch(_){} this.on = false;
     this.level = 0; this.raw = 0;
     try {
       if (this.stream) this.stream.getTracks().forEach(t => { try { t.stop(); } catch (_) {} });
@@ -6920,7 +7143,7 @@ function animRig(rig, dt, s, locks) {
 function respawnP() {
   const rt = RT; if (!rt) return;
   
-  if (S.allowScriptSpawn && rt.scriptSpawn) {
+  if (rt.scriptSpawn) {
     const s = rt.scriptSpawn;
     rt.p.set(+s.x || 0, (+s.y || 0) + .02, +s.z || 0);
   } else {
@@ -7082,9 +7305,9 @@ function bigGame(rt, o, root) {
       return G2.controlPlayer(target, cmd);
     },
     
-    get allowScriptSpawn() { return !!S.allowScriptSpawn; },
+    get allowScriptSpawn() { return true; },
     setScriptSpawn(x, y, z) {
-      if (!S.allowScriptSpawn) return false;
+      /* script spawn دائماً مسموح */
       rt.scriptSpawn = { x: +x || 0, y: +y || 0, z: +z || 0 };
       return true;
     },
@@ -8644,21 +8867,51 @@ function showEnginePlayLoad(ms) {
     if (!el) {
       el = document.createElement('div');
       el.id = 'hawaEngineLoad';
-      el.style.cssText = 'position:fixed;inset:0;z-index:100000;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;background:radial-gradient(ellipse at 50% 30%,#1a1530 0%,#08060f 70%);color:#f4efe4;font-family:Cairo,Tahoma,sans-serif';
-      el.innerHTML = '<img src="logo-256.png" alt="Hawa Engine" style="width:112px;height:112px;object-fit:contain;border-radius:50%;filter:drop-shadow(0 0 28px rgba(255,190,61,.55)) drop-shadow(0 0 50px rgba(255,190,61,.22));margin-bottom:8px"><div style="font-size:28px;font-weight:900;letter-spacing:.12em;background:linear-gradient(90deg,#ffe2a6,#7ff0dc,#c4b5fd);-webkit-background-clip:text;background-clip:text;color:transparent">HAWA ENGINE</div><div style="opacity:.85;font-weight:700">تهيئة وضع اللعب…</div><div style="width:min(260px,70vw);height:4px;border-radius:99px;background:#1e1a2e;overflow:hidden"><div id="hawaEngineLoadBar" style="height:100%;width:0%;background:linear-gradient(90deg,#7ff0dc,#ffe2a6)"></div></div>';
+      el.style.cssText = 'position:fixed;inset:0;z-index:100000;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:18px;background:radial-gradient(ellipse at 50% 28%,#1e1838 0%,#08060f 72%);color:#f4efe4;font-family:Cairo,Tahoma,sans-serif;opacity:0;transition:opacity .28s ease';
+      el.innerHTML =
+        '<div style="width:120px;height:120px;border-radius:50%;padding:3px;background:linear-gradient(135deg,#ffbe3d,#7ff0dc,#c4b5fd);box-shadow:0 0 40px rgba(255,190,61,.35)">' +
+          '<div style="width:100%;height:100%;border-radius:50%;background:#0c0a14;display:flex;align-items:center;justify-content:center;overflow:hidden">' +
+            '<img src="logo-256.png" alt="Hawa" style="width:100%;height:100%;object-fit:contain">' +
+          '</div></div>' +
+        '<div style="font-size:26px;font-weight:900;letter-spacing:.14em;background:linear-gradient(90deg,#ffe2a6,#7ff0dc,#c4b5fd);-webkit-background-clip:text;background-clip:text;color:transparent">HAWA ENGINE</div>' +
+        '<div id="hawaEngineLoadTxt" style="opacity:.9;font-weight:700;font-size:14px">جاري تحميل اللعبة…</div>' +
+        '<div style="width:min(280px,72vw);height:5px;border-radius:99px;background:#1e1a2e;overflow:hidden;border:1px solid #2a2438">' +
+          '<div id="hawaEngineLoadBar" style="height:100%;width:0%;background:linear-gradient(90deg,#7ff0dc,#ffe2a6,#c4b5fd);transition:width .08s linear"></div>' +
+        '</div>';
       document.body.appendChild(el);
+      requestAnimationFrame(() => { el.style.opacity = '1'; });
+    } else {
+      el.style.display = 'flex';
+      el.style.opacity = '1';
     }
-    el.style.display = 'flex';
     const bar = document.getElementById('hawaEngineLoadBar');
+    const txt = document.getElementById('hawaEngineLoadTxt');
+    const dur = Math.max(900, +ms || 1600);
     const t0 = performance.now();
-    const dur = Math.max(3000, +ms || 3000);
+    const steps = ['جاري تحميل اللعبة…', 'تهيئة العالم…', 'تحضير اللاعب…', 'جاهز تقريباً…'];
+    let raf = 0;
     const tick = (now) => {
-      const u = Math.min(1, (now - t0) / dur);
-      if (bar) bar.style.width = (u * 100).toFixed(1) + '%';
-      if (u >= 1) { el.style.display = 'none'; resolve(); return; }
-      requestAnimationFrame(tick);
+      const k = Math.min(1, (now - t0) / dur);
+      // ease-out cubic then hold near end
+      const e = 1 - Math.pow(1 - k, 2.4);
+      if (bar) bar.style.width = (Math.min(0.98, e) * 100).toFixed(1) + '%';
+      if (txt) txt.textContent = steps[Math.min(steps.length - 1, Math.floor(k * steps.length))];
+      if (k < 1) raf = requestAnimationFrame(tick);
+      else {
+        if (bar) bar.style.width = '100%';
+        if (txt) txt.textContent = 'تم';
+        setTimeout(() => {
+          try {
+            el.style.opacity = '0';
+            setTimeout(() => {
+              try { el.style.display = 'none'; el.remove(); } catch (_) {}
+              resolve();
+            }, 260);
+          } catch (_) { resolve(); }
+        }, 180);
+      }
     };
-    requestAnimationFrame(tick);
+    raf = requestAnimationFrame(tick);
   });
 }
 
@@ -8767,16 +9020,14 @@ const OnlineMenu = {
 };
 
 async function playStart() {
-  // متظهرش شاشة تحميل تانية لو جايين من game.html (أونلاين) — كانت بتعمل طبقتين فوق بعض
-  let skipLoad = false;
+  // إخفاء طبقة البناء فوراً عشان متظهرش ومضة قبل اللعب
   try {
-    if (window.HAWA_PLAY_ONLY) skipLoad = true;
-    const meta = JSON.parse(sessionStorage.getItem('hawa_play_meta') || 'null');
-    if (meta && meta.mode === 'online') skipLoad = true;
+    const app = document.getElementById('app');
+    if (app) { app.style.display = 'none'; app.setAttribute('hidden', ''); }
+    document.body.classList.add('play-on', 'pure-play');
   } catch (_) {}
-  if (!skipLoad) {
-    try { await showEnginePlayLoad(1200); } catch (_) {}
-  }
+  // شاشة تحميل واضحة (حتى من game.html) — مدة كافية عشان متتفوتش
+  try { await showEnginePlayLoad(window.HAWA_PLAY_ONLY ? 1800 : 1400); } catch (_) {}
   try {
     const el = document.getElementById('hawaEngineLoad');
     if (el) { el.style.display = 'none'; try { el.remove(); } catch (_) {} }
@@ -8838,7 +9089,7 @@ async function playStart() {
             addEventListener('pointerdown', unlockOnce, { once: false, passive: true });
             addEventListener('keydown', unlockOnce, { once: false, passive: true });
           } catch (_) {}
-          try { say('🔊 اضغط أي مكان لسماع الآخرين · المايك أعلى اليسار', 4000); } catch (_) {}
+          try { say('تم تفعيل الاستماع', 1800); } catch (_) {}
         }
       } else {
         try { document.body.classList.remove('online-play'); } catch (_) {}
@@ -8976,7 +9227,7 @@ async function playStart() {
       pipe: (who, fn) => VoiceChat.pipe(who, fn)
     },
     clearHud() { const el = document.getElementById('hawaScriptHud'); if (el) { el.innerHTML = ''; el.style.display = 'none'; } },
-    get allowScriptSpawn() { return !!S.allowScriptSpawn; },
+    get allowScriptSpawn() { return true; },
     setScriptSpawn(x, y, z) {
       if (!S.allowScriptSpawn || !RT) return false;
       RT.scriptSpawn = { x: +x || 0, y: +y || 0, z: +z || 0 };
@@ -9235,7 +9486,24 @@ function playStop() {
 
   for (const o of S.objs) { try { refreshPreview(o); } catch (_) {} }
   try { hier(); pList(); sList(); inspect(); } catch (_) {}
-  grid.visible = true; $('#play').hidden = true; $('#app').hidden = false; attach(vp);
+  grid.visible = true;
+  try {
+    const playEl = document.getElementById('play');
+    const app = document.getElementById('app');
+    if (playEl) { playEl.hidden = true; playEl.style.display = 'none'; }
+    if (app) {
+      app.hidden = false;
+      app.removeAttribute('hidden');
+      app.style.display = '';
+      app.style.visibility = '';
+    }
+    document.body.classList.remove('play-on', 'pure-play', 'online-play');
+    const bootSt = document.getElementById('pure-play-boot');
+    if (bootSt) try { bootSt.remove(); } catch (_) {}
+  } catch (_) {
+    try { $('#play').hidden = true; $('#app').hidden = false; } catch (_) {}
+  }
+  attach(vp);
   setTool(S.tool); sel(null); camUpdate(); updModes(); refNames = null; syncMarks();
   try { endDrag(false); mv = null; MOB.resetBuildTouch(); MOB.detect(); MOB.syncPads(); setTimeout(() => { try { MOB.detect(); MOB.syncPads(); resize(); } catch (_) {} }, 120); } catch (_) {}
 }
@@ -9865,7 +10133,10 @@ function boot() {
       for (const id of Object.keys(S.media)) { const m = S.media[id]; if (m && !m.kind) m.kind = mediaKindFrom(m.mime, m.name); }
       const pn = d.playNet || (d.meta && d.meta.playNet);
       S.playNet = (pn === 'online' || pn === 'offline') ? pn : null;
-      S.allowScriptSpawn = !!d.allowScriptSpawn;
+      S.allowScriptSpawn = true;
+      S.roomMinEnabled = !!d.roomMinEnabled;
+      S.roomFillExact = !!d.roomFillExact;
+      S.roomMinPlayers = Math.max(2, Math.floor(+(d.roomMinPlayersSetting != null ? d.roomMinPlayersSetting : d.roomMinPlayers) || 2));
       if (d.player && typeof d.player === 'object') {
         window.__HAWA_PLAYER_LOCKED = true;
         for (const k in PCFG) delete PCFG[k];
@@ -9902,9 +10173,40 @@ function boot() {
   try { syncPlayNetUI(); } catch (_) {}
   requestAnimationFrame(frame);
   if (window.HAWA_PLAY_ONLY) {
-    const bar = document.getElementById('bar');
-    const app = document.getElementById('app');
-    if (bar) bar.style.display = 'none';
+    try {
+      const bar = document.getElementById('bar');
+      const app = document.getElementById('app');
+      if (bar) bar.style.display = 'none';
+      if (app) { app.style.display = 'none'; app.setAttribute('hidden', ''); }
+      document.body.classList.add('pure-play', 'play-on');
+      // شاشة تحميل احترافية فوراً (بدل الجملة البيضا على أسود)
+      if (!document.getElementById('hawaEngineLoad')) {
+        const el = document.createElement('div');
+        el.id = 'hawaEngineLoad';
+        el.style.cssText = 'position:fixed;inset:0;z-index:100000;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:18px;background:radial-gradient(ellipse at 50% 28%,#1e1838 0%,#08060f 72%);color:#f4efe4;font-family:Cairo,Tahoma,sans-serif;opacity:1';
+        el.innerHTML =
+          '<div style="width:120px;height:120px;border-radius:50%;padding:3px;background:linear-gradient(135deg,#ffbe3d,#7ff0dc,#c4b5fd);box-shadow:0 0 40px rgba(255,190,61,.35)">' +
+            '<div style="width:100%;height:100%;border-radius:50%;background:#0c0a14;display:flex;align-items:center;justify-content:center;overflow:hidden">' +
+              '<img src="logo-256.png" alt="Hawa" style="width:100%;height:100%;object-fit:contain">' +
+            '</div></div>' +
+          '<div style="font-size:26px;font-weight:900;letter-spacing:.14em;background:linear-gradient(90deg,#ffe2a6,#7ff0dc,#c4b5fd);-webkit-background-clip:text;background-clip:text;color:transparent">HAWA ENGINE</div>' +
+          '<div id="hawaEngineLoadTxt" style="opacity:.9;font-weight:700;font-size:14px">جاري تحميل اللعبة…</div>' +
+          '<div style="width:min(280px,72vw);height:5px;border-radius:99px;background:#1e1a2e;overflow:hidden;border:1px solid #2a2438">' +
+            '<div id="hawaEngineLoadBar" style="height:100%;width:8%;background:linear-gradient(90deg,#7ff0dc,#ffe2a6,#c4b5fd);transition:width .25s linear"></div>' +
+          '</div>';
+        document.body.appendChild(el);
+        // حركة بسيطة للشريط لحد ما playStart ياخد الأمر
+        let _p = 8;
+        const _iv = setInterval(() => {
+          _p = Math.min(92, _p + 4 + Math.random() * 6);
+          const b = document.getElementById('hawaEngineLoadBar');
+          const t = document.getElementById('hawaEngineLoadTxt');
+          if (b) b.style.width = _p + '%';
+          if (t) t.textContent = _p < 40 ? 'جاري تحميل اللعبة…' : _p < 70 ? 'تهيئة العالم…' : 'تحضير اللاعب…';
+          if (_p >= 92 || !document.getElementById('hawaEngineLoad')) clearInterval(_iv);
+        }, 120);
+      }
+    } catch (_) {}
     setTimeout(async () => {
       try {
         if (!(d && d.objs && d.objs.length)) {
@@ -9914,7 +10216,7 @@ function boot() {
         }
         playStart();
       } catch (e) { console.error(e); await uiAlert('فشل بدء اللعب: ' + (e.message || e)); }
-    }, 80);
+    }, 40);
   }
 }
 (async function bootAsync() {
@@ -9940,53 +10242,47 @@ function boot() {
   }
   try { st = await StoreFS.init(); } catch (e) { console.warn(e); }
   boot();
+  // تخزين صامت: سيرفر تلقائي أو مجلد محفوظ أو localStorage — من غير ما نسأل المستخدم
   if (st === true) {
     try {
       const d2 = await StoreFS.loadPreferred();
       if (d2) try { loadData(d2, false); } catch (e) { console.warn(e); }
     } catch (e) { console.warn(e); }
   } else if (st === 'migrate') {
-    
+    // محاولة نقل صامتة من المجلد القديم — لو فشلت نكمّل بـ localStorage
     try {
-      await uiAlert('لقيت مشروعك القديم في مجلد على جهازك.\nاضغط «حسنًا» وسمح للمتصفح بقراءته عشان أنقله للتخزين التلقائي (مرة واحدة بس).');
       const d2 = await StoreFS.readFromLegacy();
       if (d2) {
         try { loadData(d2, false); } catch (e) { console.warn(e); }
         try { await StoreFS.saveAll(); StoreFS.legacy = null; tip('✔ اتنقل مشروعك للتخزين التلقائي'); } catch (e) { console.warn(e); }
-      } else {
-        await uiAlert('متنقلش. تقدر تنقله بعدين من «عرض التخزين» ← «استيراد من المجلد القديم».');
       }
     } catch (e) { console.warn(e); }
   } else if (st === 'pending') {
-    
+    // إذن المجلد محتاج إيماءة مستخدم — من غير تنبيه مزعج؛ التفعيل من «عرض التخزين» لو حابب
     try {
-      await uiAlert('اضغط «حسنًا» لتفعيل مجلد التخزين المحفوظ بعد تحديث الصفحة.');
       const ok = await StoreFS.activatePermission();
       if (ok) {
         const d2 = await StoreFS.loadPreferred();
         if (d2) try { loadData(d2, false); } catch (e) { console.warn(e); }
-      } else {
-        await uiAlert('لم يتم تفعيل المجلد. من «عرض التخزين» اضغط تفعيل أو غيّر المجلد.');
-        try { showStorageInfo(); } catch (_) {}
       }
-    } catch (e) { console.warn(e); try { showStorageInfo(); } catch (_) {} }
-  } else {
-    
-    try {
-      await uiAlert('أول استخدام: اختر مجلدًا على الجهاز لحفظ المشروع.');
-      const ok = await StoreFS.ensureFolderOrPrompt(true);
-      if (!ok) try { showStorageInfo(); } catch (_) {}
     } catch (e) { console.warn(e); }
+  } else {
+    // مفيش سيرفر ولا مجلد — localStorage يكفي؛ المستخدم يختار مجلد من «عرض التخزين» لو عايز
+    try {
+      StoreFS.mode = StoreFS.mode === 'none' ? 'local' : StoreFS.mode;
+      StoreFS.label = StoreFS.label || 'متصفح (localStorage)';
+    } catch (_) {}
   }
   try { INTRO.start(); } catch (e) { console.warn(e); try { INTRO.finish(true); } catch (_) {} }
-  
+
+  // أونلاين/أوفلاين تلقائي من غير سؤال
   if (!window.HAWA_PLAY_ONLY) {
     setTimeout(() => {
       try {
         if (S.playNet !== 'online' && S.playNet !== 'offline') ensurePlayNetChosen(false);
         else syncPlayNetUI();
       } catch (_) {}
-    }, 900);
+    }, 400);
   }
 })();
 })();
