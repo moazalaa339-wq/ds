@@ -91,7 +91,8 @@ function onUpdate(self, game, dt) {
   // self.rotation.y += dt;
 }
 `;
-const API = `onStart(self,game) onUpdate(self,game,dt) onTouch(self,game,dt)
+const API = `⚠ الصيغة الإلزامية: Game.defineParams([...]) أول سطر + Game.onUpdate(function(dt){ const P = Game.params; ... }). ممنوع const CFG / ثوابت قابلة للتعديل (سرعات، مسافات، ألوان، مدد) — كلها بارامترات.
+onStart(self,game) onUpdate(self,game,dt) onTouch(self,game,dt)  (قديم — للتوافق فقط، لا تستخدمه للكود الجديد)
 self: name,props,mesh,position,rotation,scale,hide,show,hideBody,dist
 game: THREE,scene,camera,time,score,addScore,say,respawn,key,setKey,forcePlayerInput,find,player,coords,setHud,setPlayerLimb,touch
 مدخل موحّد (كيبورد + موبايل نفس المصدر):
@@ -464,6 +465,8 @@ function resize() {
     cam.near = 0.12;
   } catch (_) {}
   cam.updateProjectionMatrix(); S.dirty = 1;
+  // setSize بيمسح الكانفس؛ نرسم فوراً في نفس الفريم عشان ما تسودّش الشاشة أثناء حركة الأسهم/تغيير الحجم
+  try { if (R && R.render && typeof scene !== 'undefined' && scene) R.render(scene, cam); } catch (_) {}
 }
 const ro = new ResizeObserver(() => resize());
 function attach(host) {
@@ -1003,6 +1006,22 @@ function recolor(o) {
   look(o);
 }
 function reg(o) { S.objs.push(o); OBJ.set(o.id, o); fillDefaults(o); mk(o); if (o.type === 'sobj') refreshPreview(o); return o; }
+/* يوسّع البارامترات المرتبطة بعدد: entry فيه each:"countKey" بيتولد منه key_1..key_N */
+function expandSchema(sch, o) {
+  if (!sch || !sch.length) return sch || [];
+  if (!o.p) o.p = {};
+  const out = [];
+  for (const e of sch) {
+    if (!e.each) { out.push(e); continue; }
+    const n = Math.max(0, Math.min(64, Math.round(+o.p[e.each]) || 0));
+    for (let i = 1; i <= n; i++) {
+      const key = e.key + '_' + i;
+      if (o.p[key] === undefined) o.p[key] = e.value === undefined ? null : JSON.parse(JSON.stringify(e.value));
+      out.push(Object.assign({}, e, { key, label: (e.label || e.key) + ' ' + i, each: undefined, count: undefined }));
+    }
+  }
+  return out;
+}
 function fillDefaults(o) {
   if (o.type !== 'sobj') return;
   const d = defOf(o.def); if (!d) return;
@@ -1683,6 +1702,43 @@ $('#tools').onclick = e => { const b = e.target.closest('[data-tool]'); if (b) s
 $('#secs').onclick = e => { const b = e.target.closest('[data-sec]'); if (b) setSec(b.dataset.sec); };
 if ($('#mSecs')) $('#mSecs').onclick = e => { const b = e.target.closest('[data-sec]'); if (b) setSec(b.dataset.sec); };
 try { const _bfly = document.getElementById('bFly'); if (_bfly) _bfly.onclick = toggleFly; } catch (_) {}
+/* —— أزرار إخفاء/إظهار النافذتين الجانبيتين في وضع البناء (كمبيوتر) —— */
+(function panelToggles() {
+  const B = document.body, bd = document.getElementById('tglDock'), bs = document.getElementById('tglSide');
+  if (!bd || !bs) return;
+  const KEY = 'hawa_panels_hidden';
+  let first = true;
+  const pulse = el => { el.classList.remove('pulse'); void el.offsetWidth; el.classList.add('pulse'); };
+  const sync = (hintEl) => {
+    const hd = B.classList.contains('hide-dock'), hs = B.classList.contains('hide-side') || B.classList.contains('noside');
+    bd.classList.toggle('off', hd); bs.classList.toggle('off', hs);
+    if (hintEl && ((hintEl === bd && hd) || (hintEl === bs && hs))) pulse(hintEl);
+    try { if (!first) localStorage.setItem(KEY, JSON.stringify({ dock: hd, side: B.classList.contains('hide-side') })); } catch (_) {}
+    first = false;
+    // الـ ResizeObserver بيعمل resize مع كل فريم من الأنميشن؛ ده resize أخير للتأكيد
+    setTimeout(() => { try { resize(); } catch (_) {} }, 460);
+  };
+  bd.onclick = () => { B.classList.toggle('hide-dock'); sync(bd); };
+  bs.onclick = () => {
+    if (B.classList.contains('noside')) { B.classList.remove('noside'); B.classList.remove('hide-side'); const pb = document.getElementById('bPar'); if (pb) pb.classList.add('on'); }
+    else B.classList.toggle('hide-side');
+    sync(bs);
+  };
+  try {
+    const st = JSON.parse(localStorage.getItem(KEY) || 'null');
+    if (st) {
+      // من غير أنميشن عند فتح الصفحة
+      const app = document.getElementById('app'); if (app) app.style.transition = 'none';
+      B.classList.toggle('hide-dock', !!st.dock); B.classList.toggle('hide-side', !!st.side);
+      requestAnimationFrame(() => requestAnimationFrame(() => { if (app) app.style.transition = ''; }));
+    }
+  } catch (_) {}
+  const secs = document.getElementById('secs');
+  if (secs) secs.addEventListener('click', e => {
+    if (e.target.closest('[data-sec]') && B.classList.contains('hide-dock')) { B.classList.remove('hide-dock'); sync(); }
+  });
+  sync();
+})();
 $('#bPar').onclick = () => { document.body.classList.toggle('noside'); $('#bPar').classList.toggle('on', !document.body.classList.contains('noside')); setTimeout(resize, 30); };
 const _bSpawns = document.getElementById('bSpawns');
 if (_bSpawns) _bSpawns.onclick = () => openSpawnsPanel();
@@ -2341,7 +2397,7 @@ function paramRow(o, k, label, e) {
   } else if (ty === 'text' || ty === 'string' || (typeof v === 'string' && !isMediaType(ty))) {
     inp = `<input type="text" data-p="${k}" value="${esc(v ?? '')}" style="flex:1">`;
   } else {
-    inp = `<input type="number" data-p="${k}" value="${v}" step="${(e && e.step) || .5}"${e && e.min != null ? ` min="${e.min}"` : ''}${e && e.max != null ? ` max="${e.max}"` : ''} style="flex:1">`;
+    inp = `<input type="number" data-p="${k}"${e && e.count ? ' data-count="1"' : ''} value="${v}" step="${(e && e.step) || .5}"${e && e.min != null ? ` min="${e.min}"` : ''}${e && e.max != null ? ` max="${e.max}"` : ''} style="flex:1">`;
   }
   return `<div class="r param-row"><b class="pl">${esc(label || (e && e.label) || PL[k] || k)}</b>${inp}</div>`;
 }
@@ -2716,7 +2772,7 @@ function syncParamPanel() {
   if (!d) { panel.hidden = true; return; }
   panel.hidden = false;
   if (title) title.textContent = (o.name || d.name || 'كائن') + ' · بارامترات';
-  const sch = schemaOf(d.code);
+  const sch = expandSchema(schemaOf(d.code), o);
   if (!sch.length) {
     body.innerHTML = '<p class=\"mut small\">—</p>';
     return;
@@ -2742,6 +2798,14 @@ function bindParamPanel() {
   const close = document.getElementById('paramClose');
   if (close) close.onclick = () => closeParamPanel();
   if (!body) return;
+  body.addEventListener('change', e => {
+    if (e.target && e.target.hasAttribute && e.target.hasAttribute('data-count')) {
+      const o = OBJ.get(S.sel); if (!o) return;
+      applyParamValue(o, e.target.dataset.p, e.target.value, null);
+      syncParamPanel();
+      try { inspect(); } catch (_) {}
+    }
+  });
   body.addEventListener('input', e => {
     const t = e.target, o = OBJ.get(S.sel); if (!o || !t.dataset.p) return;
     const d = defOf(o.def);
@@ -4272,16 +4336,16 @@ function chg() {
   refNames = null;
   try { hier(); } catch (_) {}
   clearTimeout(rfT);
-  rfT = setTimeout(() => { refNames = null; try { hier(); } catch (_) {} }, 500);
+  rfT = setTimeout(() => { refNames = null; try { hier(); } catch (_) {} }, 400);
   S.dirty = 1;
   clearTimeout(svT);
-  // حفظ سريع بعد أي تغيير في الشريط أو المشهد
-  svT = setTimeout(save, 280);
+  // أي تعديل → حفظ تلقائي (من غير ما تدوس حفظ)
+  svT = setTimeout(save, 120);
   try { refreshLive(); } catch (_) {}
 }
 // حفظ إجباري عند إغلاق/تحديث الصفحة + نبض دوري لو في تعديلات
 (function bindPersistGuards() {
-  const flush = () => { try { clearTimeout(svT); save(); } catch (_) {} };
+  const flush = () => { try { clearTimeout(svT); save(); S.dirty = 0; } catch (_) {} };
   try {
     addEventListener('pagehide', flush);
     addEventListener('beforeunload', flush);
@@ -4296,7 +4360,7 @@ function chg() {
         save();
       }
     } catch (_) {}
-  }, 4000);
+  }, 1500);
 })();
 function ensureLive() {
   for (const [pid, id] of [['progP', 'pLive'], ['sobjP', 'sLive']]) {
@@ -4875,7 +4939,12 @@ function showStorageInfo() {
 }
 
 const _bSave = $('#bSave');
-if (_bSave) _bSave.onclick = () => { save(); try { tip('✔ اتسجل في المتصفح'); } catch (_) {} };
+if (_bSave) _bSave.onclick = () => {
+  try { clearTimeout(svT); } catch (_) {}
+  save();
+  S.dirty = 0;
+  try { tip('✔ حفظ فوري'); } catch (_) {}
+};
 const _bProjDown = document.getElementById('bProjDown');
 if (_bProjDown) _bProjDown.onclick = () => { downloadProjectZip().catch(e => { uiAlert(e.message || e); }); };
 const _bProjUp = document.getElementById('bProjUp');
@@ -5605,6 +5674,7 @@ const VoiceChat = {
         video: false
       });
       if (!this._wantOn) { stream.getTracks().forEach(t => t.stop()); return false; }
+      this._rawStream = stream;
       this.stream = stream;
       const AC = window.AudioContext || window.webkitAudioContext;
       this.ac = new AC();
@@ -5614,6 +5684,12 @@ const VoiceChat = {
       this.analyser.fftSize = 512;
       this.analyser.smoothingTimeConstant = 0.35;
       this.data = new Uint8Array(this.analyser.frequencyBinCount);
+      this.boostGain = this.ac.createGain();
+      this.boostGain.gain.value = this._boost || 1;
+      this.outDest = this.ac.createMediaStreamDestination();
+      this.boostGain.connect(this.outDest);
+      try { this._buildFx(); } catch (e) { console.warn('voice fx', e); }
+      this.stream = this.outDest.stream;   // الصوت اللي بيروح للاعبين = بعد الـ boost
       this._rebuildFilters();
       this.on = true;
       this._syncBtn();
@@ -5638,15 +5714,73 @@ const VoiceChat = {
     lp.type = 'lowpass'; lp.frequency.value = +VOICE_CFG.lowpass || 7500; lp.Q.value = 0.7;
     this.filters = [hp, lp];
     this.src.connect(hp); hp.connect(lp); lp.connect(this.analyser);
+    if (this.fxIn) lp.connect(this.fxIn); else if (this.boostGain) lp.connect(this.boostGain);
   },
+  _drive(k) {
+    const n = 2048, c = new Float32Array(n), d = Math.tanh(k);
+    for (let i = 0; i < n; i++) { const x = (i * 2) / n - 1; c[i] = Math.tanh(k * x) / d; }
+    return c;
+  },
+  _buildFx() {
+    const ac = this.ac;
+    this.fxIn = ac.createGain();
+    const dry = ac.createGain(); dry.gain.value = 1;
+    this.fxIn.connect(dry); dry.connect(this.boostGain);
+    const low = ac.createBiquadFilter(); low.type = 'lowshelf'; low.frequency.value = 180; low.gain.value = 0;
+    const shaper = ac.createWaveShaper(); shaper.curve = this._drive(1); shaper.oversample = '4x';
+    const ring = ac.createGain(); ring.gain.value = 0.5;
+    const rosc = ac.createOscillator(); rosc.type = 'sine'; rosc.frequency.value = 30;
+    const rdepth = ac.createGain(); rdepth.gain.value = 0;
+    rosc.connect(rdepth); rdepth.connect(ring.gain); rosc.start();
+    const lp2 = ac.createBiquadFilter(); lp2.type = 'lowpass'; lp2.frequency.value = 1400; lp2.Q.value = 1.2;
+    const dl = ac.createDelay(1.5); dl.delayTime.value = 0.22;
+    const fb = ac.createGain(); fb.gain.value = 0;
+    dl.connect(fb); fb.connect(dl);
+    const wet = ac.createGain(); wet.gain.value = 0;
+    this.fxIn.connect(low); low.connect(shaper); shaper.connect(ring); ring.connect(lp2);
+    lp2.connect(wet); lp2.connect(dl); dl.connect(wet);
+    wet.connect(this.boostGain);
+    this.fx = { wet, dry, low, shaper, rdepth, lp2, dl, fb, rosc };
+    this._applyFx();
+  },
+  _applyFx() {
+    const f = this.fx, c = this._fxCfg || {}, t = this.ac ? this.ac.currentTime : 0;
+    if (!f) return;
+    const on = !!c.on;
+    const set = (param, v) => { try { param.setTargetAtTime(v, t, 0.05); } catch (_) { param.value = v; } };
+    set(f.wet.gain, on ? (c.mix != null ? +c.mix : 0.9) : 0);
+    set(f.dry.gain, on ? (c.dryMix != null ? +c.dryMix : 0.3) : 1);
+    set(f.low.gain, on ? (c.lowGain != null ? +c.lowGain : 12) : 0);
+    set(f.rdepth.gain, on ? (c.ringDepth != null ? +c.ringDepth : 0.5) : 0);
+    set(f.lp2.frequency, c.cutoff != null ? +c.cutoff : 1400);
+    set(f.dl.delayTime, c.echo != null ? +c.echo : 0.22);
+    set(f.fb.gain, on ? (c.feedback != null ? +c.feedback : 0.35) : 0);
+    try { f.rosc.frequency.setTargetAtTime(c.ringHz != null ? +c.ringHz : 30, t, 0.05); } catch (_) {}
+    try { f.shaper.curve = this._drive(c.drive != null ? +c.drive : 4); } catch (_) {}
+  },
+  setFx(o) {
+    this._fxCfg = Object.assign({}, this._fxCfg || {}, o || {});
+    this._applyFx();
+    return Object.assign({}, this._fxCfg);
+  },
+  setBoost(v) {
+    this._boost = Math.max(0, Math.min(8, +v || 0));
+    if (this.boostGain && this.ac) {
+      try { this.boostGain.gain.setTargetAtTime(this._boost, this.ac.currentTime, 0.05); } catch (_) {}
+    }
+    return this._boost;
+  },
+  getBoost() { return this._boost != null ? this._boost : 1; },
   off() {
     this._wantOn = false;
     try { say('تم إلغاء المايك', 1600); } catch(_){} this.on = false;
     this.level = 0; this.raw = 0;
     try {
-      if (this.stream) this.stream.getTracks().forEach(t => { try { t.stop(); } catch (_) {} });
+      [this.stream, this._rawStream].forEach(st => { if (st) st.getTracks().forEach(t => { try { t.stop(); } catch (_) {} }); });
     } catch (_) {}
-    this.stream = null;
+    this.stream = null; this._rawStream = null;
+    try { if (this.boostGain) this.boostGain.disconnect(); } catch (_) {}
+    this.boostGain = null; this.outDest = null; this.fx = null; this.fxIn = null;
     try { if (this.src) this.src.disconnect(); } catch (_) {}
     try { if (this.filters) this.filters.forEach(f => { try { f.disconnect(); } catch (_) {} }); } catch (_) {}
     this.src = null; this.filters = null; this.analyser = null; this.data = null;
@@ -5978,35 +6112,8 @@ const VoiceChat = {
       }
       const entry = { el: a, stream, peerId, slot: null, name: null, username: null, volume: vol, muted: false, gain: null, panner: null };
       this._bindMeta(peerId, entry);
-      // مسار Web Audio اختياري للتأثيرات المكانية / الفلاتر من السكربت
-      try {
-        if (!this.ac) {
-          const AC = window.AudioContext || window.webkitAudioContext;
-          this.ac = new AC();
-        }
-        if (this.ac && this.ac.state === 'suspended') this.ac.resume().catch(() => {});
-        const srcNode = this.ac.createMediaStreamSource(stream);
-        const gain = this.ac.createGain();
-        gain.gain.value = this.muteAll || entry.muted ? 0 : vol;
-        const panner = this.ac.createPanner();
-        panner.panningModel = 'HRTF';
-        panner.distanceModel = 'inverse';
-        panner.refDistance = 2;
-        panner.maxDistance = 60;
-        panner.rolloffFactor = 1.2;
-        panner.coneInnerAngle = 360;
-        panner.coneOuterAngle = 360;
-        srcNode.connect(gain);
-        gain.connect(panner);
-        // لو spatial مفعّل نستخدم panner، وإلا نفضل عنصر Audio العادي (أوضح على الموبايل)
-        if (this.spatial) {
-          panner.connect(this.ac.destination);
-          a.muted = true; // نمنع مضاعفة الصوت
-        }
-        entry.gain = gain;
-        entry.panner = panner;
-        entry.srcNode = srcNode;
-      } catch (_) {}
+      try { this._buildRemoteChain(entry); } catch (e) { console.warn('voice chain', e); }
+      if (entry.chain) a.muted = true;   // الصوت بيطلع من الـ chain مش من العنصر (مانعين التكرار)
       this._remoteAudios.set(peerId, entry);
       setTimeout(go, 120);
       setTimeout(go, 600);
@@ -6299,6 +6406,195 @@ const VoiceChat = {
     if (this._listenLoop) { try { clearInterval(this._listenLoop); } catch (_) {} this._listenLoop = null; }
   }
 };
+
+// ===== نظام صوت اللاعبين (Voice Profiles) — كل لاعب ليه بروفايل ثابت مربوط بيه =====
+const _origStopRemote = VoiceChat._stopRemote;
+Object.assign(VoiceChat, {
+  _profiles: new Map(),      // مفتاح اللاعب (اسم/سلوت) -> بروفايل جزئي
+  _defaultProfile: null,     // بروفايل افتراضي لكل اللاعبين
+  _rctx: null,               // AudioContext مستقل لأصوات اللاعبين البعيدين
+  _rctxGet() {
+    if (!this._rctx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return null;
+      this._rctx = new AC();
+    }
+    if (this._rctx.state === 'suspended') this._rctx.resume().catch(() => {});
+    return this._rctx;
+  },
+  _baseProfile() {
+    return {
+      volume: 1, muted: false, pan: 0, spatial: false, pos: null,
+      eq: { low: 0, mid: 0, high: 0, midFreq: 1000 },
+      hpf: 60, lpf: 12000,
+      echo: { on: false, time: 0.25, feedback: 0.35, mix: 0.35 },
+      distance: { ref: 2, max: 60, rolloff: 1.2 }
+    };
+  },
+  _merge(base, patch) {
+    const out = JSON.parse(JSON.stringify(base || {}));
+    if (!patch) return out;
+    for (const k of Object.keys(patch)) {
+      const v = patch[k];
+      if (v && typeof v === 'object' && !Array.isArray(v) && out[k] && typeof out[k] === 'object') Object.assign(out[k], v);
+      else out[k] = v;
+    }
+    return out;
+  },
+  _entryKey(e) {
+    if (!e) return null;
+    if (e.name) return 'name:' + String(e.name).toLowerCase();
+    if (e.slot != null) return 'slot:' + (+e.slot);
+    return null;
+  },
+  _rawKey(who) {
+    if (typeof who === 'number' || /^\d+$/.test(String(who))) return 'slot:' + (+who);
+    return 'name:' + String(who).toLowerCase();
+  },
+  _entryFor(who) {
+    const pid = this._findPeer(who);
+    return pid ? (this._remoteAudios.get(pid) || null) : null;
+  },
+  _keyFor(who) {
+    const e = this._entryFor(who);
+    return (e && this._entryKey(e)) || this._rawKey(who);
+  },
+  _effective(e) {
+    const base = this._merge(this._baseProfile(), this._defaultProfile);
+    const per = this._profiles.get(this._entryKey(e) || '') || null;
+    return this._merge(base, per);
+  },
+  _applyRoute(e) {
+    const c = e.chain; if (!c) return;
+    const ac = c.ac;
+    try { c.out.disconnect(); } catch (_) {}
+    try { c.panner.disconnect(); } catch (_) {}
+    try { if (c.pan) c.pan.disconnect(); } catch (_) {}
+    const P = e.effective || {};
+    if (P.spatial) { c.out.connect(c.panner); c.panner.connect(ac.destination); }
+    else if (c.pan) { c.out.connect(c.pan); c.pan.connect(ac.destination); }
+    else c.out.connect(ac.destination);
+  },
+  _buildRemoteChain(entry) {
+    const ac = this._rctxGet();
+    if (!ac || !entry.stream) return;
+    const src = ac.createMediaStreamSource(entry.stream);
+    const hpf = ac.createBiquadFilter(); hpf.type = 'highpass';
+    const lo = ac.createBiquadFilter(); lo.type = 'lowshelf'; lo.frequency.value = 200;
+    const mi = ac.createBiquadFilter(); mi.type = 'peaking'; mi.Q.value = 1;
+    const hi = ac.createBiquadFilter(); hi.type = 'highshelf'; hi.frequency.value = 3200;
+    const lpf = ac.createBiquadFilter(); lpf.type = 'lowpass';
+    const dry = ac.createGain();
+    const echoIn = ac.createGain();
+    const dl = ac.createDelay(2.0);
+    const fb = ac.createGain();
+    const echoWet = ac.createGain();
+    const out = ac.createGain();
+    const pan = ac.createStereoPanner ? ac.createStereoPanner() : null;
+    const panner = ac.createPanner();
+    panner.panningModel = 'HRTF'; panner.distanceModel = 'inverse';
+    src.connect(hpf); hpf.connect(lo); lo.connect(mi); mi.connect(hi); hi.connect(lpf);
+    lpf.connect(dry); lpf.connect(echoIn);
+    echoIn.connect(dl); dl.connect(fb); fb.connect(dl); dl.connect(echoWet);
+    dry.connect(out); echoWet.connect(out);
+    entry.chain = { ac, src, hpf, lo, mi, hi, lpf, dry, echoIn, dl, fb, echoWet, out, pan, panner };
+    entry.srcNode = src; entry.gain = out; entry.panner = panner;
+    this._applyProfile(entry);
+  },
+  _applyProfile(e) {
+    if (!e) return;
+    const P = this._effective(e);
+    e.effective = P; e.profile = P; e.volume = P.volume; e.muted = !!P.muted;
+    const c = e.chain; if (!c) return;
+    const t = c.ac.currentTime;
+    const sp = (param, v) => { try { param.setTargetAtTime(v, t, 0.03); } catch (_) { param.value = v; } };
+    sp(c.out.gain, (this.muteAll || P.muted) ? 0 : Math.max(0, Math.min(4, +P.volume || 0)));
+    if (c.pan) sp(c.pan.pan, Math.max(-1, Math.min(1, +P.pan || 0)));
+    sp(c.lo.gain, +P.eq.low || 0);
+    sp(c.mi.gain, +P.eq.mid || 0);
+    sp(c.hi.gain, +P.eq.high || 0);
+    c.mi.frequency.value = +P.eq.midFreq || 1000;
+    c.hpf.frequency.value = +P.hpf || 60;
+    c.lpf.frequency.value = +P.lpf || 12000;
+    const on = !!P.echo.on;
+    c.dl.delayTime.value = Math.max(0.01, Math.min(2, +P.echo.time || 0.25));
+    sp(c.fb.gain, on ? Math.min(0.9, +P.echo.feedback || 0) : 0);
+    sp(c.echoWet.gain, on ? Math.max(0, Math.min(1, +P.echo.mix || 0)) : 0);
+    sp(c.dry.gain, 1);
+    c.panner.refDistance = +P.distance.ref || 2;
+    c.panner.maxDistance = +P.distance.max || 60;
+    c.panner.rolloffFactor = +P.distance.rolloff || 1.2;
+    this._applyRoute(e);
+  },
+  _stopRemote(peerId) {
+    const e = this._remoteAudios.get(peerId);
+    if (e && e.chain) {
+      try { Object.keys(e.chain).forEach(k => { const n = e.chain[k]; if (n && n.disconnect && k !== 'ac') n.disconnect(); }); } catch (_) {}
+      e.chain = null;
+    }
+    return _origStopRemote.call(this, peerId);
+  },
+  /** يعدّل بروفايل لاعب (سلوت / اسم / peerId). patch بيتدمج فوق القديم */
+  setProfile(who, patch) {
+    const key = this._keyFor(who);
+    const cur = this._profiles.get(key) || {};
+    this._profiles.set(key, this._merge(cur, patch || {}));
+    const e = this._entryFor(who);
+    if (e) this._applyProfile(e);
+    return this.getProfile(who);
+  },
+  getProfile(who) {
+    const e = this._entryFor(who);
+    if (e) return this._effective(e);
+    return this._merge(this._merge(this._baseProfile(), this._defaultProfile), this._profiles.get(this._keyFor(who)) || {});
+  },
+  clearProfile(who) {
+    this._profiles.delete(this._keyFor(who));
+    const e = this._entryFor(who);
+    if (e) this._applyProfile(e);
+    return true;
+  },
+  /** بروفايل عام لكل اللاعبين (البروفايل الخاص باللاعب بيفوق العام) */
+  setDefaultProfile(patch) {
+    this._defaultProfile = this._merge(this._defaultProfile || {}, patch || {});
+    for (const e of this._remoteAudios.values()) this._applyProfile(e);
+    return this._merge(this._baseProfile(), this._defaultProfile);
+  },
+  setPosition(who, pos) { return this.setProfile(who, { pos: pos || null }); },
+  setVolume(who, vol) { return this.setProfile(who, { volume: +vol }); },
+  mutePlayer(who, on) { return this.setProfile(who, { muted: !!on }); },
+  setSpatial(on) {
+    this.spatial = !!on;
+    this.setDefaultProfile({ spatial: !!on });
+    return this.spatial;
+  },
+  tickSpatial() {
+    const ctx = this._rctx; if (!ctx) return;
+    try {
+      if (typeof RT !== 'undefined' && RT && RT.p && ctx.listener) {
+        const L = ctx.listener;
+        if (L.positionX) { L.positionX.value = RT.p.x; L.positionY.value = RT.p.y + 1.6; L.positionZ.value = RT.p.z; }
+        else if (L.setPosition) L.setPosition(RT.p.x, RT.p.y + 1.6, RT.p.z);
+      }
+    } catch (_) {}
+    for (const [pid, e] of this._remoteAudios) {
+      const c = e.chain; if (!c || !c.panner) continue;
+      try {
+        this._bindMeta(pid, e);
+        let pos = e.profile && e.profile.pos ? e.profile.pos : null;
+        if (!pos && e.slot != null && NetMP.remotes) {
+          const r = NetMP.remotes.get(+e.slot);
+          if (r && r.rig && r.rig.root) pos = r.rig.root.position;
+          else if (r && r.tp) pos = r.tp;
+        }
+        if (!pos) continue;
+        const P = c.panner;
+        if (P.positionX) { P.positionX.value = pos.x; P.positionY.value = pos.y + 1.5; P.positionZ.value = pos.z; }
+        else if (P.setPosition) P.setPosition(pos.x, pos.y + 1.5, pos.z);
+      } catch (_) {}
+    }
+  }
+});
 try {
   window.__HAWA_ON_REMOTE_AUDIO = function (id, stream) {
     try { VoiceChat._playRemote(id || 'remote', stream); } catch (_) {}
@@ -7800,6 +8096,17 @@ function bigGame(rt, o, root) {
       on: () => VoiceChat.start(),
       off: () => VoiceChat.off(),
       isOn: () => VoiceChat.isOn(),
+      setBoost: (v) => VoiceChat.setBoost(v),
+      setFx: (o) => VoiceChat.setFx(o),
+      setProfile: (w, p) => VoiceChat.setProfile(w, p),
+      getProfile: (w) => VoiceChat.getProfile(w),
+      clearProfile: (w) => VoiceChat.clearProfile(w),
+      setDefaultProfile: (p) => VoiceChat.setDefaultProfile(p),
+      setPosition: (w, pos) => VoiceChat.setPosition(w, pos),
+      setEcho: (w, e) => VoiceChat.setProfile(w, { echo: e }),
+      setEQ: (w, eq) => VoiceChat.setProfile(w, { eq: eq }),
+      setPan: (w, v) => VoiceChat.setProfile(w, { pan: v }),
+      getBoost: () => VoiceChat.getBoost(),
       level: () => VoiceChat.level01(),
       // مايك مرتبط باللاعب (سلوت / اسم / peerId) — مش مايك عام
       listPlayers: () => VoiceChat.listPlayers(),
@@ -8044,12 +8351,12 @@ function runBig(rt, o, root, code) {
   if (root.userData && root.userData.body) root.userData.body.visible = false;
   const body = root.userData.body;
   rt.bigs.push({o, m: root, base, body});
-  try { const G = bigGame(rt, o, root); try { window.Game = G; } catch (_) {} sandboxRun(root, false, () => new Function('Game', 'root', code)(G, root)); }
+  try { try { const _d = defOf(o.def); if (_d) expandSchema(schemaOf(_d.code), o); } catch (_) {} const G = bigGame(rt, o, root); try { window.Game = G; } catch (_) {} sandboxRun(root, false, () => new Function('Game', 'root', code)(G, root)); }
   catch (e) { fail(o.name || 'script', e); }
 }
 function runScene(rt, s) {
   const root = new T.Group(); scene.add(root); rt.sceneRoots.push(root);
-  try { if (!s.p) s.p = {}; const G = bigGame(rt, {name: s.name, p: s.p}, root); try { window.Game = G; } catch (_) {} new Function('Game', 'root', s.code)(G, root); }
+  try { if (!s.p) s.p = {}; try { expandSchema(schemaOf(s.code), s); } catch (_) {} const G = bigGame(rt, {name: s.name, p: s.p}, root); try { window.Game = G; } catch (_) {} new Function('Game', 'root', s.code)(G, root); }
   catch (e) { fail(s.name, e); }
 }
 function cleanBig(rt) {
@@ -9520,8 +9827,9 @@ async function playStart() {
       } else {
         try { document.body.classList.remove('online-play'); } catch (_) {}
         try { VoiceChat.off(); } catch (_) {}
+        try { VoiceChat.ensureBtn(); } catch (_) {}
         const b = document.getElementById('pMic');
-        if (b) b.style.display = 'none';
+        if (b) { b.classList.add('show'); b.style.display = 'flex'; b.style.visibility = 'visible'; b.style.opacity = '1'; }
         const bar = document.getElementById('pOnlineBar');
         if (bar) bar.classList.remove('show');
       }
@@ -9635,6 +9943,17 @@ async function playStart() {
       on: () => VoiceChat.start(),
       off: () => VoiceChat.off(),
       isOn: () => VoiceChat.isOn(),
+      setBoost: (v) => VoiceChat.setBoost(v),
+      setFx: (o) => VoiceChat.setFx(o),
+      setProfile: (w, p) => VoiceChat.setProfile(w, p),
+      getProfile: (w) => VoiceChat.getProfile(w),
+      clearProfile: (w) => VoiceChat.clearProfile(w),
+      setDefaultProfile: (p) => VoiceChat.setDefaultProfile(p),
+      setPosition: (w, pos) => VoiceChat.setPosition(w, pos),
+      setEcho: (w, e) => VoiceChat.setProfile(w, { echo: e }),
+      setEQ: (w, eq) => VoiceChat.setProfile(w, { eq: eq }),
+      setPan: (w, v) => VoiceChat.setProfile(w, { pan: v }),
+      getBoost: () => VoiceChat.getBoost(),
       level: () => VoiceChat.level01(),
       // مايك مرتبط باللاعب (سلوت / اسم / peerId) — مش مايك عام
       listPlayers: () => VoiceChat.listPlayers(),
@@ -9855,7 +10174,7 @@ function playStop() {
   const rt = RT; if (!rt) return;
   if (document.pointerLockElement) document.exitPointerLock();
   try { NetMP.stop(); } catch (e) {}
-  try { VoiceChat.destroy(); VoiceChat.show(false); } catch (e) {}
+  try { VoiceChat.destroy(); VoiceChat.show(false); const mb = document.getElementById('pMic'); if (mb) mb.style.display = 'none'; } catch (e) {}
   cleanBig(rt);
   try {
     document.querySelectorAll('[data-script-ui]').forEach(el => { try { el.remove(); } catch (_) {} });
@@ -9974,7 +10293,7 @@ function playStartFX() {
       snap = {img: o, rect: {x: r.left, y: r.top, w: r.width, h: r.height}};
     } catch (_) { snap = null; }
     const go = () => { try { playStart().catch(e => console.error(e)); } catch (e) { console.error(e); } };
-    if (!FX.play('test', go, {snap})) go();
+    if (!FX.play('test', go, {snap, sound: false})) go();
   } catch (e) {
     console.error(e);
     try { playStart().catch(err => console.error(err)); } catch (_) {}
@@ -10163,10 +10482,12 @@ const MOB = {
   run: false,
   jump: false,
   detect() {
-    const coarse = (typeof matchMedia === 'function' && matchMedia('(pointer:coarse)').matches);
-    const small = Math.min(innerWidth, innerHeight) <= 900;
+    // الموبايل = جهاز لمس فعلاً (مش حجم الشاشة). تصغير نافذة الكمبيوتر ما يغيّرش الوضع.
+    const mq = (q) => (typeof matchMedia === 'function' && matchMedia(q).matches);
+    const coarseOnly = mq('(any-pointer:coarse)') && !mq('(any-pointer:fine)');
     const touch = navigator.maxTouchPoints > 0 || 'ontouchstart' in window;
-    this.on = !!(coarse || (touch && small) || innerWidth <= 820);
+    const fineMouse = mq('(any-pointer:fine)') && !mq('(pointer:coarse)');
+    this.on = !!(coarseOnly || (touch && !fineMouse && /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)));
     document.body.classList.toggle('is-mobile', this.on);
     return this.on;
   },

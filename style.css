@@ -1736,3 +1736,65 @@ body.is-mobile:fullscreen #pvp canvas{
 body.is-mobile,body.is-mobile #app,body.is-mobile #vp{
   max-width:100vw;overflow:hidden;
 }
+
+
+/* ===== أزرار إخفاء/إظهار النوافذ الجانبية — أنميشن سلس (سطح المكتب) ===== */
+:root{--pnl-ease:cubic-bezier(.22,1,.36,1);--pnl-dur:.42s}
+
+.pnl-tgl{position:absolute;top:10px;z-index:30;width:34px;height:34px;padding:0;display:flex;align-items:center;justify-content:center;
+  color:#7ff0dc;background:rgba(8,6,12,.82);border:1px solid rgba(45,226,196,.45);border-radius:11px;
+  cursor:pointer;pointer-events:auto;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);box-shadow:var(--shadow);
+  transition:background .2s ease,border-color .2s ease,box-shadow .25s ease,transform .25s var(--pnl-ease)}
+.pnl-tgl svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;
+  transition:transform var(--pnl-dur) var(--pnl-ease)}
+.pnl-tgl:hover{background:rgba(45,226,196,.2);border-color:rgba(45,226,196,.85);box-shadow:0 0 0 3px rgba(45,226,196,.14),var(--shadow);transform:scale(1.08)}
+.pnl-tgl:active{transform:scale(.92)}
+.pnl-tgl:focus-visible{outline:2px solid #7ff0dc;outline-offset:2px}
+.pnl-tgl-l{left:10px}
+.pnl-tgl-r{right:10px}
+/* السهم: يلف 180° بسلاسة عند الإخفاء/الإظهار */
+.pnl-tgl-l svg{transform:rotate(0deg)}
+.pnl-tgl-l.off svg{transform:rotate(180deg)}
+.pnl-tgl-r svg{transform:rotate(180deg)}
+.pnl-tgl-r.off svg{transform:rotate(360deg)}
+/* نبضة خفيفة مرة واحدة لما النافذة تتخبّى عشان المستخدم يلاقي زر الرجوع */
+@keyframes pnlHint{0%{box-shadow:0 0 0 0 rgba(45,226,196,.55),var(--shadow)}100%{box-shadow:0 0 0 14px rgba(45,226,196,0),var(--shadow)}}
+.pnl-tgl.pulse{animation:pnlHint .8s ease-out 1}
+
+body:not(.is-mobile) #modeChip{inset-inline-start:54px}
+body.is-mobile .pnl-tgl{display:none!important}
+
+/* --- الشبكة: نفس عدد الأعمدة دايماً (7) عشان المتصفح يعمل أنميشن للعرض --- */
+body:not(.is-mobile) #app{
+  --pw:292px;--g:10px;
+  gap:var(--g) 0;
+  grid-template-rows:60px 1fr;
+  grid-template-columns:66px var(--g) var(--pw) var(--g) 1fr var(--g) var(--pw);
+  grid-template-areas:"bar bar bar bar bar bar bar" "rail . dock . vp . side";
+  transition:grid-template-columns var(--pnl-dur) var(--pnl-ease);
+}
+body:not(.is-mobile).hide-dock #app{grid-template-columns:66px var(--g) 0px 0px 1fr var(--g) var(--pw)}
+body:not(.is-mobile).hide-side #app,
+body:not(.is-mobile).noside #app{grid-template-columns:66px var(--g) var(--pw) var(--g) 1fr 0px 0px}
+body:not(.is-mobile).hide-dock.hide-side #app,
+body:not(.is-mobile).hide-dock.noside #app{grid-template-columns:66px var(--g) 0px 0px 1fr 0px 0px}
+@media (max-width:1000px){body:not(.is-mobile) #app{--pw:250px}}
+
+body:not(.is-mobile) #vp{min-width:0}
+/* النوافذ: تفضل بعرضها الكامل وتنزلق وتتلاشى (بدل display:none) */
+body:not(.is-mobile) #dock,body:not(.is-mobile) #side{
+  width:var(--pw);min-width:0;display:flex;
+  transition:opacity .26s ease,transform var(--pnl-dur) var(--pnl-ease),visibility 0s linear 0s;
+}
+body:not(.is-mobile) #dock{justify-self:start}
+body:not(.is-mobile) #side{justify-self:end}
+body:not(.is-mobile).hide-dock #dock{opacity:0;transform:translateX(-28px) scale(.985);visibility:hidden;pointer-events:none;
+  transition:opacity .22s ease,transform var(--pnl-dur) var(--pnl-ease),visibility 0s linear var(--pnl-dur)}
+body:not(.is-mobile).hide-side #side,
+body:not(.is-mobile).noside #side{opacity:0;transform:translateX(28px) scale(.985);visibility:hidden;pointer-events:none;
+  transition:opacity .22s ease,transform var(--pnl-dur) var(--pnl-ease),visibility 0s linear var(--pnl-dur)}
+
+@media (prefers-reduced-motion:reduce){
+  body:not(.is-mobile) #app,body:not(.is-mobile) #dock,body:not(.is-mobile) #side,.pnl-tgl,.pnl-tgl svg{transition-duration:.01ms!important}
+  .pnl-tgl.pulse{animation:none}
+}

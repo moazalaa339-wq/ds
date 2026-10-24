@@ -163,6 +163,16 @@ button.on{border-color:rgba(45,226,196,.6);background:linear-gradient(180deg,rgb
 }
 .brand{display:flex;align-items:center;gap:8px}
 .gbrand-logo{width:32px;height:32px;object-fit:contain;border-radius:50%;filter:drop-shadow(0 0 10px rgba(255,190,61,.45)) drop-shadow(0 2px 6px rgba(0,0,0,.3))}
+
+.net-status{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.ns-chip{font-size:11.5px;font-weight:700;padding:4px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.05);color:var(--mu);transition:all .25s}
+.ns-chip[data-s="ok"]{color:#5ff0a4;border-color:rgba(95,240,164,.5);background:rgba(95,240,164,.1)}
+.ns-chip[data-s="bad"]{color:#ff8a9b;border-color:rgba(255,138,155,.5);background:rgba(255,138,155,.1)}
+.net-compare{margin-top:8px;border:1px solid rgba(45,226,196,.3);border-radius:10px;background:rgba(10,14,24,.6);padding:6px 10px}
+.net-compare summary{cursor:pointer;font-size:12.5px;font-weight:800;color:#7ff0dc;padding:4px 0}
+.nc-grid{display:grid;gap:8px;margin:8px 0 4px}
+.nc-card{border:1px solid rgba(255,255,255,.1);border-radius:9px;padding:8px 10px;background:rgba(255,255,255,.03);font-size:12px;line-height:1.55}
+.nc-card ul{margin:4px 0 0;padding-inline-start:18px;color:#cbd5e1}
 </style>
 <script src="hawa-fx.js"></script>
 </head>
@@ -227,6 +237,21 @@ button.on{border-color:rgba(45,226,196,.6);background:linear-gradient(180deg,rgb
         <button type="button" id="ntCodes">🔑 تبادل أكواد</button>
       </div>
       <div class="msg" id="netTypeHint"></div>
+      <div id="netStatus" class="net-status">
+        <span class="ns-chip" id="nsNet" data-s="wait">🌐 الإنترنت: بيتفحص…</span>
+        <span class="ns-chip" id="nsLan" data-s="wait">📡 السيرفر المحلي: بيتفحص…</span>
+      </div>
+      <details class="net-compare" id="netCompare">
+        <summary>❓ إيه الفرق بين إنترنت (PeerJS) وشبكة محلية (LAN) وتبادل الأكواد؟</summary>
+        <div class="nc-grid">
+          <div class="nc-card"><b>🌐 إنترنت (PeerJS)</b>
+            <ul><li>لاعبين من أي مكان في العالم</li><li>محتاج إنترنت عند <u>كل</u> اللاعبين</li><li>سيرفر مجاني (0.peerjs.com) بيعرّف اللاعبين على بعض بس، واللعب نفسه مباشر بينهم</li><li>الكود قصير (6 حروف) + اسم الرووم</li><li>مش محتاج START_SERVER</li></ul></div>
+          <div class="nc-card"><b>📡 شبكة محلية (LAN)</b>
+            <ul><li>نفس الواي فاي / الراوتر بس — من غير إنترنت</li><li>المضيف لازم يشغّل <b>START_SERVER.bat</b></li><li>الضيوف يفتحوا اللعبة من <b>رابط المضيف</b> (http://IP:المنفذ/game.html) مش من ملف على جهازهم</li><li>أسرع وأثبت (ping قليل)</li></ul></div>
+          <div class="nc-card"><b>🔑 تبادل أكواد</b>
+            <ul><li>من غير سيرفر خالص</li><li>بتنسخ كود العرض والرد يدوياً (واتساب…)</li><li>الحل لو الإنترنت بطيء أو السيرفرين مش شغالين</li></ul></div>
+        </div>
+      </details>
       <div class="msg ok" id="lanInfo" style="display:none"></div>
 
       <div class="row">
@@ -247,15 +272,11 @@ button.on{border-color:rgba(45,226,196,.6);background:linear-gradient(180deg,rgb
         </label>
         <div class="msg" id="createMsg"></div>
         <div class="row"><button type="button" class="pri" id="btnDoCreate" style="flex:1">إنشاء وبدء اللوبي</button></div>
-        <div id="hostCodeBox" style="display:none">
-          <label>كود الرووم</label>
-          <div class="codebox" id="hostCode">—</div>
-          <div class="msg" id="hostCodeHelp"></div>
-        </div>
       </div>
 
       <div id="joinBox" style="display:none;flex-direction:column;gap:10px;margin-top:8px">
         <div id="joinPeerLanFields" style="display:flex;flex-direction:column;gap:10px">
+          <div class="msg" id="joinNetNote"></div>
           <label>اسم الرووم</label>
           <input id="joinRoomName" placeholder="اسم الرووم" maxlength="40">
           <label>كود الشبكة</label>
@@ -304,6 +325,17 @@ button.on{border-color:rgba(45,226,196,.6);background:linear-gradient(180deg,rgb
       </div>
 
       <!-- اللوبي -->
+      <div id="hostCodeBox" style="display:none;margin-top:10px;padding:12px;border:1px solid rgba(255,190,61,.45);border-radius:12px;background:rgba(255,190,61,.06)">
+        <label>كود الرووم</label>
+        <div class="codebox" id="hostCode">—</div>
+        <div class="msg" id="hostCodeHelp"></div>
+        <div class="row" style="margin-top:6px">
+          <button type="button" id="btnCopyCode">📋 نسخ الكود</button>
+          <button type="button" id="btnCopyInvite" class="pri">📨 نسخ رسالة الدعوة</button>
+        </div>
+        <textarea id="hostInvite" readonly rows="6" style="width:100%;margin-top:8px;direction:rtl;font:12px/1.6 Cairo,Tahoma,sans-serif;background:#060a12;color:#e2e8f0;border:1px solid #334;border-radius:8px;padding:8px"></textarea>
+      </div>
+
       <div class="lobby" id="lobby">
         <div class="msg ok" id="lobbyTitle" style="font-size:15px;font-weight:900">اللوبي</div>
         <div class="msg" id="lobbyCap" style="opacity:.85"></div>
@@ -605,14 +637,14 @@ function setNetType(t) {
   const peerLanCreate = document.getElementById('createPeerLanFields');
   const codesHint = document.getElementById('joinCodesHint');
   if (t === 'peerjs') {
-    if (hint) hint.textContent = 'يحتاج إنترنت — كود قصير عبر PeerJS';
+    if (hint) hint.textContent = '🌐 إنترنت (PeerJS): لاعبين من أي مكان — محتاج إنترنت عند الكل، والكود قصير.';
     if (lanInfo) lanInfo.style.display = 'none';
     if (codesBox) codesBox.style.display = 'none';
     if (peerLanJoin) peerLanJoin.style.display = 'flex';
     if (peerLanCreate) peerLanCreate.style.display = 'flex';
     if (codesHint) codesHint.style.display = 'none';
   } else if (t === 'lan') {
-    if (hint) hint.textContent = 'نفس الواي فاي — يحتاج START_SERVER.bat';
+    if (hint) hint.textContent = '📡 شبكة محلية (LAN): نفس الواي فاي بس — المضيف يشغّل START_SERVER.bat والضيوف يفتحوا اللعبة من رابطه.';
     if (lanInfo) {
       lanInfo.style.display = 'block';
       lanInfo.textContent = 'جاري قراءة عنوان الشبكة المحلية…';
@@ -649,6 +681,103 @@ $('#ntPeer').onclick = () => setNetType('peerjs');
 $('#ntLan').onclick = () => setNetType('lan');
 $('#ntCodes').onclick = () => setNetType('codes');
 setNetType('peerjs');
+const _setNT = setNetType;
+setNetType = function (t) {
+  _setNT(t);
+  const n = $('#joinNetNote');
+  if (n) n.textContent = t === 'lan' ? '📡 LAN: لازم تفتح اللعبة من رابط المضيف (http://IP:المنفذ/game.html) وتكون على نفس الواي فاي، وبعدين الصق الكود.' : (t === 'peerjs' ? '🌐 إنترنت: اكتب اسم الرووم والكود زي ما المضيف بعتهم.' : '');
+  try { probeNet(); } catch (_) {}
+};
+setNetType(netType);
+
+/* ===== فحص حالة الشبكة + شرح الفرق + كود الدعوة ===== */
+function setChip(id, state, text) { const el = $(id); if (el) { el.dataset.s = state; el.textContent = text; } }
+async function probeNet() {
+  // الإنترنت (سيرفر PeerJS السحابي)
+  setChip('#nsNet', 'wait', '🌐 الإنترنت: بيتفحص…');
+  try {
+    const ac = new AbortController(); const tm = setTimeout(() => ac.abort(), 5000);
+    await fetch('https://0.peerjs.com/', { mode: 'no-cors', cache: 'no-store', signal: ac.signal });
+    clearTimeout(tm);
+    setChip('#nsNet', 'ok', '🌐 الإنترنت/PeerJS: متاح');
+  } catch (_) { setChip('#nsNet', 'bad', '🌐 الإنترنت/PeerJS: مش متاح (جرّب LAN أو تبادل الأكواد)'); }
+  // السيرفر المحلي (LAN)
+  if (location.protocol === 'file:') { setChip('#nsLan', 'bad', '📡 LAN: افتح اللعبة من السيرفر (مش من ملف)'); return; }
+  try {
+    const j = await (await fetch('/api/lan/info', { cache: 'no-store' })).json();
+    if (j && j.ok) setChip('#nsLan', 'ok', '📡 LAN: السيرفر شغال' + ((j.ips && j.ips[0]) ? ' · ' + j.ips[0] : ''));
+    else setChip('#nsLan', 'bad', '📡 LAN: شغّل START_SERVER.bat');
+  } catch (_) { setChip('#nsLan', 'bad', '📡 LAN: شغّل START_SERVER.bat'); }
+}
+async function lanJoinUrl() {
+  try {
+    const j = await (await fetch('/api/lan/info', { cache: 'no-store' })).json();
+    const ip = (j.ips || []).find(x => x && !/^127\./.test(x)) || '';
+    const port = j.port || location.port;
+    if (ip) return 'http://' + ip + (port ? ':' + port : '') + '/game.html';
+  } catch (_) {}
+  return '';
+}
+function netErrHint(e) {
+  const m = String((e && e.message) || e || '');
+  if (netType === 'lan') return m + ' — اتأكد إن START_SERVER.bat شغال وإنك فاتح اللعبة من http://localhost مش من ملف.';
+  if (netType === 'peerjs') return m + ' — لو الإنترنت بطيء جرّب «شبكة محلية» أو «تبادل أكواد».';
+  return m;
+}
+async function showHostCode(n, rn) {
+  const code = String((n && (n.code || n.peerId)) || '').trim().toUpperCase();
+  const codeEl = $('#hostCode'), help = $('#hostCodeHelp'), inv = $('#hostInvite');
+  if (!code) {
+    if (codeEl) codeEl.textContent = '⚠ مفيش كود';
+    if (help) { help.className = 'msg err'; help.textContent = 'السيرفر ما رجّعش كود. ' + (netType === 'lan' ? 'تأكد إن START_SERVER.bat شغال.' : 'اتأكد من الإنترنت أو استخدم «تبادل أكواد».'); }
+    if (inv) inv.value = '';
+    return '';
+  }
+  if (codeEl) codeEl.textContent = code;
+  { const cap = $('#lobbyCap'); if (cap) cap.textContent = '🔑 كود الرووم: ' + code + (rn ? ' · الاسم: ' + rn : ''); }
+  const gname = (gameData && gameData.name) || '';
+  let how = '', url = '';
+  if (netType === 'lan') {
+    url = await lanJoinUrl();
+    how = '📡 شبكة محلية (LAN) — لازم تكون على نفس الواي فاي مع المضيف.\n' +
+      (url ? 'افتح الرابط ده: ' + url + '\n' : 'اطلب من المضيف رابط اللعبة (http://IP:المنفذ/game.html).\n') +
+      'بعدين: أونلاين ← انضمام ← شبكة محلية ← الصق الكود.';
+    if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
+      if (help) { help.className = 'msg'; help.textContent = url ? 'الضيوف لازم يفتحوا الرابط ده (مش localhost): ' + url : 'الضيوف مش هيقدروا يدخلوا من localhost — شارك IP جهازك والمنفذ.'; }
+    } else if (help) { help.className = 'msg ok'; help.textContent = 'ابعت الكود + الرابط لأصدقائك على نفس الواي فاي'; }
+  } else {
+    const pub = /^https?:$/.test(location.protocol) && !/^(localhost|127\.|192\.168\.|10\.)/.test(location.hostname);
+    url = pub ? location.origin + location.pathname : '';
+    how = '🌐 إنترنت (PeerJS) — محتاج إنترنت.\n' + (url ? 'افتح: ' + url + '\n' : '') +
+      'بعدين: أونلاين ← انضمام ← إنترنت ← اكتب اسم الرووم والكود.';
+    if (help) { help.className = 'msg ok'; help.textContent = 'ابعت اسم الرووم والكود لأصدقائك لينضموا'; }
+  }
+  if (inv) inv.value = '🎮 تعالى العب معايا' + (gname ? ' «' + gname + '»' : '') + '\nاسم الرووم: ' + (rn || '—') + '\nكود الشبكة: ' + code + '\n' + how;
+  return code;
+}
+(function wireCopy() {
+  const cp = (txt, okMsg) => {
+    if (!txt) return;
+    const done = () => { const h = $('#hostCodeHelp'); if (h) { h.className = 'msg ok'; h.textContent = okMsg; } };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(done).catch(() => { const t = $('#hostInvite'); if (t) { t.select(); document.execCommand('copy'); done(); } });
+    else { const t = $('#hostInvite'); if (t) { t.value = t.value || txt; t.select(); document.execCommand('copy'); done(); } }
+  };
+  const a = $('#btnCopyCode'), b = $('#btnCopyInvite');
+  if (a) a.onclick = () => { const c = ($('#hostCode') || {}).textContent || ''; if (/^[A-Z0-9-]{4,}$/i.test(c)) cp(c, '✔ تم نسخ الكود'); };
+  if (b) b.onclick = () => cp(($('#hostInvite') || {}).value || '', '✔ تم نسخ رسالة الدعوة');
+})();
+probeNet();
+/* رابط دعوة: ?net=lan|peerjs&room=..&code=.. يعبّي الانضمام تلقائياً */
+(function inviteFromUrl() {
+  try {
+    const q = new URLSearchParams(location.search), c = (q.get('code') || '').trim();
+    if (!c) return;
+    const t = q.get('net'); if (t === 'lan' || t === 'peerjs') setNetType(t);
+    if ($('#joinCode')) $('#joinCode').value = c;
+    if ($('#joinRoomName') && q.get('room')) $('#joinRoomName').value = q.get('room');
+    setTimeout(() => { try { showJoinUi(); } catch (_) {} }, 0);
+  } catch (_) {}
+})();
 
 function hideLobbyUi() {
   const lob = $('#lobby');
@@ -961,8 +1090,7 @@ $('#btnDoCreate').onclick = async () => {
       roomPlayers = [{ id: net.peerId || 'host', name: hn, slot: 1, host: true, ready: true }];
       showEl('createBox', 'none');
       showEl('hostCodeBox', 'block');
-      if ($('#hostCode')) $('#hostCode').textContent = net.code || net.peerId || '—';
-      if ($('#hostCodeHelp')) $('#hostCodeHelp').textContent = 'ابعث الكود واسم الرووم لأصدقائك لينضموا';
+      await showHostCode(net, rn);
       $('#lobby').classList.add('on');
       showEl('btnStart', 'block');
       $('#lobbyTitle').textContent = 'لوبي «' + rn + '» · ' + (gameData.name||'');
@@ -973,7 +1101,7 @@ $('#btnDoCreate').onclick = async () => {
     }
   } catch (e) {
     $('#createMsg').className = 'msg err';
-    $('#createMsg').textContent = '⚠ ' + (e.message||e);
+    $('#createMsg').textContent = '⚠ ' + netErrHint(e);
   }
 };
 
@@ -1125,7 +1253,7 @@ $('#btnDoJoin').onclick = async () => {
     }
   } catch (e) {
     $('#joinMsg').className = 'msg err';
-    $('#joinMsg').textContent = '⚠ ' + (e.message||e);
+    $('#joinMsg').textContent = '⚠ ' + netErrHint(e);
   }
 };
 

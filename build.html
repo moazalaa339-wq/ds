@@ -39,16 +39,16 @@
     <div class="grow"></div>
 
     <button id="bPlayNet" type="button" class="playnet-chip" title="حالة المشروع">❓<i>—</i></button>
+    <button id="bMyFiles" type="button" title="ملفاتي">📁<i>ملفاتي</i></button>
 
     <div class="seg seg-proj">
-      <button id="bSave" title="حفظ"><span data-ic="save"></span><i>حفظ</i></button>
       <button id="bProjDown" title="تحميل المشروع"><span data-ic="save"></span><i>تحميل</i></button>
       <button id="bProjUp" title="رفع المشروع"><span data-ic="load"></span><i>رفع</i></button>
     </div>
     <details class="menu" id="barMenu">
       <summary title="المزيد"><span>⋯</span><i>المزيد</i></summary>
       <div class="menu-pop">
-        <button id="bMyFiles" type="button" title="ملفاتي">📁<i>ملفاتي</i></button>
+        <button id="bSave" title="حفظ فوري (الحفظ تلقائي دائماً)"><span data-ic="save"></span><i>حفظ فوري</i></button>
         <button id="bStorage" title="عرض التخزين">💾<i>عرض التخزين</i></button>
         <button id="bConvert" class="go convert-btn" type="button" title="تحويل إلى لعبة">📦<i>تحويل إلى لعبة</i></button>
         <button id="bWipe" class="danger-btn" title="حذف الكلي">🗑<i>حذف الكلي</i></button>
@@ -115,6 +115,8 @@
   <!-- منطقة العرض -->
   <main id="vp">
     <canvas id="cv"></canvas>
+    <button type="button" id="tglDock" class="pnl-tgl pnl-tgl-l" title="إخفاء / إظهار نافذة الأقسام" aria-label="إخفاء أو إظهار نافذة الأقسام"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
+    <button type="button" id="tglSide" class="pnl-tgl pnl-tgl-r" title="إخفاء / إظهار نافذة المشهد" aria-label="إخفاء أو إظهار نافذة المشهد"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
 
     <div id="modeChip" class="chip-top">🏗 بناء</div>
     <div id="marqueeBox" hidden></div>
