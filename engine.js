@@ -784,22 +784,29 @@ function syncPlayNetUI() {
   const b = document.getElementById('bPlayNet');
   if (!b) return;
   const m = S.playNet;
+  b.classList.remove('playnet-online', 'playnet-offline', 'playnet-ask');
   if (m === 'online') {
     b.innerHTML = '🌐<i>أونلاين</i>';
-    b.title = 'أونلاين';
-    b.classList.add('on');
-    b.classList.remove('playnet-ask');
+    b.title = 'المشروع أونلاين';
+    b.classList.add('on', 'playnet-online');
   } else if (m === 'offline') {
     b.innerHTML = '📴<i>أوفلاين</i>';
-    b.title = 'أوفلاين';
-    b.classList.add('on');
-    b.classList.remove('playnet-ask');
+    b.title = 'المشروع أوفلاين';
+    b.classList.add('on', 'playnet-offline');
   } else {
-    b.innerHTML = '❓<i>أونلاين / أوفلاين</i>';
-    b.title = 'أونلاين / أوفلاين';
+    b.innerHTML = '❓<i>غير محدد</i>';
+    b.title = 'حدد نوع المشروع';
     b.classList.remove('on');
     b.classList.add('playnet-ask');
   }
+  // تحديث زر الموبايل في قائمة المزيد إن وُجد
+  try {
+    document.querySelectorAll('[data-proxy="bPlayNet"]').forEach(el => {
+      if (m === 'online') el.innerHTML = '<span>🌐</span>أونلاين';
+      else if (m === 'offline') el.innerHTML = '<span>📴</span>أوفلاين';
+      else el.innerHTML = '<span>❓</span>أونلاين / أوفلاين';
+    });
+  } catch (_) {}
   try { updOnRsBtn(); } catch (_) {}
 }
 function removeAllOnlineSpawns() {
@@ -836,10 +843,11 @@ function applyPlayNetMode(mode, opts) {
 function uiPlayNetChoice() {
   return new Promise(resolve => {
     const { actions, msgEl } = HawaUI._open(
-      'تفعيل المشروع — اختيار مرة واحدة فقط\n\n' +
-      '• أوفلاين: لعب محلي فقط · تُحذف نقاط بدء الأونلاين · التلقائي بدون مزامنة لاعبين\n' +
-      '• أونلاين: نفس منطق الأوفلاين + مزامنة أونلاين بين اللاعبين\n\n' +
-      'لا يمكن التبديل لاحقاً إلا بعد حذف المشروع بالكامل.'
+      'نوع المشروع الجديد\n\n' +
+      'اختار هتشتغل بإيه:\n' +
+      '• أوفلاين: لعب محلي فقط · بدون مزامنة لاعبين\n' +
+      '• أونلاين: لعب محلي + مزامنة بين اللاعبين\n\n' +
+      'مكان التخزين الحالي هيفضل كما هو.'
     );
     msgEl.style.whiteSpace = 'pre-wrap';
     const off = document.createElement('button');
@@ -868,10 +876,21 @@ function autoDetectPlayNet() {
 }
 async function ensurePlayNetChosen(forceAsk) {
   if (window.HAWA_PLAY_ONLY) return S.playNet || autoDetectPlayNet();
-  // لو محدد مسبقاً — رجّعه بس (من غير تنبيهات)
-  if (S.playNet === 'online' || S.playNet === 'offline') {
+  // لو محدد مسبقاً ومش إجباري السؤال — رجّعه
+  if (!forceAsk && (S.playNet === 'online' || S.playNet === 'offline')) {
     syncPlayNetUI();
     return S.playNet;
+  }
+  // سؤال صريح (بعد حذف كلي أو طلب إجباري)
+  if (forceAsk) {
+    try {
+      const choice = await uiPlayNetChoice();
+      if (choice === 'online' || choice === 'offline') {
+        applyPlayNetMode(choice, { silent: false });
+        syncPlayNetUI();
+        return S.playNet;
+      }
+    } catch (_) {}
   }
   // تلقائي: وجود نقطة أونلاين = أونلاين، غير كده أوفلاين
   const choice = autoDetectPlayNet();
@@ -4544,7 +4563,7 @@ async function uploadProjectZip(file) {
 }
 async function wipeProjectTotal() {
   for (let i = 1; i <= 3; i++) {
-    const ok = await uiConfirm('تأكيد ' + i + ' من 3\n\nهذا سيحذف كل شيء في المشروع الحالي (كائنات، برمجة، كائنات برمجية، وسائط، تخزين محلي).\nهل أنت متأكد؟');
+    const ok = await uiConfirm('تأكيد ' + i + ' من 3\n\nهذا سيحذف محتوى المشروع الحالي (كائنات، برمجة، كائنات برمجية، وسائط).\nمكان التخزين اللي محدد هيفضل زي ما هو.\nهل أنت متأكد؟');
     if (!ok) { try { tip('تم إلغاء الحذف'); } catch (_) {} return; }
   }
   try { if (S.mode === 'play') playStop(); } catch (_) {}
@@ -4554,27 +4573,43 @@ async function wipeProjectTotal() {
   S.media = {}; S.mediaOrder = [];
   S.nid = 1; S.sid = 1; S.did = 1; S.mid = 1;
   S.sel = null; S.paramOpen = false;
-  S.playNet = null; 
+  S.playNet = null;
+  S.roomMinEnabled = false;
+  S.roomFillExact = false;
+  S.roomMinPlayers = 2;
   try { SCH.clear(); } catch (_) {}
-  try { localStorage.removeItem('hawa2'); } catch (_) {} 
+  // امسح نسخة المشروع فقط — متلمسش مكان التخزين / مجلد الجهاز
+  try { localStorage.removeItem('hawa2'); } catch (_) {}
+  try { localStorage.removeItem('hawa2-project'); } catch (_) {}
+  try { localStorage.removeItem('hawa2-room'); } catch (_) {}
   try { closeParamPanel(); } catch (_) {}
   hier(); pList(); sList(); inspect();
-  try { demo(); } catch (_) {  }
-  chg();
+  try { demo(); } catch (_) {}
   try { syncPlayNetUI(); } catch (_) {}
-  try { save(); } catch (_) {}
-  try { tip('✔ المشروع اتصفر'); } catch (_) {}
-  
-  try { await ensurePlayNetChosen(false); } catch (_) {}
+  // امسح محتوى المجلد/السيرفر لكن نفس المسار يفضل مربوط
   if (StoreFS.mode === 'server') {
     try { await fetch('/api/fs/wipe', { method: 'POST' }); StoreFS._fp.clear(); } catch (_) {}
-    try { await StoreFS.saveAll(); } catch (_) {}
-    try { tip('✔ المشروع اتمسح · التخزين تلقائي'); } catch (_) {}
-    return;
+  } else if (StoreFS.isFolderLike && StoreFS.isFolderLike()) {
+    try {
+      // اكتب مشروع فاضي على نفس المجلد
+      await StoreFS.saveAll();
+    } catch (_) {}
   }
-  // مفيش إجبار على اختيار مجلد — localStorage أو المجلد الحالي يكفي
-  try { await StoreFS.saveAll(); } catch (_) {}
-  try { tip('✔ المشروع اتمسح'); } catch (_) {}
+  try { tip('✔ اتمسح المشروع · مكان التخزين كما هو'); } catch (_) {}
+  // بعد المسح: اسأل نوع المشروع الجديد
+  try {
+    const choice = await uiPlayNetChoice();
+    if (choice === 'online' || choice === 'offline') {
+      applyPlayNetMode(choice, { silent: false });
+    } else {
+      applyPlayNetMode('offline', { silent: true });
+    }
+  } catch (_) {
+    try { applyPlayNetMode('offline', { silent: true }); } catch (__) {}
+  }
+  try { save(); } catch (_) {}
+  try { if (StoreFS.isFolderLike && StoreFS.isFolderLike()) await StoreFS.saveAll(); } catch (_) {}
+  try { if (StoreFS.mode === 'server') await StoreFS.saveAll(); } catch (_) {}
 }
 /** نافذة تقدم النقل بين أماكن التخزين */
 function showTransferProgress(fromName, toName) {
