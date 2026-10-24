@@ -95,6 +95,10 @@ const API = `⚠ الصيغة الإلزامية: Game.defineParams([...]) أو�
 onStart(self,game) onUpdate(self,game,dt) onTouch(self,game,dt)  (قديم — للتوافق فقط، لا تستخدمه للكود الجديد)
 self: name,props,mesh,position,rotation,scale,hide,show,hideBody,dist
 game: THREE,scene,camera,time,score,addScore,say,respawn,key,setKey,forcePlayerInput,find,player,coords,setHud,setPlayerLimb,touch
+⚠ صيغة Game.defineParams: كل عنصر {key:'speed',label:'السرعة (م/ث)',type:'number'|'color'|'boolean'|'vec3'|'text',value:5,min:0,max:20,step:0.5} — الحقل اسمه value (مش default).
+⚠ ممنوع تضيف بارامترات إحداثيات أو مواضع (x/y/z/pos/offset/مكان…) إلا لو المستخدم طلب ذلك صراحة — مكان الكائن بيتحدد من المحرك (الموضع/Transform) مش من البارامترات.
+⚠ الصيغة الجديدة (Game.*): الأب لأي مجسم تضيفه = root (متغير جاهز في السكربت) — استخدم root.add(mesh) عشان يتنضف لما تقفل الاختبار. Game.THREE و Game.scene موجودين. مفيش Game.say ولا Game.time: استخدم Game.subtitle("نص") للرسائل، وللزمن المتزامن أونلاين Date.now()/1000.
+تصادم مجسمات السكربت: Game.addSolidBox(cx,cy,cz,w,h,d) بإحداثيات العالم (مربع محاذي للمحاور، بيرجّع true/false) — شغال في وضع الاختبار بس. استخدمه للعمارات والحيطان عشان اللاعب ما يعديش منها.
 مدخل موحّد (كيبورد + موبايل نفس المصدر):
   game.key('KeyW'|'KeyA'|'KeyS'|'KeyD'|'Space'|'KeyE'|'KeyF'|...)
   game.setKey(code,true|false) — كأنك بتضغط/بتسيب زر كيبورد (يشتغل لأي سكربت/مركبة/تفاعل)
@@ -234,15 +238,99 @@ function parseParams(code) {
 const BIG_RE = /Game\s*\.\s*(onUpdate|defineParams|registerInteractAction)\b/;
 const isBig = code => BIG_RE.test(code || '');
 const SCH = new Map();
+/** استخراج مصفوفة defineParams بأقواس متوازنة (مقاوم لـ ] جوه سترينج/تعليق) */
+function extractDefineParamsArray(code) {
+  if (!code) return null;
+  const re = /Game\s*\.\s*defineParams\s*\(\s*\[/;
+  const m = re.exec(code);
+  if (!m) return null;
+  let i = m.index + m[0].length - 1; // على [
+  let depth = 0, inStr = null, esc = false;
+  for (; i < code.length; i++) {
+    const ch = code[i];
+    if (inStr) {
+      if (esc) { esc = false; continue; }
+      if (ch === '\\') { esc = true; continue; }
+      if (ch === inStr) inStr = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === '`') { inStr = ch; continue; }
+    if (ch === '[') depth++;
+    else if (ch === ']') {
+      depth--;
+      if (depth === 0) return code.slice(m.index + m[0].length - 1, i + 1);
+    }
+  }
+  return null;
+}
 function schemaOf(code) {
   if (SCH.has(code)) return SCH.get(code);
   let out = [];
-  const m = /Game\s*\.\s*defineParams\s*\(\s*(\[[\s\S]*?\])\s*\)/.exec(code || '');
-  if (m) { try { out = new Function('return ' + m[1])() || []; } catch (e) { out = []; } }
+  const arrSrc = extractDefineParamsArray(code || '');
+  if (arrSrc) {
+    try { out = new Function('return (' + arrSrc + ')')() || []; }
+    catch (e1) {
+      try { out = new Function('return ' + arrSrc)() || []; } catch (e2) { out = []; }
+    }
+  }
+  if (!Array.isArray(out)) out = [];
   out = out.filter(x => x && x.key);
   SCH.set(code, out); return out;
 }
 const defOf = id => S.sdefs.find(x => x.id === id);
+const RESET_BTN = '<div class="param-defaults-row" style="margin-bottom:8px"><button type="button" class="ok" data-reset-defaults="1" title="رجوع لإعدادات الكود الافتراضية">الإعدادات الافتراضية</button></div>';
+function confirmResetParams() {
+  return new Promise(function (resolve) {
+    try {
+      var old = document.getElementById('hawaConfirmOv');
+      if (old) old.remove();
+      var ov = document.createElement('div');
+      ov.id = 'hawaConfirmOv';
+      ov.className = 'hawa-confirm-ov';
+      ov.innerHTML = '<div class="hawa-confirm-box" role="dialog" aria-modal="true">'
+        + '<div class="hawa-confirm-title">الإعدادات الافتراضية</div>'
+        + '<div class="hawa-confirm-msg">هترجّع كل البارامترات للإعدادات الافتراضية الموجودة في الكود، وأي تعديل عملته هيتمسح.<br><b>متأكد؟</b></div>'
+        + '<div class="hawa-confirm-actions">'
+        + '<button type="button" class="ok" data-yes>نعم، رجّع</button>'
+        + '<button type="button" data-no>إلغاء</button>'
+        + '</div></div>';
+      document.body.appendChild(ov);
+      var done = function (v) {
+        try { ov.remove(); } catch (_) {}
+        resolve(!!v);
+      };
+      ov.querySelector('[data-yes]').onclick = function (e) { e.preventDefault(); e.stopPropagation(); done(true); };
+      ov.querySelector('[data-no]').onclick = function (e) { e.preventDefault(); e.stopPropagation(); done(false); };
+      ov.addEventListener('click', function (e) { if (e.target === ov) done(false); });
+      setTimeout(function () { try { ov.querySelector('[data-yes]').focus(); } catch (_) {} }, 30);
+    } catch (err) {
+      try { resolve(!!window.confirm('هترجّع كل البارامترات للإعدادات الافتراضية؟')); }
+      catch (_) { resolve(false); }
+    }
+  });
+}
+async function doResetParams(target, code, after) {
+  var ok = await confirmResetParams();
+  if (!ok) return false;
+  resetParamsInPlace(target, code);
+  try { if (typeof after === 'function') after(); } catch (_) {}
+  try { tip('تم الرجوع للإعدادات الافتراضية'); } catch (_) {}
+  return true;
+}
+function resetParamsInPlace(target, code) {
+  // امسح كاش السكيما للكود عشان لو اتعدّل يتقرا تاني
+  try { if (code && SCH.has(code)) SCH.delete(code); } catch (_) {}
+  const d = fileDefaultParams(code || '', null);
+  if (!target.p) target.p = {};
+  for (const k of Object.keys(target.p)) delete target.p[k];
+  Object.assign(target.p, d);
+  // لو السكيما رجعت فاضية حاول مرة تانية بعد مسح الكاش
+  if (Object.keys(d).length === 0 && code) {
+    try { SCH.delete(code); } catch (_) {}
+    const d2 = fileDefaultParams(code, null);
+    Object.assign(target.p, d2);
+  }
+}
 
 function fileDefaultParams(code, fileP) {
   const p = {};
@@ -2777,11 +2865,22 @@ function syncParamPanel() {
     body.innerHTML = '<p class=\"mut small\">—</p>';
     return;
   }
-  body.innerHTML = sch.map(e => paramRow(o, e.key, e.label || e.key, e)).join('')
+  body.innerHTML = RESET_BTN + sch.map(e => paramRow(o, e.key, e.label || e.key, e)).join('')
     + '<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">'
     + '<button type="button" id="paramFromFile" class="ok" title="من الملف">من الملف</button>'
     + '</div>'
 ;
+  const rb = body.querySelector('[data-reset-defaults]');
+  if (rb) rb.onclick = (ev) => {
+    if (ev) { ev.preventDefault(); ev.stopPropagation(); }
+    doResetParams(o, d.code, () => {
+      clearTimeout(prevT);
+      prevT = setTimeout(() => { try { refreshPreview(o); } catch (_) {} }, 80);
+      chg();
+      syncParamPanel();
+      try { inspect(); } catch (_) {}
+    });
+  };
   const btn = document.getElementById('paramFromFile');
   if (btn) btn.onclick = () => {
     applyFileParamsToObject(o);
@@ -2831,6 +2930,18 @@ function bindParamPanel() {
       });
       return;
     }
+    const rst = e.target.closest('[data-reset-defaults]');
+    if (rst) {
+      e.preventDefault(); e.stopPropagation();
+      const d = defOf(o.def);
+      doResetParams(o, d ? d.code : '', () => {
+        clearTimeout(prevT);
+        prevT = setTimeout(() => { try { refreshPreview(o); } catch (_) {} }, 80);
+        chg(); syncParamPanel();
+        try { inspect(); } catch (_) {}
+      });
+      return;
+    }
     const b = e.target.closest('[data-p-clr]'); if (!b) return;
     const key = b.getAttribute('data-p-clr');
     o.p[key] = '';
@@ -2859,7 +2970,7 @@ function inspect() {
     + `<label class="r"><input type="checkbox" data-k="hidden" ${o.hidden ? 'checked' : ''}> مخفي</label></div>`;
   if (big) {
     const sch = schemaOf(defOf(o.def).code);
-    h += `<div class="cp"><h4>${esc(o.name)} · البارامترات</h4>`
+    h += `<div class="cp"><h4>${esc(o.name)} · البارامترات</h4>` + RESET_BTN
       + (sch.length ? sch.map(e => paramRow(o, e.key, e.label, e)).join('') : '<p class="mut small">—</p>')
       + `<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap"><button type="button" data-from-file="1" class="ok">من الملف</button>`
       + `<button type="button" class="unit-viewer-btn" data-unit-view title="عارض الوحدة الافتراضية">عارض الوحده الافتراضيه</button></div>`
@@ -2936,6 +3047,15 @@ $('#ins').addEventListener('click', e => {
     try { syncParamPanel(); } catch (_) {}
     return;
   }
+  if (b.hasAttribute && b.hasAttribute('data-reset-defaults')) {
+    const _d = defOf(o.def);
+    doResetParams(o, _d ? _d.code : '', () => {
+      try { refreshPreview(o); } catch (_) {}
+      chg(); inspect();
+      try { syncParamPanel(); } catch (_) {}
+    });
+    return;
+  }
   if (b.dataset.fromFile || b.getAttribute('data-from-file')) {
     applyFileParamsToObject(o);
     inspect();
@@ -2969,13 +3089,21 @@ function openScriptParams(id) {
   const holder = {p: s.p};
   const keys = sch.length ? sch : Object.keys(s.p).map(k => ({ key: k, label: k, value: s.p[k] }));
   m.innerHTML = `<div style="background:#14161c;color:#eee;border-radius:12px;padding:16px;min-width:300px;max-width:90vw;max-height:80vh;overflow:auto;direction:rtl">`
-    + `<h4 style="margin:0 0 10px">${esc(s.name)} · بارامترات الملف</h4>`
+    + `<h4 style="margin:0 0 10px">${esc(s.name)} · بارامترات الملف</h4>` + RESET_BTN
     + (keys.length ? keys.map(e => paramRow(holder, e.key, e.label || e.key, e)).join('') : '<p class=\"mut small\">—</p>')
     + `<div style="display:flex;gap:8px;justify-content:space-between;align-items:center;margin-top:12px;flex-wrap:wrap">`
     + `<button type="button" class="unit-viewer-btn" data-unit-view title="عارض الوحدة الافتراضية">عارض الوحده الافتراضيه</button>`
     + `<button data-close>إغلاق</button></div></div>`;
   m.hidden = false;
   m.querySelector('[data-close]').onclick = () => { m.hidden = true; };
+  const _rb = m.querySelector('[data-reset-defaults]');
+  if (_rb) _rb.onclick = (ev) => {
+    if (ev) { ev.preventDefault(); ev.stopPropagation(); }
+    doResetParams(holder, s.code, () => {
+      openScriptParams(id);
+      chg();
+    });
+  };
   m.querySelectorAll('[data-p]').forEach(inp => {
     const k = inp.dataset.p, e = sch.find(x => x.key === k);
     const h = () => {
@@ -3026,13 +3154,21 @@ function openSdefParams(id) {
   const holder = {p: d.p};
   const keys = sch.length ? sch : Object.keys(d.p).map(k => ({ key: k, label: k, value: d.p[k] }));
   m.innerHTML = `<div style="background:#14161c;color:#eee;border-radius:12px;padding:16px;min-width:300px;max-width:90vw;max-height:80vh;overflow:auto;direction:rtl">`
-    + `<h4 style="margin:0 0 10px">${esc(d.name)} · بارامترات الملف</h4>`
+    + `<h4 style="margin:0 0 10px">${esc(d.name)} · بارامترات الملف</h4>` + RESET_BTN
     + (keys.length ? keys.map(e => paramRow(holder, e.key, e.label || e.key, e)).join('') : '<p class=\"mut small\">—</p>')
     + `<div style="display:flex;gap:8px;justify-content:space-between;align-items:center;margin-top:12px;flex-wrap:wrap">`
     + `<button type="button" class="unit-viewer-btn" data-unit-view title="عارض الوحدة الافتراضية">عارض الوحده الافتراضيه</button>`
     + `<button data-close>إغلاق</button></div></div>`;
   m.hidden = false;
   m.querySelector('[data-close]').onclick = () => { m.hidden = true; };
+  const _rb = m.querySelector('[data-reset-defaults]');
+  if (_rb) _rb.onclick = (ev) => {
+    if (ev) { ev.preventDefault(); ev.stopPropagation(); }
+    doResetParams(holder, d.code, () => {
+      openSdefParams(id);
+      chg();
+    });
+  };
   m.querySelectorAll('[data-p]').forEach(inp => {
     const k = inp.dataset.p, e = sch.find(x => x.key === k);
     const h = () => {
@@ -7983,6 +8119,18 @@ function bigGame(rt, o, root) {
     listAllObjects: () => (rt.byName ? Array.from(rt.byName.values()) : []),
     defineParams(list) { for (const e of list || []) if (e && e.key && o.p[e.key] === undefined) o.p[e.key] = e.value; },
     onUpdate(fn) { if (typeof fn === 'function') rt.ups.push(fn); },
+    addSolidBox(cx, cy, cz, w, h, d) {
+      try {
+        if (!rt || !rt.hash || S.mode !== 'play') return false;
+        const hx = Math.abs(+w) / 2, hy = Math.abs(+h) / 2, hz = Math.abs(+d) / 2;
+        if (!isFinite(hx + hy + hz + cx + cy + cz)) return false;
+        const b = {x0: cx - hx, x1: cx + hx, y0: cy - hy, y1: cy + hy, z0: cz - hz, z1: cz + hz, cx, cy, cz};
+        for (let x = Math.floor(b.x0 / CELL); x <= Math.floor(b.x1 / CELL); x++) for (let z = Math.floor(b.z0 / CELL); z <= Math.floor(b.z1 / CELL); z++) {
+          const k = x * 100003 + z; let a = rt.hash.get(k); if (!a) rt.hash.set(k, a = []); a.push(b);
+        }
+        return true;
+      } catch (_) { return false; }
+    },
     isKeyDown: c => keyDown(c),
     key: c => keyDown(c),
     setKey(code, down) { setVirtualKey(code, !!down); },
@@ -9827,9 +9975,8 @@ async function playStart() {
       } else {
         try { document.body.classList.remove('online-play'); } catch (_) {}
         try { VoiceChat.off(); } catch (_) {}
-        try { VoiceChat.ensureBtn(); } catch (_) {}
         const b = document.getElementById('pMic');
-        if (b) { b.classList.add('show'); b.style.display = 'flex'; b.style.visibility = 'visible'; b.style.opacity = '1'; }
+        if (b) { b.classList.remove('show'); b.style.display = 'none'; }
         const bar = document.getElementById('pOnlineBar');
         if (bar) bar.classList.remove('show');
       }
