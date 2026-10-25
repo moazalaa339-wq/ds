@@ -1,7 +1,7 @@
 {
   "name": "Hawa Engine",
   "short_name": "Hawa",
-  "start_url": "index.html",
+  "start_url": "./",
   "scope": "/",
   "display": "standalone",
   "orientation": "any",

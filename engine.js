@@ -2716,7 +2716,7 @@ function setTestUrl(mode) {
       document.title = mode === 'half' ? 'Test Mode (Half)' : 'Test Mode';
     } else {
       sessionStorage.removeItem('hawa_test_ok');
-      if (/[?&]test(mode)?(&|=|$)/.test(location.search)) history.replaceState(null, '', 'build.html');
+      if (/[?&]test(mode)?(&|=|$)/.test(location.search)) history.replaceState(null, '', 'build');
       document.title = 'Build';
     }
   } catch (_) {}
@@ -3236,7 +3236,7 @@ $('#bSnap').onclick = () => {
   try { chg(); } catch (_) {}
 };
 
-const HAWA_ASSET_NAMES = ['game.html', 'play-runtime.js', 'three.min.js', 'peerjs.min.js', 'jszip.min.js'];
+const HAWA_ASSET_NAMES = ['game', 'play-runtime.js', 'three.min.js', 'peerjs.min.js', 'jszip.min.js'];
 const HAWA_ASSETS = {}; 
 async function preloadGameAssets() {
   let ok = 0;
@@ -3536,7 +3536,7 @@ async function convertToGameImpl() {
     ui.step('rt', 'جلب ملفات التشغيل', 'run');
     const required = [
       ['three.min.js', 'three.min.js'], ['engine.js', 'engine.js'], ['style.css', 'style.css'],
-      ['play.html', 'play.html'], ['index.html', 'play.html'], ['game.html', 'game.html'],
+      ['play', 'play'], ['./', 'play'], ['game', 'game'],
       ['peerjs.min.js', 'peerjs.min.js'], ['jszip.min.js', 'jszip.min.js'], ['play-runtime.js', 'play-runtime.js']
     ];
     const bufs = new Map(), missing = [];
@@ -3607,7 +3607,7 @@ async function convertToGameImpl() {
     addF('manifest.json', JSON.stringify(manifest, null, 2));
     addF('README.txt',
       'Hawa Game: ' + data.name + '\n========================\n' +
-      'شغّل index.html أو game.html في Chrome/Edge (مباشرة أو من سيرفر).\n\nالمحتويات:\n' +
+      'شغّل الصفحة الرئيسية أو game في Chrome/Edge (مباشرة أو من سيرفر).\n\nالمحتويات:\n' +
       included.map(x => ' - ' + x).join('\n') + '\n\n' +
       'كائنات: ' + data.meta.objectCount + '\nسكربتات: ' + data.meta.scriptCount + '\nكائنات برمجية: ' + data.meta.sdefCount +
       '\nملفات ووسائط: ' + data.meta.assetFiles + '\nنقاط أونلاين: ' + data.meta.onlineSlots + '\nنقاط أوفلاين: ' + data.meta.offlineSpawns +
@@ -3695,7 +3695,7 @@ async function convertToGameImpl() {
   };
   try { bindParamPanel(); } catch (_) {}
 })();
-{ const _bo = document.getElementById('bOpenGame'); if (_bo) _bo.onclick = () => { window.open('game.html', '_blank'); }; }
+{ const _bo = document.getElementById('bOpenGame'); if (_bo) _bo.onclick = () => { window.open('game', '_blank'); }; }
 S.showCoord = false; S.pick = false;
 S.boxdel = null; 
 setInterval(() => { try { HawaPad.updateUi(); } catch (_) {} try { syncPadToggles(); } catch (_) {} }, 1000);
@@ -13338,9 +13338,9 @@ const OnlineMenu = {
       sessionStorage.removeItem('hawa_play');
     } catch (_) {}
     try {
-      if (window.parent && window.parent !== window) { window.parent.location.href = 'game.html'; return; }
+      if (window.parent && window.parent !== window) { window.parent.location.href = 'game'; return; }
     } catch (_) {}
-    try { location.href = 'game.html'; } catch (_) {}
+    try { location.href = 'game'; } catch (_) {}
   },
   leaveToHome() {
     try { NetMP.announceLeave(); } catch (_) {}
@@ -13353,11 +13353,11 @@ const OnlineMenu = {
     // لو جوا iframe (تبادل أكواد): رجّع الأب للرئيسية
     try {
       if (window.parent && window.parent !== window) {
-        window.parent.location.href = 'index.html';
+        window.parent.location.href = './';
         return;
       }
     } catch (_) {}
-    try { location.href = 'index.html'; } catch (_) {}
+    try { location.href = './'; } catch (_) {}
   },
   setupOnlineChrome() {
     this.ensure();
@@ -15414,7 +15414,7 @@ function boot() {
       try {
         if (!(d && d.objs && d.objs.length)) {
           await uiAlert('اللعبة مفيهاش بيانات كافية للتشغيل.\nالسبب: ملف اللعبة ما وصلش لوضع اللعب (ارفعه من «فتح اللعبة» قبل إنشاء/انضمام الرووم، أو أعد رفعه).');
-          location.href = 'game.html';
+          location.href = 'game';
           return;
         }
         playStart();

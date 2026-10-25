@@ -197,7 +197,7 @@ button.on{border-color:rgba(45,226,196,.6);background:linear-gradient(180deg,rgb
 </div>
 
 <div class="topbar">
-  <a class="home hawa-icon-btn" href="index.html"><span class="hawa-ico-frame"><svg class="hawa-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11.5L12 4l8 7.5"/><path d="M6.5 10.5V20h11V10.5"/><path d="M10 20v-5h4v5"/></svg></span><i>الرئيسية</i></a>
+  <a class="home hawa-icon-btn" href="./"><span class="hawa-ico-frame"><svg class="hawa-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11.5L12 4l8 7.5"/><path d="M6.5 10.5V20h11V10.5"/><path d="M10 20v-5h4v5"/></svg></span><i>الرئيسية</i></a>
   <div class="brand"><img src="logo-64.png" alt="Hawa" class="gbrand-logo"><b>HAWA</b> · وضع اللعب</div>
   <div class="mode-switch">
     <button type="button" id="mOff" class="on">🏠 أوفلاين</button>
@@ -362,7 +362,7 @@ button.on{border-color:rgba(45,226,196,.6);background:linear-gradient(180deg,rgb
 <div id="playRoot">
   <div id="hud">
     <div class="chip" id="pName">—</div>
-    <div class="hbtns"><a class="hh hawa-icon-btn" href="index.html"><span class="hawa-ico-frame"><svg class="hawa-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11.5L12 4l8 7.5"/><path d="M6.5 10.5V20h11V10.5"/><path d="M10 20v-5h4v5"/></svg></span> الرئيسية</a><button type="button" id="btnExit">خروج</button></div>
+    <div class="hbtns"><a class="hh hawa-icon-btn" href="./"><span class="hawa-ico-frame"><svg class="hawa-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11.5L12 4l8 7.5"/><path d="M6.5 10.5V20h11V10.5"/><path d="M10 20v-5h4v5"/></svg></span> الرئيسية</a><button type="button" id="btnExit">خروج</button></div>
   </div>
 </div>
 
@@ -734,7 +734,7 @@ const _setNT = setNetType;
 setNetType = function (t) {
   _setNT(t);
   const n = $('#joinNetNote');
-  if (n) n.textContent = t === 'lan' ? '📡 LAN: لازم تفتح اللعبة من رابط المضيف (http://IP:المنفذ/game.html) وتكون على نفس الواي فاي، وبعدين الصق الكود.' : (t === 'peerjs' ? '🌐 إنترنت: اكتب اسم الرووم والكود زي ما المضيف بعتهم.' : '');
+  if (n) n.textContent = t === 'lan' ? '📡 LAN: لازم تفتح اللعبة من رابط المضيف (http://IP:المنفذ/game) وتكون على نفس الواي فاي، وبعدين الصق الكود.' : (t === 'peerjs' ? '🌐 إنترنت: اكتب اسم الرووم والكود زي ما المضيف بعتهم.' : '');
   try { probeNet(); } catch (_) {}
 };
 setNetType(netType);
@@ -763,7 +763,7 @@ async function lanJoinUrl() {
     const j = await (await fetch('/api/lan/info', { cache: 'no-store' })).json();
     const ip = (j.ips || []).find(x => x && !/^127\./.test(x)) || '';
     const port = j.port || location.port;
-    if (ip) return 'http://' + ip + (port ? ':' + port : '') + '/game.html';
+    if (ip) return 'http://' + ip + (port ? ':' + port : '') + '/game';
   } catch (_) {}
   return '';
 }
@@ -789,7 +789,7 @@ async function showHostCode(n, rn) {
   if (netType === 'lan') {
     url = await lanJoinUrl();
     how = '📡 شبكة محلية (LAN) — لازم تكون على نفس الواي فاي مع المضيف.\n' +
-      (url ? 'افتح الرابط ده: ' + url + '\n' : 'اطلب من المضيف رابط اللعبة (http://IP:المنفذ/game.html).\n') +
+      (url ? 'افتح الرابط ده: ' + url + '\n' : 'اطلب من المضيف رابط اللعبة (http://IP:المنفذ/game).\n') +
       'بعدين: أونلاين ← انضمام ← شبكة محلية ← الصق الكود.';
     if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
       if (help) { help.className = 'msg'; help.textContent = url ? 'الضيوف لازم يفتحوا الرابط ده (مش localhost): ' + url : 'الضيوف مش هيقدروا يدخلوا من localhost — شارك IP جهازك والمنفذ.'; }
@@ -1628,10 +1628,10 @@ function goPlay(opts) {
         try { w.postMessage({ t: 'hawa_codes_net' }, '*'); } catch (_) {}
       } catch (e) { console.error('inject live net', e); }
     };
-    fr.src = 'play.html';
+    fr.src = 'play';
     return;
   }
-  location.href = 'play.html';
+  location.href = 'play';
 }
 </script>
 
