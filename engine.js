@@ -2286,7 +2286,6 @@ function ghostUpdate() {
             clone.position.set(0, 0, 0);
             clone.rotation.set(0, 0, 0);
             clone.scale.set(1, 1, 1);
-            try { makeGhostBBox(clone, ok); } catch (_) {}
             GH.userData.isFull = true;
             shown = true;
           }
@@ -2836,6 +2835,32 @@ function _marqueeShow(box) {
   el.style.left = x + 'px'; el.style.top = y + 'px';
   el.style.width = w + 'px'; el.style.height = h + 'px';
 }
+function _marqueeIds(box) {
+  const x0 = Math.min(box.x0, box.x1), x1 = Math.max(box.x0, box.x1);
+  const y0 = Math.min(box.y0, box.y1), y1 = Math.max(box.y0, box.y1);
+  const W = vp.clientWidth, H = vp.clientHeight;
+  const v = new T.Vector3(), ids = [];
+  for (const o of S.objs) {
+    if (o.type === 'respawn' || o.type === 'online_spawn') continue;
+    const m = MESH.get(o.id); if (!m || o.hidden) continue;
+    v.set(o.pos[0], o.pos[1] + (o.scl[1] || 1) * 0.5, o.pos[2]).project(cam);
+    if (v.z > 1) continue;
+    const sx = (v.x * 0.5 + 0.5) * W, sy = (-v.y * 0.5 + 0.5) * H;
+    if (sx >= x0 && sx <= x1 && sy >= y0 && sy <= y1) ids.push(o.id);
+  }
+  return ids;
+}
+function _marqueeSelect(box, add) {
+  const ids = _marqueeIds(box);
+  const set = new Set(add ? selIds() : []);
+  ids.forEach(id => set.add(id));
+  S.selGroup = null;
+  S.selSet = [...set];
+  S.sel = ids.length ? ids[ids.length - 1] : (S.selSet.length ? S.selSet[S.selSet.length - 1] : null);
+  selSync();
+  hier();
+  return ids.length;
+}
 function _marqueeDelete(box) {
   if (!box) return 0;
   const x0 = Math.min(box.x0, box.x1), x1 = Math.max(box.x0, box.x1);
@@ -2863,6 +2888,8 @@ cv.addEventListener('pointerdown', e => {
   // في وضع النصفين: لو الماوس تبع الاختبار متتعاملش مع البناء
   if (S.playEdit && _playViewFocused()) return;
   cv.setPointerCapture(e.pointerId); lx = e.clientX; ly = e.clientY; mv = {b: e.button, moved: 0};
+  let gzHit = false;
+  const placingTool = (S.tool === 'place' || S.tool === 'respawn' || S.tool === 'online_spawn');
   if (e.button === 2) rmb = true;
   if (e.button === 0 && S.tool === 'boxdel') {
     const p = _vpLocal(e);
@@ -2873,11 +2900,16 @@ cv.addEventListener('pointerdown', e => {
   }
   // أثناء وضع كائن: تجاهل محاور الجيزمو عشان تقدر تحط حول الكائن المختار
   if (DROPP.mode) return;
-  const placingTool = (S.tool === 'place' || S.tool === 'respawn' || S.tool === 'online_spawn');
   if (e.button === 0 && S.sel != null && gizmo.visible && !placingTool && !S.pick) {
     const list = HIT.filter(h => h.mode === S.gz).map(h => h.m);
     const hh = ray(e).intersectObjects(list, false)[0];
-    if (hh) { const rec = HIT.find(h => h.m === hh.object); if (rec) { startDrag(rec, e); mv.moved = 99; } }
+    if (hh) { const rec = HIT.find(h => h.m === hh.object); if (rec) { startDrag(rec, e); mv.moved = 99; gzHit = true; } }
+  }
+  // تحديد بالمستطيل: ضغط شمال مطوّل في البناء (من غير Ctrl) على أرض فاضية
+  if (e.button === 0 && !gzHit && !drag && S.mode === 'build' && S.tool === 'select' && !S.pick && !e.ctrlKey && !e.metaKey && !DROPP.mode && !placingTool) {
+    const p = _vpLocal(e);
+    S.boxsel = { x0: p.x, y0: p.y, x1: p.x, y1: p.y };
+    mv.moved = 0;
   }
 });
 cv.addEventListener('pointermove', e => {
@@ -2900,6 +2932,14 @@ cv.addEventListener('pointermove', e => {
     lx = e.clientX; ly = e.clientY;
     return;
   }
+  if (mv && S.boxsel && mv.b === 0 && !drag) {
+    const p = _vpLocal(e);
+    S.boxsel.x1 = p.x; S.boxsel.y1 = p.y;
+    _marqueeShow(S.boxsel);
+    mv.moved += Math.abs(e.clientX - lx) + Math.abs(e.clientY - ly);
+    lx = e.clientX; ly = e.clientY;
+    return;
+  }
   if (!mv) hoverGizmo(e);
   if (DROPP.mode && !mv) dropUpdateGhost(e);
   if (!mv && (S.tool === 'place' || S.tool === 'respawn' || S.tool === 'online_spawn')) { S.hr = ray(e).ray.clone(); S.dirty = 1; }
@@ -2913,6 +2953,7 @@ cv.addEventListener('pointerleave', () => { S.hr = null; });
 function _endPointerGesture() {
   mv = null; rmb = false;
   if (S.boxdel) { S.boxdel = null; try { _marqueeShow(null); } catch (_) {} }
+  if (S.boxsel) { S.boxsel = null; try { _marqueeShow(null); } catch (_) {} }
   if (drag) endDrag(true);
 }
 cv.addEventListener('pointercancel', e => { if (S.mode === 'build' || S.playEdit) _endPointerGesture(); });
@@ -2927,6 +2968,10 @@ cv.addEventListener('pointerup', e => {
     if (n > 0) { tip('🗑 اتحذف ' + n + ' كائن'); hier(); chg(); }
     else tip('مفيش كائنات جوه المستطيل');
     return;
+  }
+  if (S.boxsel) {
+    const bx = S.boxsel; S.boxsel = null; _marqueeShow(null);
+    if (m.moved >= 5) { _marqueeSelect(bx, e.shiftKey || false); tip('تم تحديد ' + selIds().length + ' كائن'); return; }
   }
   if (drag) { endDrag(true); return; }
   
@@ -3879,7 +3924,30 @@ function fitShrinkRows() {
     while (s.getBoundingClientRect().width > room && fs > min) { fs -= 0.5; s.style.fontSize = fs + 'px'; }
   });
 }
-window.addEventListener('resize', () => { try { fitShrinkRows(); } catch (_) {} });
+// تصغير أي نص بيتقص تلقائياً لحد ما يتسع (بدل "…") — يشمل المجلدات والأسماء والأزرار
+function fitShrinkAll() {
+  const els = document.querySelectorAll('body *');
+  for (const el of els) {
+    if (el.children.length > 3 || !el.textContent || !el.textContent.trim()) continue;
+    if (el.clientWidth === 0 || el.getClientRects().length === 0) continue;
+    const cs = getComputedStyle(el);
+    if (cs.whiteSpace !== 'nowrap' && cs.whiteSpace !== 'pre') continue;
+    if (cs.overflowX !== 'hidden' && cs.overflowX !== 'clip') continue;
+    if (el.dataset.noShrink !== undefined) continue;
+    el.style.fontSize = '';
+    let fs = parseFloat(getComputedStyle(el).fontSize);
+    const min = 7;
+    while (el.scrollWidth > el.clientWidth + 1 && fs > min) { fs -= 0.5; el.style.fontSize = fs + 'px'; }
+  }
+}
+let _shrinkRAF = 0;
+function scheduleShrink() {
+  if (_shrinkRAF) return;
+  _shrinkRAF = requestAnimationFrame(() => { _shrinkRAF = 0; try { fitShrinkAll(); } catch (_) {} });
+}
+try { new MutationObserver(scheduleShrink).observe(document.body, { childList: true, subtree: true, characterData: true }); } catch (_) {}
+window.addEventListener('resize', scheduleShrink);
+window.addEventListener('load', scheduleShrink);
 function hier() {
   refNames = null;
   ensureOrd();
@@ -3985,6 +4053,30 @@ _HIER.onclick = e => {
   hier();
 };
 const _hAdd = $('#hAddGrp'); if (_hAdd) _hAdd.onclick = () => addGroupPrompt();
+// كليك يمين على مجموعة في قائمة الكائنات → إعادة تسمية / حذف (ويتحفظ في المشروع)
+async function renameGroupPrompt(gid) {
+  const g = grpOf(gid); if (!g) return;
+  const name = await uiPrompt('اسم جديد للمجموعة؟', g.name);
+  if (name == null) return;
+  const nm = String(name).trim().slice(0, 60); if (!nm) return;
+  g.name = nm;
+  chg(); hier();
+}
+_HIER.addEventListener('contextmenu', async e => {
+  e.preventDefault();
+  const d = _hRowAt(e);
+  if (!d || !d.dataset.gid) return;
+  const gid = d.dataset.gid;
+  if (!grpOf(gid)) return;
+  selectGroup(gid, false);
+  const c = await HawaUI.choose('المجموعة «' + grpOf(gid).name + '»', [
+    { value: 'rename', label: '✏ إعادة تسمية', cls: 'hd-ok' },
+    { value: 'del', label: '🗑 حذف المجموعة', cls: 'hd-danger' },
+    { value: 'cancel', label: 'إلغاء' }
+  ]);
+  if (c === 'rename') return renameGroupPrompt(gid);
+  if (c === 'del') return deleteGroup(gid);
+});
 
 $('#hq').oninput = hier;
 function mediaLabel(v) {
@@ -6650,7 +6742,7 @@ function sList() {
     return `<div class="pcard sobj-card ${armed ? 'is-on' : ''}" data-d="${d.id}" draggable="true" title="اضغط لفتح">
       <div class="pc-top"><span class="pc-ico sobj-ico">🎮</span>${big ? '<span class="tag">كبير</span>' : ''}</div>
       <div class="pc-name" style="${fitNameStyle(nm)}" title="${esc(nm)}">${esc(nm)}</div>
-      <div class="pc-meta"><em>${cnt ? cnt + ' في المشهد' : 'غير موضوع'}</em>${armed ? '<em> · جاهز للوضع</em>' : ''}</div>
+      <div class="pc-meta">${cnt ? '<em>' + cnt + '</em>' : ''}</div>
       <button type="button" class="pc-place-arrow" data-pl="${d.id}" title="وضع في المشهد">↙</button>
     </div>`;
   }).join('');
@@ -6750,7 +6842,7 @@ async function openSobjItemMenu(id) {
   const armed = S.item === 's:' + id && S.tool === 'place';
   const cnt = S.objs.filter(o => +o.def === +id).length;
   const choice = await HawaUI.choose(
-    'كائن برمجي «' + (d.name || id) + '»\n' + (cnt ? (cnt + ' في المشهد') : 'غير موضوع') + (armed ? ' · جاهز للوضع' : ''),
+    'كائن برمجي «' + (d.name || id) + '»' + (cnt ? '\n' + cnt : ''),
     [
       { value: 'place', label: armed ? '📍 إلغاء الوضع' : '＋ وضع في المشهد', cls: 'hd-ok' },
       { value: 'edit', label: '✏ تعديل الكود', cls: 'hd-ok' },
@@ -7735,15 +7827,20 @@ async function uploadProjectZip(file) {
   if (typeof JSZip === 'undefined') { await uiAlert('JSZip غير محمّل'); return; }
   try {
     const zip = await JSZip.loadAsync(file);
-    let jsonText = null;
-    if (zip.file('project.json')) jsonText = await zip.file('project.json').async('string');
-    else {
-      
-      const names = Object.keys(zip.files).filter(n => /\.json$/i.test(n) && !zip.files[n].dir);
-      if (names.length) jsonText = await zip.file(names[0]).async('string');
+    // ترتيب البحث: project.json (تصدير الموبايل/المشروع) ← game.json (حزمة اللعبة من الكمبيوتر)
+    // ← أي json فيه بيانات المشروع (objs/scripts/sdefs) — بنتجاهل ملفات الحزمة الجانبية زي manifest/player_config
+    const jsonNames = Object.keys(zip.files).filter(n => /\.json$/i.test(n) && !zip.files[n].dir);
+    const rank = n => { const b = (n.split('/').pop() || '').toLowerCase(); return b === 'project.json' ? 0 : b === 'game.json' ? 1 : 2; };
+    const skip = n => /(^|\/)(manifest|player_config|package)\.json$/i.test(n);
+    const cands = jsonNames.filter(n => !skip(n)).sort((a, b) => rank(a) - rank(b));
+    let data = null;
+    for (const n of cands) {
+      try {
+        const d = JSON.parse(await zip.file(n).async('string'));
+        if (d && (d.objs || d.scripts || d.sdefs)) { data = d; break; }
+      } catch (_) {}
     }
-    if (!jsonText) { await uiAlert('الملف لا يحتوي project.json'); return; }
-    const data = JSON.parse(jsonText);
+    if (!data) { await uiAlert('الملف مالوش بيانات مشروع أو لعبة صالحة (project.json أو game.json)'); return; }
     if (!data || (!data.objs && !data.scripts && !data.sdefs)) {
       await uiAlert('ملف مشروع غير صالح');
       return;

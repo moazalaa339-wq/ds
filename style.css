@@ -69,7 +69,7 @@ body.noside #side{display:none;width:0;min-width:0;overflow:hidden;padding:0;bor
 #bar::-webkit-scrollbar{display:none}
 #bar > *{flex-shrink:0}
 #bar .tabs,#bar .seg{flex-shrink:1;min-width:0}
-#bar button i{max-width:7em;overflow:hidden;text-overflow:ellipsis}
+#bar button i{max-width:7em;overflow:hidden;text-overflow:clip}
 .grow{flex:1;min-width:8px}
 .brand{display:flex;align-items:center;gap:10px}
 .brand .logo{width:36px;height:36px;display:grid;place-items:center;border-radius:10px;background:transparent;border:0;color:var(--gold);font-size:18px;overflow:hidden;padding:0}
@@ -222,7 +222,7 @@ label.r{color:var(--tx)}
 #gz .red{color:#ff9fb0}
 .gz-hint{padding:4px 12px;border-radius:999px;background:rgba(8,6,12,.75);border:1px solid var(--line);font-size:11px;color:#d8d0c2}
 #stat{position:absolute;bottom:10px;inset-inline-start:12px;font:600 11px/1 Consolas,monospace;color:#7ff0dc;background:rgba(0,0,0,.45);padding:5px 9px;border-radius:7px;pointer-events:none;direction:ltr}
-#tip{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);font-size:12px;color:#efe8da;background:rgba(8,6,12,.78);border:1px solid var(--line2);padding:5px 14px;border-radius:999px;pointer-events:none;white-space:nowrap;max-width:88%;overflow:hidden;text-overflow:ellipsis;z-index:4}
+#tip{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);font-size:12px;color:#efe8da;background:rgba(8,6,12,.78);border:1px solid var(--line2);padding:5px 14px;border-radius:999px;pointer-events:none;white-space:nowrap;max-width:88%;overflow:hidden;text-overflow:clip;z-index:4}
 
 /* ================= طبقة الاختبار (منفصلة) ================= */
 #play{position:fixed;inset:0;background:#09070d;z-index:20;direction:rtl}
@@ -575,7 +575,7 @@ body.is-mobile #bFullscreen{min-width:44px;height:44px}
 .param-hd button{border:0;background:transparent;color:var(--mu);font-size:16px;cursor:pointer;padding:2px 6px}
 .param-body{overflow:auto;padding:8px 10px;display:flex;flex-direction:column;gap:6px}
 .param-row{align-items:center;flex-wrap:wrap}
-.media-name{flex:1;min-width:0;font-size:11px;color:#a199ae;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.media-name{flex:1;min-width:0;font-size:11px;color:#a199ae;overflow:hidden;text-overflow:clip;white-space:nowrap}
 .media-btn{
   display:inline-flex;align-items:center;justify-content:center;
   padding:4px 8px;border-radius:7px;border:1px solid var(--line2);
@@ -961,14 +961,14 @@ body.is-mobile #introSkip{min-height:46px;padding:10px 22px;bottom:calc(13vh + 1
 .mf-item .mf-meta{flex:1;min-width:0;width:100%;display:flex;flex-direction:column;align-items:center;gap:2px}
 .mf-item .mf-name{
   font-size:12px;font-weight:600;line-height:1.25;
-  overflow:hidden;text-overflow:ellipsis;
+  overflow:hidden;text-overflow:clip;
   display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;
   white-space:normal;word-break:break-word;max-width:100%;
   width:100%;max-height:2.6em;
 }
 .mf-item .mf-name.mf-name-sm{font-size:10px}
 .mf-item .mf-name.mf-name-xs{font-size:8.5px}
-.mf-item .mf-sub{font-size:10px;color:#a199ae;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+.mf-item .mf-sub{font-size:10px;color:#a199ae;overflow:hidden;text-overflow:clip;white-space:nowrap;max-width:100%}
 .mf-item .mf-del{
   border:0;background:rgba(248,113,113,.12);color:#fca5a5;border-radius:8px;
   padding:4px 8px;cursor:pointer;font-size:11px;flex:0 0 auto;margin-top:2px;
@@ -1000,7 +1000,7 @@ body.is-mobile #introSkip{min-height:46px;padding:10px 22px;bottom:calc(13vh + 1
 }
 .mf-preview-hd h3{
   margin:0;font-size:14px;font-weight:700;color:#2de2c4;
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:85%;
+  overflow:hidden;text-overflow:clip;white-space:nowrap;max-width:85%;
 }
 .mf-preview-x{
   border:1px solid rgba(255,214,150,.2);background:transparent;color:#a199ae;
@@ -1029,7 +1029,7 @@ body.is-mobile #introSkip{min-height:46px;padding:10px 22px;bottom:calc(13vh + 1
 }
 .mf-audio-title{
   font-size:14px;font-weight:600;color:#efe8da;max-width:90%;
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center;
+  overflow:hidden;text-overflow:clip;white-space:nowrap;text-align:center;
 }
 .mf-player-bar{
   width:100%;max-width:640px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;
@@ -1071,7 +1071,7 @@ body.is-mobile #introSkip{min-height:46px;padding:10px 22px;bottom:calc(13vh + 1
 .mf-upload-title{font-weight:800;font-size:15px;color:#2de2c4;margin-bottom:8px}
 .mf-upload-name{
   font-size:12px;color:#cfc7d8;margin-bottom:12px;
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  overflow:hidden;text-overflow:clip;white-space:nowrap;
 }
 .mf-upload-bar{
   height:10px;border-radius:99px;background:rgba(255,214,150,.12);overflow:hidden;
@@ -2413,7 +2413,7 @@ body.play-edit #play #pTop{
 }
 body.play-edit #play #pTop button{
   flex:0 0 auto;max-width:100%;
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap;overflow:hidden;text-overflow:clip;
 }
 body.play-edit #play #pExit{
   max-width:calc(100% - 80px);
@@ -2469,7 +2469,7 @@ body.ui-short:not(.is-mobile) #rail button{width:34px;height:34px}
   max-width:min(92vw,320px);
   white-space:nowrap;
   overflow:hidden;
-  text-overflow:ellipsis;
+  text-overflow:clip;
   font-size:11px;
   font-weight:700;
   color:#fca5a5;
@@ -2500,7 +2500,7 @@ body.is-mobile .pad-chip{top:8px;inset-inline-start:auto;inset-inline-end:8px;fo
 .sel-multi{font-size:11.5px;font-weight:700;color:#c8fff4;background:rgba(45,226,196,.12);border:1px solid rgba(45,226,196,.35);border-radius:9px;padding:6px 9px}
 
 /* ===== الدراع: شريط البناء + تنبيهات الاختبار ===== */
-.pad-chip-bar{position:static!important;inset:auto!important;top:auto!important;max-width:240px;margin:0 6px;align-self:center;font-size:11px;font-weight:700;color:#fca5a5;border:1px solid rgba(248,113,113,.35);background:rgba(40,12,16,.75);border-radius:999px;padding:4px 10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pad-chip-bar{position:static!important;inset:auto!important;top:auto!important;max-width:240px;margin:0 6px;align-self:center;font-size:11px;font-weight:700;color:#fca5a5;border:1px solid rgba(248,113,113,.35);background:rgba(40,12,16,.75);border-radius:999px;padding:4px 10px;white-space:nowrap;overflow:hidden;text-overflow:clip}
 .pad-chip-bar.on{color:#86efac;border-color:rgba(74,222,128,.4);background:rgba(10,28,18,.78)}
 body.is-mobile .pad-chip-bar{font-size:10px;max-width:120px}
 .pad-self-warn{position:absolute;inset:0;margin:auto;width:fit-content;height:fit-content;max-width:90vw;z-index:60;padding:18px 26px;border-radius:16px;background:rgba(40,8,12,.9);border:2px solid #f87171;color:#fecaca;font-weight:900;font-size:18px;text-align:center;box-shadow:0 0 30px rgba(248,113,113,.5);pointer-events:none}
@@ -2581,7 +2581,7 @@ select{appearance:none;-webkit-appearance:none;padding-inline-end:24px;backgroun
 #ins input[type=number]::-webkit-inner-spin-button,.cp input[type=number]::-webkit-inner-spin-button{display:none}
 
 /* ===== v2.10: تسميات صغيرة تحت أزرار البناء + زر الدراع في الشريط الجانبي ===== */
-.bcap{display:block;font-style:normal;font-size:8.5px;line-height:1.15;font-weight:600;color:#9d94ad;max-width:52px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;pointer-events:none;margin-top:1px;letter-spacing:.1px}
+.bcap{display:block;font-style:normal;font-size:8.5px;line-height:1.15;font-weight:600;color:#9d94ad;max-width:52px;overflow:hidden;text-overflow:clip;white-space:nowrap;pointer-events:none;margin-top:1px;letter-spacing:.1px}
 body:not(.is-mobile) #rail button .bcap{position:absolute;top:52px;left:50%;transform:translateX(-50%);width:max-content;max-width:72px;text-align:center;margin:0}
 body:not(.is-mobile) #rail button.on .bcap{color:#7ff0dc}
 body.is-mobile #rail .bcap{display:none}
@@ -2601,6 +2601,13 @@ body.is-mobile #rail .bcap{display:none}
 #ed .ed-gut{flex:none;width:46px;overflow:hidden;white-space:pre;text-align:right;direction:ltr;user-select:none;-webkit-user-select:none;padding:10px 8px 10px 6px;box-sizing:border-box;font:13px/1.6 Consolas,monospace;color:#6b6480;background:#0c0a12;border-inline-end:1px solid #2a2438}
 #ed #edT{flex:1;min-width:0;height:auto;margin:0;border:0;border-radius:0!important;padding:10px 10px 10px 8px;box-sizing:border-box;white-space:pre;overflow:auto;overflow-wrap:normal;word-break:normal;background:#09070e}
 /* أسماء الملفات والمجلدات: سطر واحد، والخط بيصغر تلقائياً */
-.pc-name,.mf-name{white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis;display:block!important;-webkit-line-clamp:unset!important;-webkit-box-orient:horizontal!important;max-height:none!important;word-break:normal!important;line-height:1.25!important}
+.pc-name,.mf-name{white-space:nowrap!important;overflow:hidden!important;text-overflow:clip;display:block!important;-webkit-line-clamp:unset!important;-webkit-box-orient:horizontal!important;max-height:none!important;word-break:normal!important;line-height:1.25!important}
 /* صف في قائمة المشهد متحدد مع أكتر من كائن: إطار أحمر سميك */
 #hier div.on.multi{background:rgba(255,31,31,.16)!important;outline:3px solid #ff1f1f;outline-offset:-3px;box-shadow:inset 0 0 0 2px rgba(255,31,31,.75);color:#fff}
+
+/* لا "…" ولا "-" في النصوص: الخط بيتصغر لحد ما يتسع (fitShrinkAll) */
+/* قوائم طويلة على الشاشات القصيرة: سكرول بدل ما الأزرار تطلع برا الشاشة */
+@media (max-height:700px){
+  #mMore,#mTouch,.m-secs,#mSecs{max-height:calc(100dvh - 72px);overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+}
+#mBar{overflow-x:auto;-webkit-overflow-scrolling:touch}
