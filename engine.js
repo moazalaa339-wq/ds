@@ -3536,7 +3536,7 @@ async function convertToGameImpl() {
     ui.step('rt', 'جلب ملفات التشغيل', 'run');
     const required = [
       ['three.min.js', 'three.min.js'], ['engine.js', 'engine.js'], ['style.css', 'style.css'],
-      ['play', 'play'], ['./', 'play'], ['game', 'game'],
+      ['play.html', 'play'], ['index.html', 'play'], ['game.html', 'game'],
       ['peerjs.min.js', 'peerjs.min.js'], ['jszip.min.js', 'jszip.min.js'], ['play-runtime.js', 'play-runtime.js']
     ];
     const bufs = new Map(), missing = [];
@@ -3607,7 +3607,7 @@ async function convertToGameImpl() {
     addF('manifest.json', JSON.stringify(manifest, null, 2));
     addF('README.txt',
       'Hawa Game: ' + data.name + '\n========================\n' +
-      'شغّل الصفحة الرئيسية أو game في Chrome/Edge (مباشرة أو من سيرفر).\n\nالمحتويات:\n' +
+      'افتح index.html (أو game.html) في Chrome/Edge (مباشرة أو من سيرفر).\n\nالمحتويات:\n' +
       included.map(x => ' - ' + x).join('\n') + '\n\n' +
       'كائنات: ' + data.meta.objectCount + '\nسكربتات: ' + data.meta.scriptCount + '\nكائنات برمجية: ' + data.meta.sdefCount +
       '\nملفات ووسائط: ' + data.meta.assetFiles + '\nنقاط أونلاين: ' + data.meta.onlineSlots + '\nنقاط أوفلاين: ' + data.meta.offlineSpawns +
