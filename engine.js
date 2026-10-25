@@ -8213,11 +8213,13 @@ if (_bProjDown) _bProjDown.onclick = () => { downloadProjectZip().catch(e => { u
 const _bProjUp = document.getElementById('bProjUp');
 const _flProj = document.getElementById('flProj');
 if (_bProjUp && _flProj) {
-  _bProjUp.onclick = () => { _flProj.value = ''; _flProj.click(); };
+  _bProjUp.onclick = () => { try { _flProj.value = ''; _flProj.click(); } catch (_) {} };
   _flProj.onchange = async e => {
     const f = e.target.files && e.target.files[0];
-    e.target.value = '';
-    if (f) await uploadProjectZip(f);
+    if (!f) return;
+    try { await uploadProjectZip(f); }
+    catch (err) { console.error(err); try { await uiAlert('فشل الرفع: ' + (err && err.message || err)); } catch (_) {} }
+    finally { try { e.target.value = ''; } catch (_) {} }
   };
 }
 const _bWipe = document.getElementById('bWipe');
@@ -14876,8 +14878,14 @@ const MOB = {
     const mMore = document.getElementById('mMoreBtn');
     if (mMore) mMore.onclick = () => this.toggleSheet('more');
     document.querySelectorAll('[data-proxy]').forEach(b => b.onclick = () => {
-      this.closeSheets();
       const t = document.getElementById(b.dataset.proxy);
+      // منتقي الملفات لازم يتفتح جوه نفس حركة الضغط (الموبايل بيمنع فتحه لو اتأخر)
+      if (t && t.tagName === 'INPUT' && t.type === 'file') {
+        try { t.value = ''; t.click(); } catch (_) {}
+        this.closeSheets();
+        return;
+      }
+      this.closeSheets();
       if (t) setTimeout(() => { try { t.click(); } catch (_) {} }, 80);
     });
     document.querySelectorAll('[data-m-close]').forEach(b => b.onclick = () => this.closeSheets());

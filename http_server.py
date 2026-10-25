@@ -534,6 +534,9 @@ class QuietHandler(SimpleHTTPRequestHandler):
                 return
             return _json_response(self, {"ok": False, "error": "not found"}, 404)
         p = parsed.path
+        # شيل الـ / الزيادة في الآخر (/build/ و /playing/ و /hawa%20engine/ كانوا بيطلعوا 404)
+        if len(p) > 1 and p.endswith("/"):
+            p = p.rstrip("/") or "/"
         qs = ("?" + parsed.query) if parsed.query else ""
         # الصفحة الرئيسية: /hawa engine (بمسافة أو %20 أو شرطة)
         if unquote(p).strip().lower() in ("/hawa engine", "/hawa-engine", "/hawa_engine", "/hawa%20engine"):
@@ -570,6 +573,13 @@ class QuietHandler(SimpleHTTPRequestHandler):
             name = p.lstrip("/")
             if os.path.isfile(os.path.join(ROOT, name + ".html")):
                 self.path = "/" + name + ".html" + qs
+            elif not os.path.exists(os.path.join(ROOT, name)):
+                # رابط مش معروف (من غير امتداد وملوش ملف) → الرئيسية بدل صفحة 404 فاضية
+                self.send_response(302)
+                self.send_header("Location", "/" + qs)
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
         return SimpleHTTPRequestHandler.do_GET(self)
 
     def do_POST(self):
