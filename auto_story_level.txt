@@ -1484,3 +1484,12 @@ Game.updateRigAnimation(mesh, dt, {moving,running,crouching,dancing,jumping})
 - موبايل: game.touch.show + isDown/wasPressed أو setKey كل فريم
 - نفس شروط القرب والتفاعل (dist) على الجهازين
 - ممنوع تصميم يعتمد على كليك يمين فقط من غير زر حماية/فعل على الشاشة
+
+=== MIC_STATE_V1 (حالة المايك — معلومة للكود) ===
+- سطر "mic=open|closed talking=0|1 permission=granted|prompt|denied|unknown" في أول الملف التلقائي = حالة المايك وقت التصدير.
+- في السكربت (وقت التشغيل):
+    const st = Game.voice.status();   // { open, closed, talking, level, permission, supported, secureContext, trackLive, wantOn }
+    const off = Game.voice.onChange(s => { /* بينده لما المايك يتفتح/يتقفل/اللاعب يبدأ/يوقف الكلام */ });
+- open = المايك مفتوح ومستعد يبعت الصوت. talking = مفتوح وفيه صوت فعلي. permission = صلاحية المتصفح للمايك.
+- لو permission = denied أو المايك مقفول، ما تفترضش إن فيه صوت؛ اعمل fallback.
+- التحكم: Game.voice.toggle() / on() / off(). المايك مش بيتفتح لوحده غير لما المستخدم يوافق.

@@ -74,10 +74,38 @@ def _read_json(handler):
 
 
 # ---- Project storage (تخزين المشروع تلقائي: مكان ثابت لكل مستخدم، مستقل عن البورت والمتصفح ونسخة المحرك) ----
-# الافتراضي: <مجلد المحرك>/hawa_data/project — كل نسخة محرك لها تخزينها الخاص جوه مجلدها،
-# ومفيش أي قراءة من مجلد المستخدم أو من نسخة تانية على الجهاز. (تقدر تغيّره بمتغير البيئة HAWA_DATA)
-DATA_DIR = os.path.abspath(os.environ.get("HAWA_DATA") or os.path.join(ROOT, "hawa_data"))
+# الافتراضي: <مجلد المستخدم>/HawaEngineData/project — مكان ثابت برّه مجلد المحرك،
+# فتحديث الزيب أو استخراج نسخة جديدة مابيمسحش المشروع ولا بيغيّر مكانه.
+# (تقدر تغيّره بمتغير البيئة HAWA_DATA)
+LEGACY_PROJECT_DIR = os.path.join(ROOT, "hawa_data", "project")
+
+
+def _default_data_dir():
+    try:
+        home = os.path.expanduser("~")
+        if home and home != "~":
+            return os.path.join(home, "HawaEngineData")
+    except Exception:
+        pass
+    return os.path.join(ROOT, "hawa_data")
+
+
+DATA_DIR = os.path.abspath(os.environ.get("HAWA_DATA") or _default_data_dir())
 PROJECT_DIR = os.path.join(DATA_DIR, "project")
+
+
+def _migrate_legacy_project():
+    """مرة واحدة: لو المشروع القديم فاضل جوه مجلد المحرك والمكان الجديد فاضي، ننقله عليه (من غير ما نمسح القديم)."""
+    try:
+        old_file = os.path.join(LEGACY_PROJECT_DIR, "hawa-project.json")
+        new_file = os.path.join(PROJECT_DIR, "hawa-project.json")
+        if os.path.isfile(old_file) and not os.path.isfile(new_file):
+            import shutil
+            os.makedirs(PROJECT_DIR, exist_ok=True)
+            shutil.copytree(LEGACY_PROJECT_DIR, PROJECT_DIR, dirs_exist_ok=True)
+            print("  Migrated project from engine folder -> %s" % PROJECT_DIR)
+    except Exception as e:
+        print("  Legacy project migration skipped: %s" % e)
 MAX_WRITE = 512 * 1024 * 1024
 
 
@@ -610,6 +638,7 @@ def _signal_handler(signum, frame):
 def main():
     global _server
     atexit.register(cleanup)
+    _migrate_legacy_project()
     try:
         signal.signal(signal.SIGINT, _signal_handler)
         signal.signal(signal.SIGTERM, _signal_handler)

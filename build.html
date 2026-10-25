@@ -42,13 +42,14 @@
     <button id="bMyFiles" type="button" title="ملفاتي">📁<i>ملفاتي</i></button>
 
     <div class="seg seg-proj">
+      <button id="bSave" title="حفظ فوري (الحفظ تلقائي دائماً)"><span data-ic="save"></span><i>حفظ</i></button>
       <button id="bProjDown" title="تحميل المشروع"><span data-ic="save"></span><i>تحميل</i></button>
       <button id="bProjUp" title="رفع المشروع"><span data-ic="load"></span><i>رفع</i></button>
     </div>
     <details class="menu" id="barMenu">
       <summary title="المزيد"><span>⋯</span><i>المزيد</i></summary>
       <div class="menu-pop">
-        <button id="bSave" title="حفظ فوري (الحفظ تلقائي دائماً)"><span data-ic="save"></span><i>حفظ فوري</i></button>
+        <button id="bSaveMenu" title="حفظ فوري (الحفظ تلقائي دائماً)" data-proxy="bSave"><span data-ic="save"></span><i>حفظ فوري</i></button>
         <button id="bStorage" title="عرض التخزين">💾<i>عرض التخزين</i></button>
         <button id="bConvert" class="go convert-btn" type="button" title="تحويل إلى لعبة">📦<i>تحويل إلى لعبة</i></button>
         <button id="bWipe" class="danger-btn" title="حذف الكلي">🗑<i>حذف الكلي</i></button>
@@ -96,7 +97,11 @@
         <button id="pNew" class="pri">＋ ملف جديد</button>
         <button id="pUp">⬆ رفع</button>
         <button id="pAuto" title="تلقائي">⬇</button>
+        <button type="button" id="pNewFolder" class="media-btn mf-newdir" title="مجلد جديد">＋ مجلد</button>
+        <button type="button" id="pEnterBtn" class="media-btn" hidden>➕ ادخال</button>
+        <button type="button" id="pEnterOk" class="media-btn" hidden disabled>تأكيد (0)</button>
       </div>
+      <div id="pCrumb" class="mf-crumb sf-crumb"></div>
       <div id="pList"></div>
     </div>
 
@@ -106,8 +111,12 @@
         <button id="sNew" class="pri">＋ كائن جديد</button>
         <button id="sUp">⬆ رفع</button>
         <button id="sAuto" title="تلقائي">⬇</button>
+        <button type="button" id="sNewFolder" class="media-btn mf-newdir" title="مجلد جديد">＋ مجلد</button>
+        <button type="button" id="sEnterBtn" class="media-btn" hidden>➕ ادخال</button>
+        <button type="button" id="sEnterOk" class="media-btn" hidden disabled>تأكيد (0)</button>
         <button type="button" id="sUnitView" class="unit-viewer-btn" title="عارض الوحدة">عارض الوحده الافتراضيه</button>
       </div>
+      <div id="sCrumb" class="mf-crumb sf-crumb"></div>
       <div id="sList"></div>
     </div>
   </aside>
@@ -168,11 +177,32 @@
   </aside>
 </div>
 
+<!-- ================= اختيار وضع الاختبار ================= -->
+<div id="testChoice" hidden>
+  <div class="tc-box">
+    <div class="tc-hd">
+      <b>وضع الاختبار</b>
+      <button type="button" id="tcClose" title="إغلاق">✕</button>
+    </div>
+    <div class="tc-opts">
+      <button type="button" id="tcFull" class="tc-opt">
+        <span class="tc-ico">⛶</span>
+        <span class="tc-title">اختبار ملء الشاشة</span>
+      </button>
+      <button type="button" id="tcBuild" class="tc-opt tc-opt-main">
+        <span class="tc-ico">🗗</span>
+        <span class="tc-title">اختبار مع شاشة البناء</span>
+      </button>
+    </div>
+  </div>
+</div>
+
 <!-- ================= طبقة الاختبار (منفصلة تماماً) ================= -->
 <div id="play" hidden>
   <div id="pvp"></div>
   <div id="pTop">
     <button id="pExit" class="stop"><span data-ic="stop"></span>خروج للبناء<kbd>P</kbd></button>
+    <button type="button" id="pPopOut" class="p-dock-btn" title="فتح كنافذة مستقلة" hidden>⧉↗</button>
   </div>
   <div id="pHud">
     <div class="chip msg" id="pMsg" hidden></div>
@@ -189,6 +219,7 @@
     <span class="mic-lbl">مكتوم</span>
     <span class="mic-bar"><i></i></span>
   </button>
+  <div id="pResize" class="p-resize" hidden title="تغيير الحجم"></div>
 </div>
 
 <!-- ================= محرر الملفات ================= -->
@@ -258,11 +289,21 @@
       <div class="mf-tools">
         <input type="search" id="mfSearch" placeholder="بحث بالاسم…" autocomplete="off">
         <label class="media-btn mf-up">⬆ رفع<input type="file" id="mfUpload" multiple accept="image/*,audio/*,video/*,.pdf,application/pdf" hidden></label>
+        <button type="button" id="mfNewFolder" class="media-btn mf-newdir" hidden>＋ مجلد</button>
+        <button type="button" id="mfEnterBtn" class="media-btn" hidden>➕ ادخال</button>
+      </div>
+      <div id="mfCrumb" class="mf-crumb"></div>
+      <div id="mfFilters" class="mf-filters">
+        <button type="button" class="mf-chip" data-mf-kind="audio">🔊 الأصوات</button>
+        <button type="button" class="mf-chip" data-mf-kind="image">🖼 الصور</button>
+        <button type="button" class="mf-chip" data-mf-kind="video">🎬 الفيديوهات</button>
+        <button type="button" class="mf-chip" data-mf-kind="other">📎 أخرى</button>
       </div>
       <p id="mfHint" hidden></p>
       <div id="mfList" class="mf-list"></div>
       <div class="mf-ft">
         <span class="mut small" id="mfCount">0 ملف</span>
+        <button type="button" id="mfEnterOk" hidden disabled>تأكيد (0)</button>
         <button type="button" id="mfCancelPick" hidden>إلغاء الاختيار</button>
       </div>
     </div>

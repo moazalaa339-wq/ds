@@ -11,6 +11,20 @@
 7) فحص قبل التسليم: ابحث في الكود عن "const " و"let " — لو لقيت رقم/لون/نص قابل للتعديل جواهم، انقله لـ defineParams. الكود اللي فيه const CFG مرفوض.
 8) نفس القاعدة بتنطبق على: السكربتات، الكائنات البرمجية، المركبات، الوحوش، الأسلحة، الأنظمة (سلسلة، حبل، مصعد…) — أي حاجة.
 
+
+=== VISIBLE_ROOT_MESH_V1300 (إلزامي مطلق — سبب «الكائن هوا / مش بيتحط») ===
+المحرك يخفي المكعب الافتراضي بعد تشغيل الكود. لو السكربت مضافش أي Mesh ظاهر تحت root → الكائن يختفي في البناء وفي القائمة.
+1) أول ما يتبني الكائن: لازم root.add(mesh) لشكل مرئي (حتى لو Trigger بسيط: مكعب/أسطوانة/حلقة بسيطة).
+2) ممنوع الاعتماد على Game.scene.add وحده للمجسم الرئيسي — الأب = root دائمًا.
+3) الشكل المحلي: المركز قريب من (0, halfHeight, 0) تحت root — ممنوع root.position.set(0,0,0).
+4) لو الكائن منطقي/مشهد بدون جسم كبير: ضع Marker ظاهر (مكعب + حلقة أرضية) يتنقّل مع الكائن.
+5) THREE = Game.THREE || window.THREE؛ بعد البناء Game.onUpdate؛ الإغلاق:
+   })(typeof Game !== "undefined" ? Game : null, typeof root !== "undefined" ? root : null);
+6) UI مؤقت (div): لازم data-script-ui="1" + تنظيف في cleanup.
+7) فشل شائع من AI: سكربت trigger/cutscene بدون root.add → يظهر «هوا» ويقول «مش موضوع». الحل = Marker تحت root قبل أي منطق.
+=== نهاية VISIBLE_ROOT_MESH_V1300 ===
+
+
 === PLAYERS_CONTROL_V1200 (التعامل مع اللاعبين) ===
 - Game.getAllPlayers(): كل عنصر فيه slot, name, local, position{x,y,z}, yaw, mesh, state. أوفلاين = لاعب واحد بس (المحلي)، فأي ميكانيكا "بين لاعبين" تحتاج أونلاين.
 - القراءة والرسم بيتعملوا عند كل جهاز لكل اللاعبين (عشان الكل يشوف نفس الحاجة). أما الحركة: كل جهاز يحرّك لاعبه المحلي بس عبر Game.controlPlayer('me',{pos:[x,y,z]}) — مش بيبعت رسايل شبكة زيادة.
@@ -36,7 +50,7 @@
 
 1) صوت/موسيقى: {key:"music",label:"الموسيقى",type:"audio",value:""} ، صورة: type:"image" ، فيديو: type:"video" ، أي ملف: type:"file" ، PDF: type:"pdf".
    المحرك بيرسم لكل واحد منهم زر «رفع» تلقائي في لوحة البارامترات (ومعاه ✕ للمسح) — فمتكتبش input ولا رابط ولا زر رفع بنفسك.
-2) ممنوع كتابة رابط أو اسم ملف ثابت في الكود (new Audio("x.mp3") / textureLoader.load("a.png") ممنوع). الاستخدام الوحيد: Game.params.<key>.
+2) يفضّل عدم تثبيت روابط في الكود؛ خذ الملفات من Game.params بعد الرفع (new Audio("x.mp3") / textureLoader.load("a.png") ممنوع). المصدر المعتاد للملفات المرفوعة: Game.params.<key> (وسائل أخرى ممكنة لو الطلب يحتاج).
 3) الاستخدام بعد الرفع: لو القيمة فاضية (المستخدم لسه ما رفعش) الكود ما يكسرش: ما يشغّلش الصوت ولا يحط الخامة، ويكمل عادي (استخدم فحص if (Game.params.music)).
    اقرأ القيمة كل فريم/كل تشغيل (مش مرة واحدة)، عشان لو المستخدم غيّر الملف يتحدّث. نضّف الصوت/الخامة القديمة عند التغيير وعند cleanup.
 4) أكتر من ملف = أكتر من بارامتر (music, clickSfx, logoImage …) كل واحد له label عربي واضح.
@@ -70,6 +84,54 @@
 الشكل الصحيح لملف البرمجة: (function (Game, root) { "use strict"; ... })(typeof Game !== "undefined" ? Game : null, typeof root !== "undefined" ? root : null);
 ممنوع: var Game = ... داخل الملف.
 === نهاية API_TRUTH_V900 ===
+
+=== OPEN_CREATIVITY_V1 (إلزامي فوق كل الأمثلة — مش قيود) ===
+كل ما في ملفات التلقائي من دوال / أمثلة / جداول / أنماط = توضيح وإلهام فقط.
+مش قائمة مسموح/ممنوع، ومش ثوابت لازم تلتزم بيها حرفياً.
+
+1) خيال المستخدم أوسع من أي مثال. لو طلب سلوك مش مكتوب هنا — نفّذه بأفضل ما يناسب المحرك.
+2) الدوال المذكورة (playSound, mediaEvent, setShared, syncObject, createVideoMesh…) وسائل موجودة تقدر تستخدمها أو تتجاوزها بـ THREE / Audio / Video / WebAudio / netEvent حر / أي تركيب.
+3) مفيش «الشكل الوحيد الصح» للصوت المحيطي أو التزامن أو الفيديو. نفس الفكرة تتنفّذ بطرق كتير — اختار الأنسب للطلب.
+4) ممنوع ترفض طلباً بحجة «مش في القائمة». ممنوع تضيّق الحل على مثال واحد من الملف.
+5) الأونلاين: التأخير طبيعي؛ مين يسمع/يشوف/يتزامن = قرار المستخدم في الطلب، مش قاعدة ثابتة من التلقائي.
+6) الوسائط (صوت/صورة/فيديو/ملف): موضع، كمية، تشغيل، إيقاف، مدى، شكل، جمهور — كلها حرّة حسب الطلب.
+7) الأمثلة في الأقسام التالية للتوضيح فقط. لو تعارض مثال مع طلب المستخدم → نفّذ طلب المستخدم.
+=== نهاية OPEN_CREATIVITY_V1 ===
+
+
+=== MEDIA_CAPABILITIES_V2 (قدرات — أمثلة مش قيود) ===
+الوسائط متاحة بحرية عبر بارامترات type:"audio"|"video"|"image"|"file"|"pdf" و Game.params (data URL).
+أمثلة وسائل (مش حصرية):
+- تشغيل/إيقاف صوت أو موسيقى عند أي حدث تتخيله
+- صوت يتأثر بالمسافة أو بالمكان أو بلاعب معيّن
+- فيديو/صورة في المشهد بأي حجم وموضع وعدد
+- إيقاف وسيط لما يحصل شيء (لمس، ضربة، دخول منطقة، مؤقت…)
+- أونلاين: وسيط يظهر/يُسمع للبعض دون البعض — بأي معيار يحدده الطلب (slot، اسم، فريق، مسافة، حالة…)
+
+وسائل جاهزة في Game لو حابب تستخدمها (اختياري مش إجباري):
+resolveMedia · playSound · playSpatialSound · stopSound · createVideoMesh · createImageMesh · mediaEvent · mediaForMe
+وأيضاً: new Audio، HTMLVideoElement، THREE.VideoTexture، Web Audio API، netEvent/setShared — كلها مباحة.
+
+القاعدة الوحيدة: ملف الوسيط من defineParams (مش رابط ثابت)، والكود متكسرش لو الملف فاضي، وفي cleanup تنظيف معقول.
+باقي التفاصيل = حسب خيال الطلب.
+=== نهاية MEDIA_CAPABILITIES_V2 ===
+
+=== ONLINE_SYNC_CAPABILITIES_V2 (قدرات تزامن — أمثلة مش قيود) ===
+أدوات ممكنة (اختياري): setShared/getShared · netEvent/onNetEvent · mediaEvent/mediaForMe · syncObject · controlPlayer/setPlayerState · أي قناة حالة تصممها أنت.
+
+أمثلة سلوك (مش قائمة مغلقة):
+- حدث عند الكل / عند غيري / عند لاعب واحد / عند مجموعة
+- حالة مشتركة أو محلية فقط
+- تزامن حركة أو شكل أو وسيط أو لا شيء من ده لو الطلب محلي
+
+التأخير وارد أونلاين؛ صمّم بما يناسب الطلب (مش قالب واحد).
+أوفلاين: نفس المنطق يشتغل محلياً.
+ممنوع فرض تزامن كامل أو فرض محلي — الطلب هو المرجع.
+=== نهاية ONLINE_SYNC_CAPABILITIES_V2 ===
+
+
+
+
 
 
 === HAND_WEAPON_AXES_V2 (إلزامي — من makeSuitRig / makeManRig / makeSoldierRig) ===
@@ -239,7 +301,7 @@ Game.lockPlayerAnim(0,true,{upperOnly:true}) رجلين تمشي
 2) مواد + هندسة مشتركة؛ أعد الاستخدام بدل new لكل نسخة.
 3) حشود: LOD (تفصيلي قريب / بسيط بعيد) + تحديث حسب المسافة من اللاعب.
 4) ظلال للقريب فقط؛ forceMeshCollision للجدران/الأرض فقط مش لكل ديكور/NPC.
-5) ابنِ تحت root.add — شكل ظاهر في البناء؛ THREE=Game.THREE||window.THREE.
+5) ابنِ تحت root.add — شكل ظاهر في البناء إلزامي (مش اختياري)؛ بدون Mesh تحت root الكائن = هوا. THREE=Game.THREE||window.THREE.
 6) الحسابات الثقيلة مرة عند الإنشاء؛ onUpdate خفيف.
 === CHARACTER_BODY_QUALITY_V612 (منع جسم فاضي / تحت الأرض / نفس الشكل) ===
 1) شخصية اللاعب الحية = Game.setPlayerForm — ممنوع Group مكعبات تتبع اللاعب كل فريم.
@@ -302,7 +364,7 @@ FIDELITY_FIRST = التزم بمضمون طلب المستخدم. لكن:
      (الأسماء التاريخية __HawaFunnyNet* هي قناة المحرك فقط — لا تعني نسخ سكربت الفاني)
   3) بديل مقبول: Game.setShared('anim_'+slot, pack) + تطبيق على getRemotePlayers() كل فريم.
   4) ممنوع الاعتماد على عشوائية غير متزامنة (Math.random على كل جهاز) — ابعت الناتج أو seed مشترك.
-  5) RULE: لو اللاعب المحلي شايف الحركة، كل لاعب أونلاين لازم يشوفها.
+  5) RULE: غالباً لو المحلي شايف الحركة الأونلاين يشوفها — إلا لو الطلب حدد غير كده.
 
 === MULTIPLAYER_SYNC_V616 (تلقائي من المحرك) ===
 المحرك يزامن تلقائي (state.autoSyncAll=true):
@@ -486,7 +548,7 @@ ENGINE_AUTO_SYNC (always on online):
   Game.holdItem(name|mesh) / releaseItem → held props visible on other clients (like the football)
   Game.onTrigger enter/exit → auto-broadcast re-fire on others
   Host periodically re-sends shared + recent strokes + holds for late joiners
-RULE: If the local player can see it, every online player MUST see it. Prefer setShared/drawStroke/holdItem/syncObject over local-only vars.
+NOTE (example default only): often if local sees it others should too — unless the user asked otherwise. Prefer setShared/drawStroke/holdItem/syncObject over local-only vars.
 EXAMPLE ball hold: Game.holdItem(ballMesh); ... Game.releaseItem(ballMesh);
 EXAMPLE board: Game.drawStroke("board1", [{x:0,y:1,z:0},{x:0.2,y:1.1,z:0}], {color:"#f00",width:0.02});
 EXAMPLE toggle: Game.setShared("spin_"+name, true); spinning=Game.getShared("spin_"+name,true);
@@ -1105,3 +1167,12 @@ samples أو ملفات المستخدم قد تحتوي HawaCtrl / hawa-control
   // onUpdate عند ضغط الزر:
   // game.setPlayerLimb(0, "rArm", -1.2, 0, 0);
   // بعد 0.4ث: game.setPlayerLimb(0, "rArm", 0, 0, 0);
+
+=== MIC_STATE_V1 (حالة المايك — معلومة للكود) ===
+- سطر "mic=open|closed talking=0|1 permission=granted|prompt|denied|unknown" في أول الملف التلقائي = حالة المايك وقت التصدير.
+- في السكربت (وقت التشغيل):
+    const st = Game.voice.status();   // { open, closed, talking, level, permission, supported, secureContext, trackLive, wantOn }
+    const off = Game.voice.onChange(s => { /* بينده لما المايك يتفتح/يتقفل/اللاعب يبدأ/يوقف الكلام */ });
+- open = المايك مفتوح ومستعد يبعت الصوت. talking = مفتوح وفيه صوت فعلي. permission = صلاحية المتصفح للمايك.
+- لو permission = denied أو المايك مقفول، ما تفترضش إن فيه صوت؛ اعمل fallback.
+- التحكم: Game.voice.toggle() / on() / off(). المايك مش بيتفتح لوحده غير لما المستخدم يوافق.
