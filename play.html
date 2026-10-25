@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Playing</title>
 <meta name="robots" content="noindex,nofollow">
-<script>(function(){if(location.pathname==="/playing"){try{if(!sessionStorage.getItem("hawa_play"))location.replace("/games");}catch(e){}}})();</script>
+<script>(function(){if(/\/play(\.html)?$/.test(location.pathname)){try{if(!sessionStorage.getItem("hawa_play"))location.replace("game.html");}catch(e){}}})();</script>
 <link rel="icon" type="image/png" href="favicon.png">
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
 <link rel="apple-touch-icon" href="favicon-180.png">

@@ -1,7 +1,6 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-<base href="/hawa%20engine">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#06050a">
@@ -735,7 +734,7 @@ const _setNT = setNetType;
 setNetType = function (t) {
   _setNT(t);
   const n = $('#joinNetNote');
-  if (n) n.textContent = t === 'lan' ? '📡 LAN: لازم تفتح اللعبة من رابط المضيف (http://IP:المنفذ/games) وتكون على نفس الواي فاي، وبعدين الصق الكود.' : (t === 'peerjs' ? '🌐 إنترنت: اكتب اسم الرووم والكود زي ما المضيف بعتهم.' : '');
+  if (n) n.textContent = t === 'lan' ? '📡 LAN: لازم تفتح اللعبة من رابط المضيف (http://IP:المنفذ/game.html) وتكون على نفس الواي فاي، وبعدين الصق الكود.' : (t === 'peerjs' ? '🌐 إنترنت: اكتب اسم الرووم والكود زي ما المضيف بعتهم.' : '');
   try { probeNet(); } catch (_) {}
 };
 setNetType(netType);
@@ -790,7 +789,7 @@ async function showHostCode(n, rn) {
   if (netType === 'lan') {
     url = await lanJoinUrl();
     how = '📡 شبكة محلية (LAN) — لازم تكون على نفس الواي فاي مع المضيف.\n' +
-      (url ? 'افتح الرابط ده: ' + url + '\n' : 'اطلب من المضيف رابط اللعبة (http://IP:المنفذ/games).\n') +
+      (url ? 'افتح الرابط ده: ' + url + '\n' : 'اطلب من المضيف رابط اللعبة (http://IP:المنفذ/game.html).\n') +
       'بعدين: أونلاين ← انضمام ← شبكة محلية ← الصق الكود.';
     if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
       if (help) { help.className = 'msg'; help.textContent = url ? 'الضيوف لازم يفتحوا الرابط ده (مش localhost): ' + url : 'الضيوف مش هيقدروا يدخلوا من localhost — شارك IP جهازك والمنفذ.'; }
@@ -1629,10 +1628,10 @@ function goPlay(opts) {
         try { w.postMessage({ t: 'hawa_codes_net' }, '*'); } catch (_) {}
       } catch (e) { console.error('inject live net', e); }
     };
-    fr.src = '/playing';
+    fr.src = 'play.html';
     return;
   }
-  location.href = '/playing';
+  location.href = 'play.html';
 }
 </script>
 
@@ -1647,12 +1646,12 @@ function goPlay(opts) {
 <script>
 (function(){
   var offB = document.getElementById('mOff'), onB = document.getElementById('mOn');
-  function setPath(p){ try { history.replaceState(null, '', p); } catch (e) {} }
-  if (offB) offB.addEventListener('click', function(){ setPath('/games/offline'); });
-  if (onB) onB.addEventListener('click', function(){ setPath('/games/online'); });
-  var p = location.pathname;
-  if (p === '/games/online' && onB) onB.click();
-  else if (p === '/games/offline' && offB) offB.click();
+  function setNet(v){ try { history.replaceState(null, '', '?net=' + v); } catch (e) {} }
+  if (offB) offB.addEventListener('click', function(){ setNet('offline'); });
+  if (onB) onB.addEventListener('click', function(){ setNet('online'); });
+  var n = new URLSearchParams(location.search).get('net');
+  if (n === 'online' && onB) onB.click();
+  else if (n === 'offline' && offB) offB.click();
 })();
 </script>
 </body>

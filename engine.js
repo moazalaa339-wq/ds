@@ -2712,11 +2712,11 @@ function setTestUrl(mode) {
     if (window.HAWA_PLAY_ONLY) return;
     if (mode) {
       sessionStorage.setItem('hawa_test_ok', '1');
-      history.replaceState(null, '', mode === 'half' ? '/testmode' : '/test');
+      history.replaceState(null, '', mode === 'half' ? '?testmode' : '?test');
       document.title = mode === 'half' ? 'Test Mode (Half)' : 'Test Mode';
     } else {
       sessionStorage.removeItem('hawa_test_ok');
-      if (/^\/test/.test(location.pathname)) history.replaceState(null, '', '/build');
+      if (/[?&]test(mode)?(&|=|$)/.test(location.search)) history.replaceState(null, '', 'build.html');
       document.title = 'Build';
     }
   } catch (_) {}
@@ -3695,7 +3695,7 @@ async function convertToGameImpl() {
   };
   try { bindParamPanel(); } catch (_) {}
 })();
-{ const _bo = document.getElementById('bOpenGame'); if (_bo) _bo.onclick = () => { window.open('/games', '_blank'); }; }
+{ const _bo = document.getElementById('bOpenGame'); if (_bo) _bo.onclick = () => { window.open('game.html', '_blank'); }; }
 S.showCoord = false; S.pick = false;
 S.boxdel = null; 
 setInterval(() => { try { HawaPad.updateUi(); } catch (_) {} try { syncPadToggles(); } catch (_) {} }, 1000);
@@ -13338,9 +13338,9 @@ const OnlineMenu = {
       sessionStorage.removeItem('hawa_play');
     } catch (_) {}
     try {
-      if (window.parent && window.parent !== window) { window.parent.location.href = '/games'; return; }
+      if (window.parent && window.parent !== window) { window.parent.location.href = 'game.html'; return; }
     } catch (_) {}
-    try { location.href = '/games'; } catch (_) {}
+    try { location.href = 'game.html'; } catch (_) {}
   },
   leaveToHome() {
     try { NetMP.announceLeave(); } catch (_) {}
@@ -13353,11 +13353,11 @@ const OnlineMenu = {
     // لو جوا iframe (تبادل أكواد): رجّع الأب للرئيسية
     try {
       if (window.parent && window.parent !== window) {
-        window.parent.location.href = '/hawa%20engine';
+        window.parent.location.href = 'index.html';
         return;
       }
     } catch (_) {}
-    try { location.href = '/hawa%20engine'; } catch (_) {}
+    try { location.href = 'index.html'; } catch (_) {}
   },
   setupOnlineChrome() {
     this.ensure();
@@ -15414,7 +15414,7 @@ function boot() {
       try {
         if (!(d && d.objs && d.objs.length)) {
           await uiAlert('اللعبة مفيهاش بيانات كافية للتشغيل.\nالسبب: ملف اللعبة ما وصلش لوضع اللعب (ارفعه من «فتح اللعبة» قبل إنشاء/انضمام الرووم، أو أعد رفعه).');
-          location.href = '/games';
+          location.href = 'game.html';
           return;
         }
         playStart();

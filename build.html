@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Build</title>
-<script>(function(){var p=location.pathname;if(p==="/test"||p==="/testmode"){try{sessionStorage.removeItem("hawa_test_ok")}catch(e){}location.replace("/build");}})();</script>
+<script>(function(){if(/[?&]test(mode)?(&|=|$)/.test(location.search)){try{sessionStorage.removeItem("hawa_test_ok")}catch(e){}location.replace("build.html");}})();</script>
 <link rel="icon" type="image/png" href="favicon.png">
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
 <link rel="apple-touch-icon" href="favicon-180.png">
@@ -34,7 +34,7 @@
 <!-- ================= طبقة البناء (Build) ================= -->
 <div id="app">
   <header id="bar">
-    <a id="bHome" class="home-btn hawa-icon-btn" href="/hawa%20engine" title="الرئيسية"><span class="hawa-ico-frame" data-ic="home"></span><i>الرئيسية</i></a>
+    <a id="bHome" class="home-btn hawa-icon-btn" href="index.html" title="الرئيسية"><span class="hawa-ico-frame" data-ic="home"></span><i>الرئيسية</i></a>
     <div class="brand"><span class="logo"><img src="logo.png" alt="Hawa"></span><div><b>Hawa</b> Engine<small>v2.25 · بناء</small></div></div>
 
     <nav class="tabs" id="secs">
@@ -284,7 +284,7 @@
 <div id="mMore">
   <div class="mm-hd"><b>المزيد</b><button type="button" data-m-close aria-label="إغلاق">✕</button></div>
   <div class="mm-grid">
-    <a id="mmHome" class="mm-home hawa-icon-btn" href="/hawa%20engine"><span class="hawa-ico-frame" data-ic="home"></span>الرئيسية</a>
+    <a id="mmHome" class="mm-home hawa-icon-btn" href="index.html"><span class="hawa-ico-frame" data-ic="home"></span>الرئيسية</a>
     <button type="button" data-proxy="bPlayNet"><span>🌐</span>أونلاين / أوفلاين</button>
     <button type="button" data-proxy="bSave"><span>💾</span>حفظ</button>
     <button type="button" data-proxy="bStorage"><span>🗂</span>عرض التخزين</button>
