@@ -1,0 +1,14 @@
+{
+  "name": "Hawa Engine",
+  "short_name": "Hawa",
+  "start_url": "/hawa%20engine",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0b0912",
+  "theme_color": "#0b0912",
+  "icons": [
+    {"src": "logo-256.png", "sizes": "256x256", "type": "image/png"},
+    {"src": "favicon-180.png", "sizes": "180x180", "type": "image/png"}
+  ]
+}

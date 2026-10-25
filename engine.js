@@ -444,12 +444,30 @@ game.touch: show(list) hide() isDown(id) wasPressed(id) isMobile()
   game.isNetworked() game.isHost() game.hostSlot() game.getHost() game.getRoomLeader() game.isRoomLeader(slot|me) game.mySlot() game.onPlayerCmd(fn)
   game.pad / game.gamepad — يد التحكم: connected() isDown('cross'|'circle'|'square'|'triangle'|'l1'|'r1'|'l2'|'r2'|'up'|...) axis(0..3) stick('left'|'right') vibrate(ms,strong,weak) state() on(fn)
   game.padButton(name) game.padAxis(i) game.padStick(w) game.padVibrate(ms) game.padState() game.padConnected()
-أطراف آمنة: game.setPlayerLimb(0,'rArm'|'rForearm'|'lArm'|'lForearm'|'spine',rx,ry,rz) — سالب X ≈ للأمام
+مفاصل حرّة بالكامل (مفيش مفصل ممنوع — استخدمها براحتك):
+  game.player.setLimb(name,rx,ry,rz) / game.player.setJoint(name,rx,ry,rz) / game.setPlayerLimb(target,name,rx,ry,rz) — سالب X ≈ للأمام
+  المفاصل القياسية: rArm rForearm lArm lForearm rLeg rShin rFoot lLeg lShin lFoot spine head
+  game.player.getJoint(name) — يرجّع الـ Object3D بتاع أي مفصل (قياسي أو مضاف) — ممكن تتحكم فيه بـ position/rotation/scale مباشرة
+  game.player.addJoint(parentName, newName, {pos:[x,y,z], rot:[x,y,z], scale}) — يضيف مفصل جديد تحت أي مفصل (parent فاضي = جذر الشخصية) ويرجّع الـ Object3D عشان تضيف عليه مجسمات
+  game.player.removeJoint(name) — يشيل المفصل المضاف؛ المفاصل القياسية بترجع لوضعها الأصلي (الأنيميشن محتاجها)
+  game.player.listJoints() — كل المفاصل المتاحة حالياً
+  أونلاين لأي لاعب: game.addPlayerJoint(target,parent,name,opt) / game.removePlayerJoint(target,name) / game.setPlayerLimb(target,...)
+  لبس وشكل: game.player.mesh = جذر الشخصية — تقدر تضيف عليه أي مجسمات (درع، عباية، أجنحة، ذيل…) وتغيّر الشكل جذرياً
+  طيران: game.player.setFlying(true|false) — Space طلوع و Shift نزول، ومفيش جاذبية وقتها. أونلاين: game.setPlayerFlying(target,on)
+  ملاحظة للتزامن: الحركة (setLimb/setJoint/addJoint/removeJoint) بتتزامن أونلاين مع اللاعبين التانيين. المجسمات اللي بتضيفها بتتبني عند كل جهاز لو السكربت شغّال عنده.
 وسائط (قدرات مفتوحة — أمثلة مش قيود): type audio|video|image|file في defineParams → params data URL
   وسائل اختيارية: resolveMedia · playSound · playSpatialSound · stopSound · createVideoMesh · createImageMesh
   أو أي Audio/Video/THREE/WebAudio تبنيه أنت. أونلاين اختياري: mediaEvent/mediaForMe/netEvent/setShared — جمهور حر حسب الطلب
-حظر: شعاع ليزر CylinderGeometry+PointLight كل فريم / p.setLimb بدل setPlayerLimb / getBone كشرط تشغيل — تسبب شاشة سوداء
+نصيحة أداء: تجنب شعاع الليزر (CylinderGeometry+PointLight) كل فريم لأنه بيبطّئ الشاشة، واستخدم game.player.getJoint(name) وتأكد إنه مش null قبل ما تستخدمه
 cleanup: امسح أي Mesh/Light من scene + stopSound + video.stop + game.touch.hide()
+
+معلومات عن المحرك (لو حد سألك عنها — أجب بالمعنى ده بكلامك وبشكل طبيعي وبدون تنسيق ثابت):
+- المحرك اسمه Hawa Engine، ومؤسسه ومالكه: معاذ علاء فؤاد.
+- لو سألوا مين عمل المحرك أو هل هو كله AI: قول إن المحرك معمول بطريقة دقيقة ومعقدة جداً، ومعاذ علاء فؤاد اشتغل عليه فترة طويلة جداً وبصبر كبير، وبيأسس تفاصيل معقدة مستحيل AI يعملها في يوم أو يومين، حتى لو استعان بالـ AI في الشغل فالمجهود والتصميم الأساسي بتاعه هو.
+- لو سألوا هل فيه فيروسات أو هل آمن: قول إن الكود اتفحص ومفيهوش برمجيات خبيثة ظاهرة، ومفيش اتصال خفي بسيرفرات تبعت بيانات المستخدم؛ لكن مفيش برنامج بيقدر يضمن أمان 100%، ولو عندهم شك يقدروا يراجعوا الكود بأنفسهم.
+- المميزات: تقدر تعمل لعبة موبايل أو كمبيوتر وتشتغل على جهاز الموبايل أو الكمبيوتر، أونلاين أو أوفلاين، والأداء (الفريمات) محسن، والبرمجة والتصميم سهلين، وبيوفّق بين صناعة اللعب بالبناء المرئي وبالبرمجة في نفس الوقت.
+- مقارنة بيونيتي أو أنريل: المحرك بيتميز بطريقة مختلفة في بناء ألعاب عالية وفي وقت أقل، لكن المحركات الكبيرة أنضج وأوسع في الأدوات والمكتبات والمجتمع، فالاختيار بيعتمد على نوع اللعبة.
+- ممنوع تقول إن المحرك ملوش عيوب. لو فيه عيوب أو أخطاء، اعترف بيها واقترح حلول.
 `;
 
 const HawaUI = {
@@ -707,7 +725,7 @@ function applyFileParamsToObject(o) {
   chg();
 }
 
-const S = {objs:[], scripts:[], sdefs:[], sel:null, mode:'build', tool:'select', gz:'move', item:'cube', section:'objects',
+const S = {objs:[], scripts:[], sdefs:[], sel:null, groups:[], selSet:[], selGroup:null, gnid:1, padGame:false, mode:'build', tool:'select', gz:'move', item:'cube', section:'objects',
   snap:.5, nid:1, sid:1, did:1, mid:1, dirty:1, needSave:0, err:[], hr:null, fly:false, media:{}, mediaOrder:[], mediaFolders:{}, scriptFolders:{}, sdefFolders:{}, progCwd:null, sobjCwd:null, progEnter:false, sobjEnter:false, progEnterSel:null, sobjEnterSel:null, paramOpen:false,
   allowScriptSpawn:true, // دائماً مسموح — الخيار اتشال من الواجهة
   roomMinEnabled:false,   // تفعيل حد أدنى مخصص
@@ -742,6 +760,7 @@ const HawaPad = (() => {
   let pad = null;           // آخر Gamepad نشط
   let index = -1;
   let connected = false;
+  let active = false;       // اتفعّل: ضغط زر أو حرّك عصا بعد التوصيل
   let id = '';
   let brand = '';           // dualsense | dualshock | xbox | generic
   let buttons = [];
@@ -749,7 +768,7 @@ const HawaPad = (() => {
   let prevButtons = [];
   let listeners = [];
   let lastUi = '';
-  let mapToKeys = true;     // يحوّل العصي/الأزرار لمفاتيح افتراضية للحركة
+  let mapToKeys = false;    // الدراع مابيحركش اللاعب إلا لو فيه برمجة بتقرا game.pad     // يحوّل العصي/الأزرار لمفاتيح افتراضية للحركة
   let dead = 0.18;
 
   function detectBrand(gid) {
@@ -787,8 +806,16 @@ const HawaPad = (() => {
     } catch (_) {}
     return null;
   }
+  const PAD_KEYS = ['KeyW','KeyS','KeyA','KeyD','Space','ShiftLeft','KeyE','KeyF','KeyQ','KeyR','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'];
+  let padKeysOn = false;
   function applyKeyMap(lx, ly, rx, ry, btns) {
-    if (!mapToKeys) return;
+    // الدراع ما يتحكمش في الحركة إلا لو المشروع فعّل «اللعب يحتوي على كونترولر»
+    const padGameOn = false;   // الدراع ما يحرّكش اللاعب إلا بالبرمجة
+    if (!mapToKeys || !padGameOn) {
+      if (padKeysOn) { padKeysOn = false; for (const c of PAD_KEYS) setVirtualKey(c, false); }
+      return;
+    }
+    padKeysOn = true;
     // عصا شمال → WASD
     try {
       setVirtualKey('KeyW', ly < -dead);
@@ -819,12 +846,12 @@ const HawaPad = (() => {
     const el = document.getElementById('padChip');
     if (!el) return;
     let txt, on = false;
-    if (!connected || !pad) {
-      txt = '🎮 لا يوجد controller متصل';
+    if (!connected || !pad || !active) {
+      txt = 'غير متصل · اضغط أي زر على الكونترولر للتفعيل';
       on = false;
     } else {
       const bl = brandLabel(brand) || 'Controller';
-      txt = '🎮 متصل: ' + bl;
+      txt = '🎮 ' + bl;
       on = true;
     }
     if (txt !== lastUi) {
@@ -838,7 +865,7 @@ const HawaPad = (() => {
     const g = snap();
     const was = connected;
     if (!g) {
-      connected = false; pad = null; index = -1; id = ''; brand = '';
+      connected = false; active = false; pad = null; index = -1; id = ''; brand = '';
       buttons = []; axes = [0, 0, 0, 0];
       if (was) {
         try {
@@ -855,6 +882,7 @@ const HawaPad = (() => {
     id = g.id || '';
     brand = detectBrand(id);
     connected = true;
+    { const bs = g.buttons || [], ax0 = g.axes || []; if (bs.some(b => b && (b.pressed || b.value > .5)) || [0, 1, 2, 3].some(i => Math.abs(ax0[i] || 0) > .5)) active = true; }
     const btns = g.buttons || [];
     buttons = btns;
     const ax = g.axes || [];
@@ -979,7 +1007,7 @@ const HawaPad = (() => {
   try { setTimeout(() => { poll(); updateUi(); }, 400); } catch (_) {}
 
   return {
-    BTN, poll, tick, isDown, pressed: isDown, value, axis, stick,
+    BTN, poll, tick, isDown, pressed: isDown, value, axis, stick, isActive: () => !!(connected && active),
     vibrate, rumble: vibrate, stopVibrate,
     on, state, connected: () => !!connected,
     id: () => id, brand: () => brand,
@@ -998,11 +1026,9 @@ function setVirtualKey(code, down) {
   const c = String(code || '');
   if (!c) return;
   if (down) VK[c] = 1; else delete VK[c];
-  
-  K[c] = down ? 1 : 0;
 }
 function clearVirtualKeys() {
-  for (const c of Object.keys(VK)) { delete VK[c]; if (K[c]) K[c] = 0; }
+  for (const c of Object.keys(VK)) delete VK[c];
 }
 /** امسح كل المفاتيح (فيزيائي + افتراضي) — يمنع اللزق بعد فقدان التركيز */
 function clearAllKeys(reason) {
@@ -1043,11 +1069,18 @@ function applyInputMap(inp) {
 
 let RT = null, rmb = false, edI = null, edK = 'script', SELH = null;
 
+/* الموبايل = نوع الجهاز نفسه (مش حجم الشاشة): User-Agent Client Hints + UA + iPadOS */
+function isMobileDevice() {
+  const ua = navigator.userAgent || '';
+  if (/Android|iPhone|iPad|iPod|Mobile|webOS|BlackBerry|IEMobile|Opera Mini|Silk|Kindle/i.test(ua)) return true;
+  try { if (navigator.userAgentData && navigator.userAgentData.mobile === true) return true; } catch (_) {}
+  if (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) return true; // iPadOS بيطلع كـ Mac
+  return false;
+}
 const cv = $('#cv'), vp = $('#vp'), pvp = $('#pvp');
 let R, scene, cam, sun, grid;
 try {
-  const _isMob = /Android|iPhone|iPad|iPod|Mobile|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
-    || (navigator.maxTouchPoints > 1 && Math.min(screen.width, screen.height) < 900);
+  const _isMob = isMobileDevice();
   R = new T.WebGLRenderer({
     canvas: cv,
     antialias: !_isMob,
@@ -1324,6 +1357,7 @@ function openSpawnsPanel() {
   S.allowScriptSpawn = true;
   refreshSpawnsPanel();
   bindSpawnsPanelOnce();
+  try { syncPadToggles(); } catch (_) {}
 }
 function closeSpawnsPanel() {
   const m = document.getElementById('spawnsModal');
@@ -1964,11 +1998,18 @@ function delObj(id) {
   }
 }
 function dup() {
-  const s = OBJ.get(S.sel); if (!s) return;
-  const o = JSON.parse(JSON.stringify(s)); o.id = S.nid++; o.pos[0] += 1; o.name = s.name + ' ٢';
-  reg(o); sel(o.id); hier(); chg();
+  const ids = selIds(); if (!ids.length) return;
+  const made = [];
+  for (const id of ids) {
+    const s = OBJ.get(id); if (!s) continue;
+    const o = JSON.parse(JSON.stringify(s)); o.id = S.nid++; o.pos[0] += 1; o.name = s.name + ' ٢';
+    o.grp = s.grp != null ? s.grp : null; delete o.ord;
+    reg(o); made.push(o.id);
+  }
+  if (made.length) { S.selSet = made; S.sel = made[made.length - 1]; S.selGroup = null; selSync(); }
+  hier(); chg();
 }
-function clearAll() { for (const id of [...MESH.keys()]) removePreview(id); for (const m of MESH.values()) scene.remove(m); MESH.clear(); OBJ.clear(); S.objs = []; sel(null); }
+function clearAll() { for (const id of [...MESH.keys()]) removePreview(id); for (const m of MESH.values()) scene.remove(m); MESH.clear(); OBJ.clear(); S.objs = []; S.groups = []; sel(null); }
 
 const GH = new T.Group(); GH.visible = false; scene.add(GH);
 let ghKey = '';
@@ -2451,7 +2492,7 @@ function ugizmo() {
     gizmo.visible = true;
     gizmo.position.set(px, cy, pz);
     try { fatHits(!!(typeof MOB !== 'undefined' && MOB.on)); } catch (_) {}
-    const gzMul = (typeof MOB !== 'undefined' && MOB.on) ? .14 : .22;
+    const gzMul = (typeof MOB !== 'undefined' && MOB.on) ? .09 : .12;
     gizmo.scale.setScalar(cam.position.distanceTo(gizmo.position) * gzMul);
     gizmo.updateMatrixWorld(true);
     if (!g) return;
@@ -2483,12 +2524,18 @@ function ugizmo() {
       }
     } catch (_) {}
   }
+  const _mids = selIds();
+  if (_mids.length > 1) {
+    let sx = 0, sy = 0, sz = 0;
+    for (const id of _mids) { const q2 = OBJ.get(id); sx += +q2.pos[0] || 0; sy += q2.base ? (+q2.pos[1] || 0) + (+q2.scl[1] || 1) / 2 : (+q2.pos[1] || 0); sz += +q2.pos[2] || 0; }
+    px = sx / _mids.length; py = sy / _mids.length; pz = sz / _mids.length;
+  }
   const cy = py;
   if (g) g.hidden = false;
   gizmo.visible = true;
   gizmo.position.set(px, cy, pz);
   try { fatHits(!!(typeof MOB !== 'undefined' && MOB.on)); } catch (_) {}
-  const gzMul = (typeof MOB !== 'undefined' && MOB.on) ? .14 : .22;
+  const gzMul = (typeof MOB !== 'undefined' && MOB.on) ? .09 : .12;
   gizmo.scale.setScalar(cam.position.distanceTo(gizmo.position) * gzMul); gizmo.updateMatrixWorld(true);
   if (!g) return;
   if (typeof MOB !== 'undefined' && MOB.on) {
@@ -2548,7 +2595,12 @@ function startDrag(h, e) {
   }
   const o = OBJ.get(S.sel);
   if (!o) return;
-  drag = {o, ax: h.ax, mode: h.mode, pid: e.pointerId, t0: axT(ray(e).ray, o.pos, AX[h.ax]), pos: [...o.pos], rot: [...o.rot], scl: [...o.scl], x0: e.clientX, y0: e.clientY, rec: h};
+  const _ids = selIds();
+  if (_ids.length > 1) {
+    const cp = [gizmo.position.x, gizmo.position.y, gizmo.position.z];
+    drag = {o, ax: h.ax, mode: h.mode, pid: e.pointerId, t0: axT(ray(e).ray, cp, AX[h.ax]), pos: cp, rot: [0, 0, 0], scl: [1, 1, 1], x0: e.clientX, y0: e.clientY, rec: h,
+      items: _ids.map(id => { const q2 = OBJ.get(id); return {o: q2, pos: [...q2.pos], rot: [...q2.rot], scl: [...q2.scl]}; })};
+  } else drag = {o, ax: h.ax, mode: h.mode, pid: e.pointerId, t0: axT(ray(e).ray, o.pos, AX[h.ax]), pos: [...o.pos], rot: [...o.rot], scl: [...o.scl], x0: e.clientX, y0: e.clientY, rec: h};
   dragLight(h, true);
 }
 
@@ -2585,7 +2637,7 @@ function fatHits(on) {
     // لسه قابل للمس بس مش بياخد نصف الشاشة
     h.m.geometry = h.mode === 'rotate'
       ? new T.TorusGeometry(1.2, on ? .22 : .28, 8, 48)
-      : new T.CylinderGeometry(on ? .28 : .32, on ? .28 : .32, on ? 1.7 : 1.9, 10);
+      : new T.CylinderGeometry(on ? .4 : .5, on ? .4 : .5, on ? 1.7 : 1.9, 10);
     try { old.dispose(); } catch (_) {}
   }
 }
@@ -2605,6 +2657,15 @@ function doDrag(e) {
     return;
   }
   const {o, ax, mode, pos, rot, scl} = drag, sn = S.snap, q = (v, s) => s ? Math.round(v / s) * s : v;
+  if (drag.items) {
+    if (mode === 'rotate') { const dr = q((e.clientX - drag.x0) - (e.clientY - drag.y0), 0) * .6; const drq = sn ? Math.round(dr / 5) * 5 : dr; for (const it of drag.items) it.o.rot[ax] = it.rot[ax] + drq; }
+    else {
+      const dt = q(axT(ray(e).ray, pos, AX[ax]) - drag.t0, sn);
+      for (const it of drag.items) { if (mode === 'move') it.o.pos[ax] = it.pos[ax] + dt; else it.o.scl[ax] = Math.max(.05, it.scl[ax] + dt); }
+    }
+    for (const it of drag.items) tf(it.o);
+    refreshTf(); return;
+  }
   if (mode === 'rotate') { const dd = (e.clientX - drag.x0) - (e.clientY - drag.y0); o.rot[ax] = q(rot[ax] + dd * .6, sn ? 5 : 0); }
   else {
     const dt = axT(ray(e).ray, pos, AX[ax]) - drag.t0;
@@ -2614,8 +2675,25 @@ function doDrag(e) {
   tf(o); refreshTf();
 }
 
+let SELH_MULTI = [];
+function thickRedBox(mm) {
+  const box = new T.Box3().setFromObject(mm);
+  const size = box.getSize(new T.Vector3()), center = box.getCenter(new T.Vector3());
+  const grp = new T.Group();
+  for (const pad of [0, .015, .03]) {
+    const geo = new T.BoxGeometry(size.x + pad * 2, size.y + pad * 2, size.z + pad * 2);
+    const ln = new T.LineSegments(new T.EdgesGeometry(geo), new T.LineBasicMaterial({color: 0xff1f1f, depthTest: false, transparent: true, opacity: 1}));
+    ln.position.copy(center); ln.renderOrder = 997;
+    grp.add(ln);
+  }
+  grp.renderOrder = 997;
+  return grp;
+}
 function selHelper() {
   if (SELH) { scene.remove(SELH); SELH = null; }
+  for (const h of SELH_MULTI) { try { scene.remove(h); } catch (_) {} }
+  SELH_MULTI = [];
+  try { if (S.mode === 'build' || S.playEdit) for (const id of selIds()) { if (id === S.sel) continue; const mm = MESH.get(id); if (!mm) continue; const bh = thickRedBox(mm); scene.add(bh); SELH_MULTI.push(bh); } } catch (_) {}
   const m = S.sel != null && MESH.get(S.sel);
   
   if (m && (S.mode === 'build' || S.playEdit) && !(typeof MOB !== 'undefined' && MOB.on)) {
@@ -2630,9 +2708,29 @@ function pickObj(rc) {
   for (const x of rc.intersectObjects(allMeshes(), true)) { let m = x.object; while (m && m.userData.id == null) m = m.parent; if (m) return m.userData.id; }
   return null;
 }
-function sel(id) { S.sel = id; inspect(); hierMark(); selHelper(); try { updGzParamsBtn(); if (S.paramOpen) openParamPanel(true); else closeParamPanel(); } catch (_) {} }
+function setTestUrl(mode) {
+  try {
+    if (window.HAWA_PLAY_ONLY) return;
+    if (mode) {
+      sessionStorage.setItem('hawa_test_ok', '1');
+      history.replaceState(null, '', mode === 'half' ? '/testmode' : '/test');
+      document.title = mode === 'half' ? 'Test Mode (Half)' : 'Test Mode';
+    } else {
+      sessionStorage.removeItem('hawa_test_ok');
+      if (/^\/test/.test(location.pathname)) history.replaceState(null, '', '/build');
+      document.title = 'Build';
+    }
+  } catch (_) {}
+}
+function setSpawnVis(show) {
+  for (const o of S.objs) if (o.type === 'respawn' || o.type === 'online_spawn') { const m = MESH.get(o.id); if (m) m.visible = !!show; }
+}
+function sel(id) { S.sel = id; S.selSet = (id == null) ? [] : [id]; S.selGroup = null; selSync(); }
+function selSync() { inspect(); hierMark(); selHelper(); try { updGzParamsBtn(); if (S.paramOpen) openParamPanel(true); else closeParamPanel(); } catch (_) {} try { ugizmo(); } catch (_) {} S.dirty = 1; }
 function click(e) {
   const rc = ray(e), r = rc.ray;
+  if (DROPP.mode) { const dh = castRay(r); if (dh) dropPlace(dh); else tip('⚠ اضغط على سطح'); return; }
+  if (e.ctrlKey && !S.pick && S.tool === 'select') { const hc = pickObj(rc); if (hc != null) selectObjRow(hc, true); hier(); return; }
   if (S.pick) {                         
     const hid = pickObj(rc);
     if (hid != null) { sel(hid); if (!S.showCoord) toggleCoord(); } else tip('');
@@ -2668,16 +2766,23 @@ function click(e) {
 }
 
 function act(a) {
-  const o = OBJ.get(S.sel); if (!o) return;
+  const ids = selIds(); if (!ids.length) return;
   if (a === 'dup') return dup();
-  if (a === 'del') return delObj(o.id);
-  const f = aabbOf(o);
-  if (a === 'up') { o.pos[1] += S.snap || 1; tip('⬆ طلوع'); }
-  else if (a === 'down') { o.pos[1] = supportY(f, f.y0 + E) + (o.pos[1] - f.y0); tip('⬇ نزول'); }
-  else if (a === 'fly') { o.pos[1] = supportY(f, f.y0 + E) + (o.pos[1] - f.y0) + 3; tip('✈ طيران'); }
-  else if (a === 'vis') { o.hidden = !o.hidden; look(o); refreshPreview(o); tip(o.hidden ? 'مخفي: لن يظهر في الاختبار' : 'ظاهر في الاختبار'); inspect(); }
-  if (a !== 'vis') tf(o);
-  refreshTf(); updVis(); hier(); chg();
+  if (a === 'del') return deleteSelection();
+  const primary = OBJ.get(S.sel);
+  const nextHidden = primary ? !primary.hidden : false;
+  for (const id of ids) {
+    const o = OBJ.get(id); if (!o) continue;
+    const f = aabbOf(o);
+    if (a === 'up') o.pos[1] += S.snap || 1;
+    else if (a === 'down') o.pos[1] = supportY(f, f.y0 + E) + (o.pos[1] - f.y0);
+    else if (a === 'fly') o.pos[1] = supportY(f, f.y0 + E) + (o.pos[1] - f.y0) + 3;
+    else if (a === 'vis') { o.hidden = nextHidden; look(o); refreshPreview(o); }
+    if (a !== 'vis') tf(o);
+  }
+  if (a === 'up') tip('⬆ طلوع'); else if (a === 'down') tip('⬇ نزول'); else if (a === 'fly') tip('✈ طيران');
+  else if (a === 'vis') tip(nextHidden ? 'مخفي: لن يظهر في الاختبار' : 'ظاهر في الاختبار');
+  refreshTf(); updVis(); inspect(); hier(); chg();
 }
 function updVis() {
   const o = OBJ.get(S.sel), b = $('#gVis'); if (!b) return;
@@ -2697,7 +2802,9 @@ document.addEventListener('pointerlockchange', () => { updModes(); });
 function updModes() {
   try { const _bf = $('#bFly'); if (_bf) _bf.classList.toggle('on', S.fly); } catch (_) {}
   const locked = document.pointerLockElement === cv;
-  $('#modeChip').textContent = (S.fly ? '🕊 طيران' : '🏗 بناء') + (locked ? ' · الماوس مخفي (Ctrl للإلغاء · Enter للتنفيذ على المركز)' : '');
+  { const _mc = $('#modeChip'); const _lk = locked ? 'الماوس مخفي (Ctrl للإلغاء · Enter للتنفيذ على المركز)' : '';
+    const _t = [S.fly ? '🕊 طيران' : '', _lk].filter(Boolean).join(' · ');
+    if (_mc) { _mc.textContent = _t; _mc.hidden = !_t; } }
   const ch = $('#crosshair'); if (ch) ch.hidden = !(locked && S.mode === 'build');
   S.dirty = 1;
 }
@@ -2765,6 +2872,7 @@ cv.addEventListener('pointerdown', e => {
     return;
   }
   // أثناء وضع كائن: تجاهل محاور الجيزمو عشان تقدر تحط حول الكائن المختار
+  if (DROPP.mode) return;
   const placingTool = (S.tool === 'place' || S.tool === 'respawn' || S.tool === 'online_spawn');
   if (e.button === 0 && S.sel != null && gizmo.visible && !placingTool && !S.pick) {
     const list = HIT.filter(h => h.mode === S.gz).map(h => h.m);
@@ -2793,6 +2901,7 @@ cv.addEventListener('pointermove', e => {
     return;
   }
   if (!mv) hoverGizmo(e);
+  if (DROPP.mode && !mv) dropUpdateGhost(e);
   if (!mv && (S.tool === 'place' || S.tool === 'respawn' || S.tool === 'online_spawn')) { S.hr = ray(e).ray.clone(); S.dirty = 1; }
   if (!mv) return;
   const dx = e.clientX - lx, dy = e.clientY - ly; lx = e.clientX; ly = e.clientY; mv.moved += Math.abs(dx) + Math.abs(dy);
@@ -2907,7 +3016,7 @@ addEventListener('keydown', e => {
   const locked = document.pointerLockElement === cv;
   if (e.code === 'Space' && !c) e.preventDefault();
   if (locked && (S.mode === 'build' || S.playEdit) && (e.code === 'Enter' || e.code === 'NumpadEnter')) { e.preventDefault(); clickCenter(); return; }
-  if (e.code === 'Delete' || e.code === 'Backspace') { if (S.sel != null) delObj(S.sel); }
+  if (e.code === 'Delete' || e.code === 'Backspace') { deleteSelection(); }
   else if (c && e.code === 'KeyD') { e.preventDefault(); dup(); }
   else if (c && e.code === 'KeyS') { e.preventDefault(); save(); tip('تم الحفظ ✔'); }
   else if (e.code === 'Escape') { if (document.pointerLockElement === cv) document.exitPointerLock(); setTool('select'); sel(null); }
@@ -3146,6 +3255,7 @@ function packGameData(name) {
     roomMinPlayers: roomMinPlayers(),
     roomMinPlayersSetting: Math.max(2, Math.floor(+S.roomMinPlayers || 2)),
     roomFillExact: !!S.roomFillExact,
+    padGame: !!S.padGame,
     roomMaxPlayers: roomMaxPlayers(),
     objs,
     scripts,
@@ -3540,12 +3650,30 @@ async function convertToGameImpl() {
   };
   try { bindParamPanel(); } catch (_) {}
 })();
-{ const _bo = document.getElementById('bOpenGame'); if (_bo) _bo.onclick = () => { window.open('game.html', '_blank'); }; }
+{ const _bo = document.getElementById('bOpenGame'); if (_bo) _bo.onclick = () => { window.open('/games', '_blank'); }; }
 S.showCoord = false; S.pick = false;
 S.boxdel = null; 
+setInterval(() => { try { HawaPad.updateUi(); } catch (_) {} try { syncPadToggles(); } catch (_) {} }, 1000);
+function syncPadToggles() {
+  const on = !!S.padGame;
+  for (const id of ['padTgl', 'spPadGame']) { const el = document.getElementById(id); if (el && el.checked !== on) el.checked = on; }
+  const rb = document.getElementById('bPadRail');
+  if (rb) rb.classList.toggle('on', on);
+  // جملة حالة الدراع: تظهر بس لو الدراع مفعّل وإحنا في البناء
+  const line = document.getElementById('padStatLine');
+  if (line) {
+    const show = on && S.mode === 'build';
+    line.hidden = !show;
+    if (show) {
+      let ok = false; try { ok = !!PadGate.selfOk(); } catch (_) {}
+      const txt = ok ? 'حالة الدراع: متصل ✅' : 'حالة الدراع: غير متصل · اضغط على أي زر للتفعيل';
+      if (line.textContent !== txt) line.textContent = txt;
+      line.classList.toggle('ok', ok);
+    }
+  }
+}
 function ensureCoordUI() {
   const cp = document.getElementById('coordPanel');
-  if (cp && !document.getElementById('cr')) cp.insertAdjacentHTML('beforeend', '<div class="cp-row"><b>R</b><span id="cr">—</span></div><div class="cp-row"><b>S</b><span id="cs">—</span></div>');
   for (const id of ['bPick', 'bCoordAlways']) {
     const el = document.getElementById(id); if (el) el.style.display = 'none';
   }
@@ -3564,6 +3692,50 @@ function togglePick() {
   tip(S.pick ? 'وضع الكائن مفعّل' : 'وضع الكائن مُغلق');
   S.dirty = 1;
 }
+/* ===== نقطة الإسقاط: وهمية (مش كائن) تلمس الأسطح ومتخترقش ===== */
+const DROPP = {mode: false, ghost: null, mark: null, pt: null};
+function dropGhostObj() {
+  if (!DROPP.ghost) { DROPP.ghost = new T.Mesh(new T.SphereGeometry(.14, 16, 12), new T.MeshBasicMaterial({color: 0x34d399, transparent: true, opacity: .6, depthTest: false})); DROPP.ghost.renderOrder = 999; DROPP.ghost.visible = false; scene.add(DROPP.ghost); }
+  return DROPP.ghost;
+}
+function dropMarkObj() {
+  if (!DROPP.mark) { DROPP.mark = new T.Mesh(new T.SphereGeometry(.16, 16, 12), new T.MeshBasicMaterial({color: 0xfacc15, depthTest: false})); DROPP.mark.renderOrder = 999; DROPP.mark.visible = false; scene.add(DROPP.mark); }
+  return DROPP.mark;
+}
+function dropUpdateGhost(e) {
+  const h = castRay(ray(e).ray), g = dropGhostObj();
+  if (!h) g.visible = false; else { g.visible = true; g.position.set(h.p[0], h.p[1], h.p[2]); }
+  S.dirty = 1;
+}
+function dropPlace(h) {
+  DROPP.pt = [h.p[0], h.p[1], h.p[2]]; DROPP.mode = false;
+  dropGhostObj().visible = false;
+  const m = dropMarkObj(); m.visible = true; m.position.set(DROPP.pt[0], DROPP.pt[1], DROPP.pt[2]);
+  S.dirty = 1; updCoord();
+}
+function dropToggle() {
+  if (DROPP.pt) { DROPP.pt = null; if (DROPP.mark) DROPP.mark.visible = false; S.dirty = 1; updCoord(); return; }
+  if (DROPP.mode) { DROPP.mode = false; if (DROPP.ghost) DROPP.ghost.visible = false; S.dirty = 1; updCoord(); return; }
+  DROPP.mode = true; tip('اضغط على سطح عشان تحط النقطة');
+  updCoord();
+}
+function updCoord() {
+  if (!S.showCoord) return;
+  const f = v => (+v).toFixed(3), setT = (id, v) => { const el = $(id); if (el && el.textContent !== v) el.textContent = v; };
+  if (cam && cam.position) { setT('#kx', f(cam.position.x)); setT('#ky', f(cam.position.y)); setT('#kz', f(cam.position.z)); }
+  if (S.mode === 'play' && RT) {
+    setT('#cx', f(RT.p.x)); setT('#cy', f(RT.p.y)); setT('#cz', f(RT.p.z)); setT('#cName', 'اللاعب · وضع الاختبار');
+  } else {
+    const o = OBJ.get(S.sel);
+    if (o) { setT('#cx', f(o.pos[0])); setT('#cy', f(o.pos[1])); setT('#cz', f(o.pos[2])); setT('#cName', o.name + ' · id=' + o.id); }
+    else { setT('#cx', '—'); setT('#cy', '—'); setT('#cz', '—'); setT('#cName', 'لا يوجد تحديد'); }
+  }
+  if (DROPP.pt) { setT('#dx', f(DROPP.pt[0])); setT('#dy', f(DROPP.pt[1])); setT('#dz', f(DROPP.pt[2])); }
+  const blk = $('#dropBlk'); if (blk) blk.hidden = !DROPP.pt;
+  const b = $('#dropBtn');
+  if (b) { const t = DROPP.pt ? '🗑 إلغاء النقطة' : (DROPP.mode ? '✕ إلغاء الإسقاط' : '⬇ إسقاط'); if (b.textContent !== t) b.textContent = t; }
+}
+const _dropBtn = $('#dropBtn'); if (_dropBtn) _dropBtn.onclick = () => dropToggle();
 function toggleCoord() {
   S.showCoord = !S.showCoord;
   S.pick = S.showCoord;
@@ -3578,47 +3750,242 @@ $('#gz').onclick = e => {
   if (b.dataset.g) setGz(b.dataset.g);
   else if (b.dataset.a) act(b.dataset.a);
   else if (b.id === 'gDup') dup();
-  else if (b.id === 'gDel' && S.sel != null) delObj(S.sel);
+  else if (b.id === 'gDel') deleteSelection();
 };
-function updCoord() {
-  if (!S.showCoord) return;
-  if (S.mode === 'play' && RT) {
-    $('#cx').textContent = RT.p.x.toFixed(3); $('#cy').textContent = RT.p.y.toFixed(3); $('#cz').textContent = RT.p.z.toFixed(3);
-    $('#cName').textContent = 'اللاعب · وضع الاختبار'; return;
-  }
-  const o = OBJ.get(S.sel);
-  if (o) {
-    $('#cx').textContent = (+o.pos[0]).toFixed(3);
-    $('#cy').textContent = (+o.pos[1]).toFixed(3);
-    $('#cz').textContent = (+o.pos[2]).toFixed(3);
-    $('#cName').textContent = o.name + ' · id=' + o.id;
-    const f2 = a => a.map(n => (+n).toFixed(2)).join(', ');
-    const cr = $('#cr'), cs = $('#cs'); if (cr) cr.textContent = '[' + f2(o.rot) + ']'; if (cs) cs.textContent = '[' + f2(o.scl) + ']';
-  } else {
-    $('#cx').textContent = OB.t.x.toFixed(3);
-    $('#cy').textContent = OB.t.y.toFixed(3);
-    $('#cz').textContent = OB.t.z.toFixed(3);
-    $('#cName').textContent = 'هدف الكاميرا';
-  }
-}
 
+/* ===== مجموعات المشهد (أب / ابن) + التحديد المتعدد ===== */
+function selIds() {
+  if (S.selSet && S.selSet.length) return S.selSet.filter(id => OBJ.has(id));
+  return (S.sel != null && OBJ.has(S.sel)) ? [S.sel] : [];
+}
+function grpOf(gid) { return (S.groups || []).find(g => g.id === gid) || null; }
+function nextGid() { let id; do { id = 'g' + (S.gnid++); } while (grpOf(id)); return id; }
+function descendantGroupIds(gid) {
+  const out = [gid];
+  for (let i = 0; i < out.length; i++) for (const g of S.groups) if (g.parent === out[i] && !out.includes(g.id)) out.push(g.id);
+  return out;
+}
+function grpMembersDeep(gid) {
+  const ids = descendantGroupIds(gid), out = [];
+  for (const o of S.objs) if (o.grp != null && ids.includes(o.grp) && o.type !== 'respawn' && o.type !== 'online_spawn') out.push(o.id);
+  return out;
+}
+function isAncestorGroup(anc, gid) {
+  let cur = gid, n = 0;
+  while (cur != null && n++ < 300) { if (cur === anc) return true; const g = grpOf(cur); cur = g ? g.parent : null; }
+  return false;
+}
+function sibsOf(pid) {
+  const p = pid || null, L = [], ordv = x => (typeof x === 'number' && isFinite(x)) ? x : Infinity;
+  for (const g of S.groups) if ((g.parent || null) === p) L.push({k: 'g', id: g.id, ref: g, ord: ordv(g.ord)});
+  for (const o of S.objs) if ((o.grp || null) === p && o.type !== 'respawn' && o.type !== 'online_spawn') L.push({k: 'o', id: o.id, ref: o, ord: ordv(o.ord)});
+  L.sort((a, b) => a.ord === b.ord ? (a.k === b.k ? 0 : (a.k === 'g' ? -1 : 1)) : (a.ord < b.ord ? -1 : 1));
+  return L;
+}
+function ensureOrd() {
+  const gids = new Set(S.groups.map(g => g.id));
+  for (const g of S.groups) { if (g.parent != null && !gids.has(g.parent)) g.parent = null; if (g.parent === g.id) g.parent = null; }
+  for (const o of S.objs) if (o.grp != null && !gids.has(o.grp)) o.grp = null;
+  S.groups.forEach((g, i) => { if (typeof g.color !== 'string') g.color = groupColorAt(i); });
+  for (const pid of [null, ...S.groups.map(g => g.id)]) sibsOf(pid).forEach((it, i) => { it.ref.ord = i; });
+}
+/* ينقل العناصر (groups/objects) لجوه pid في مكان anchor (before/after/end) ويحفظ الترتيب */
+function placeNodes(items, pid, anchor, where) {
+  pid = pid || null;
+  const moving = [];
+  for (const it of items) {
+    if (it.k === 'g') { const g = grpOf(it.id); if (!g || (pid != null && isAncestorGroup(g.id, pid))) continue; moving.push({k: 'g', id: g.id}); }
+    else if (OBJ.has(it.id)) moving.push({k: 'o', id: it.id});
+  }
+  if (!moving.length) return;
+  if (anchor && moving.some(m => m.k === anchor.k && m.id === anchor.id)) return;
+  for (const m of moving) { if (m.k === 'g') grpOf(m.id).parent = pid; else OBJ.get(m.id).grp = pid; }
+  if (pid != null && grpOf(pid)) grpOf(pid).open = true;
+  const keys = new Set(moving.map(m => m.k + ':' + m.id));
+  const sibs = sibsOf(pid).filter(x => !keys.has(x.k + ':' + x.id));
+  let idx = sibs.length;
+  if (anchor && where !== 'end') { const ai = sibs.findIndex(x => x.k === anchor.k && x.id === anchor.id); if (ai >= 0) idx = where === 'before' ? ai : ai + 1; }
+  const seq = [...sibs.slice(0, idx), ...moving.map(m => ({ref: m.k === 'g' ? grpOf(m.id) : OBJ.get(m.id)})), ...sibs.slice(idx)];
+  seq.forEach((x, i) => { x.ref.ord = i; });
+  chg(); hier();
+}
+async function addGroupPrompt() {
+  const name = await uiPrompt('اسم المجموعة الجديدة؟ (مثال: البيوت)', 'مجموعة جديدة');
+  if (name == null) return;
+  const nm = String(name).trim().slice(0, 60); if (!nm) return;
+  S.groups.push({id: nextGid(), name: nm, parent: null, open: true, ord: -1e9, color: groupColorAt(S.groups.length)});
+  chg(); hier();
+}
+function selectObjRow(id, multi) {
+  if (!multi) return sel(id);
+  ctrlPend = false;
+  const set = new Set(selIds());
+  if (set.has(id)) set.delete(id); else set.add(id);
+  S.selGroup = null;
+  S.selSet = [...set];
+  S.sel = set.has(id) ? id : (S.selSet.length ? S.selSet[S.selSet.length - 1] : null);
+  selSync();
+}
+function selectGroup(gid, multi) {
+  ctrlPend = false;
+  const mem = grpMembersDeep(gid);
+  if (multi) {
+    const set = new Set(selIds()); mem.forEach(id => set.add(id));
+    S.selSet = [...set]; S.sel = S.selSet.length ? S.selSet[S.selSet.length - 1] : null; S.selGroup = null;
+  } else {
+    S.selSet = mem.slice(); S.sel = mem.length ? mem[0] : null; S.selGroup = gid;
+  }
+  selSync();
+}
+async function deleteGroup(gid) {
+  const g = grpOf(gid); if (!g) return;
+  const ids = grpMembersDeep(gid), subs = descendantGroupIds(gid);
+  if (ids.length || subs.length > 1) {
+    const ok = await uiConfirm('حذف المجموعة "' + g.name + '" وكل اللي جواها (' + ids.length + ' كائن)؟');
+    if (!ok) return;
+  }
+  for (const id of ids) { try { delObj(id); } catch (_) {} }
+  S.groups = S.groups.filter(x => !subs.includes(x.id));
+  S.selGroup = null; S.selSet = []; S.sel = null;
+  selSync(); hier(); chg();
+}
+async function deleteSelection() {
+  if (S.selGroup != null && grpOf(S.selGroup)) return deleteGroup(S.selGroup);
+  const ids = selIds(); if (!ids.length) return;
+  for (const id of ids) { try { delObj(id); } catch (_) {} }
+  S.selSet = []; S.sel = null; selSync(); hier();
+}
+function groupColorAt(i) {
+  const h = (i * 137.508) % 360, band = Math.floor(i / 12), l = [60, 50, 70][band % 3], sat = [78, 64, 88][band % 3];
+  return 'hsl(' + h.toFixed(0) + ' ' + sat + '% ' + l + '%)';
+}
+function dotOf(x) {
+  const pid = x.grp != null ? x.grp : x.parent;
+  const p = pid != null ? grpOf(pid) : null;
+  return p ? '<span class="h-dot" style="background:' + esc(p.color || '') + '"></span>' : '';
+}
+function fitShrinkRows() {
+  document.querySelectorAll('#hier .fs').forEach(s => {
+    const box = s.parentElement; if (!box) return;
+    s.style.fontSize = '';
+    const cs = getComputedStyle(box);
+    const avail = box.clientWidth - (parseFloat(cs.paddingInlineStart) || 0) - (parseFloat(cs.paddingInlineEnd) || 0) - 4;
+    // المساحة المتاحة بعد الأيقونات والبادج
+    let room = avail;
+    box.querySelectorAll(':scope > *:not(.fs)').forEach(n => { room -= n.getBoundingClientRect().width; });
+    if (room < 40) room = 40;
+    let fs = parseFloat(getComputedStyle(s).fontSize);
+    const min = 8;
+    while (s.getBoundingClientRect().width > room && fs > min) { fs -= 0.5; s.style.fontSize = fs + 'px'; }
+  });
+}
+window.addEventListener('resize', () => { try { fitShrinkRows(); } catch (_) {} });
 function hier() {
   refNames = null;
-  const q = $('#hq').value.trim(), L = [];
-  for (const o of S.objs) {
-    if (o.type === 'respawn' || o.type === 'online_spawn') continue; 
-    if (q && !o.name.includes(q)) continue;
-    L.push(o);
-    if (L.length >= 300) break;
+  ensureOrd();
+  const q = $('#hq').value.trim();
+  const selS = new Set(selIds());
+  const rowOf = (o, depth) => `<div draggable="true" data-id="${o.id}" data-k="o" style="padding-inline-start:${10 + depth * 16}px" class="${selS.has(o.id) ? ('on' + (selS.size > 1 ? ' multi' : '')) : ''}${o.hidden ? ' dim' : ''}">${dotOf(o)}${DEF[o.type].i} <span class="fs">${esc(o.name)}</span>${isProg(o) ? ' <span class="pbadge">⚙ مبرمج (' + affFiles(o).length + ' ملفات)</span>' : ''}${o.hidden ? ' <span class="mut">· مخفي</span>' : ''}</div>`;
+  let html = '';
+  if (q) {
+    let n = 0;
+    for (const o of S.objs) {
+      if (o.type === 'respawn' || o.type === 'online_spawn') continue;
+      if (!o.name.includes(q)) continue;
+      html += rowOf(o, 0); if (++n >= 300) break;
+    }
+    if (!html) html = '<div class="mut">لا توجد نتائج</div>';
+  } else {
+    const walk = (pid, depth) => {
+      for (const it of sibsOf(pid)) {
+        if (it.k === 'g') {
+          const g = it.ref, cnt = grpMembersDeep(g.id).length;
+          html += `<div draggable="true" data-gid="${esc(g.id)}" data-k="g" class="h-grp${S.selGroup === g.id ? ' on' : ''}" style="padding-inline-start:${6 + depth * 16}px;border-inline-start-color:${esc(g.color || '')}">${dotOf(g)}<span class="h-arrow" data-arrow="${esc(g.id)}">${g.open === false ? '▸' : '▾'}</span>📁 ${esc(g.name)} <span class="h-cnt">${cnt}</span></div>`;
+          if (g.open !== false) walk(g.id, depth + 1);
+        } else html += rowOf(it.ref, depth);
+      }
+    };
+    walk(null, 0);
+    if (!S.objs.some(o => o.type !== 'respawn' && o.type !== 'online_spawn') && !S.groups.length) html = '<div class="mut">المشهد فاضي</div>' + html;
+    html += '<div class="h-root" data-root="1">⤴ المستوى الرئيسي (اسحب هنا عشان تطلع من المجموعة)</div>';
   }
-  $('#hier').innerHTML = L.map(o => `<div data-id="${o.id}" class="${o.id === S.sel ? 'on' : ''}${o.hidden ? ' dim' : ''}">${DEF[o.type].i} ${esc(o.name)}${isProg(o) ? ' <span class="pbadge">⚙ مبرمج</span>' : ''}${o.hidden ? ' <span class="mut">· مخفي</span>' : ''}</div>`).join('')
-    || '<div class="mut">المشهد فاضي</div>';
+  $('#hier').innerHTML = html;
+  try { fitShrinkRows(); } catch (_) {}
   const worldN = S.objs.filter(o => o.type !== 'respawn' && o.type !== 'online_spawn').length;
   $('#objCount').textContent = worldN + ' كائن';
   try { updSpawnBtn(); } catch (_) {}
 }
-function hierMark() { $$('#hier [data-id]').forEach(d => d.classList.toggle('on', +d.dataset.id === S.sel)); }
-$('#hier').onclick = e => { const d = e.target.closest('[data-id]'); if (d) sel(+d.dataset.id); };
+function hierMark() {
+  const ids = new Set(selIds());
+  const multiSel = ids.size > 1;
+  $$('#hier [data-id]').forEach(d => { const on = ids.has(+d.dataset.id); d.classList.toggle('on', on); d.classList.toggle('multi', on && multiSel); });
+  $$('#hier [data-gid]').forEach(d => d.classList.toggle('on', S.selGroup != null && d.dataset.gid === S.selGroup));
+}
+const _HIER = $('#hier');
+let HDRAG = null;
+function _hClearMarks() { _HIER.querySelectorAll('.h-drop-before,.h-drop-after,.h-drop-in').forEach(x => x.classList.remove('h-drop-before', 'h-drop-after', 'h-drop-in')); }
+function _hZone(e, row) {
+  const r = row.getBoundingClientRect(), y = (e.clientY - r.top) / Math.max(1, r.height);
+  if (row.dataset.k === 'g') return y < .25 ? 'before' : (y > .75 ? 'after' : 'in');
+  return y < .5 ? 'before' : 'after';
+}
+function _hRowAt(e) { return (e.target && e.target.closest) ? e.target.closest('[data-id],[data-gid],[data-root]') : null; }
+_HIER.addEventListener('dragstart', e => {
+  const row = _hRowAt(e); if (!row || row.dataset.root) return;
+  let items;
+  if (row.dataset.gid) items = [{k: 'g', id: row.dataset.gid}];
+  else { const id = +row.dataset.id, cur = selIds(); items = (cur.length > 1 && cur.includes(id)) ? cur.map(x => ({k: 'o', id: x})) : [{k: 'o', id}]; }
+  HDRAG = {items};
+  try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', 'hawa-node'); } catch (_) {}
+  row.classList.add('h-dragging');
+});
+_HIER.addEventListener('dragend', () => { HDRAG = null; _hClearMarks(); _HIER.querySelectorAll('.h-dragging').forEach(x => x.classList.remove('h-dragging')); });
+_HIER.addEventListener('dragover', e => {
+  if (!HDRAG) return;
+  const row = _hRowAt(e); _hClearMarks();
+  if (!row) return;
+  e.preventDefault();
+  try { e.dataTransfer.dropEffect = 'move'; } catch (_) {}
+  if (row.dataset.root) { row.classList.add('h-drop-in'); return; }
+  row.classList.add('h-drop-' + _hZone(e, row));
+});
+_HIER.addEventListener('drop', e => {
+  if (!HDRAG) return;
+  e.preventDefault();
+  const row = _hRowAt(e), items = HDRAG.items; HDRAG = null; _hClearMarks();
+  if (!row) return;
+  if (row.dataset.root) return placeNodes(items, null, null, 'end');
+  const zone = _hZone(e, row);
+  if (row.dataset.gid) {
+    const gid = row.dataset.gid;
+    if (zone === 'in') return placeNodes(items, gid, null, 'end');
+    const g = grpOf(gid); if (!g) return;
+    return placeNodes(items, g.parent || null, {k: 'g', id: gid}, zone);
+  }
+  const o = OBJ.get(+row.dataset.id); if (!o) return;
+  placeNodes(items, o.grp || null, {k: 'o', id: o.id}, zone);
+});
+_HIER.addEventListener('mousedown', e => {
+  if (!(e.ctrlKey || e.metaKey) || e.button !== 0) return;
+  const d = _hRowAt(e); if (!d || d.dataset.root) return;
+  e.preventDefault(); e.stopPropagation();
+  ctrlPend = false;
+  if (d.dataset.gid) selectGroup(d.dataset.gid, true);
+  else selectObjRow(+d.dataset.id, true);
+  hier();
+}, true);
+_HIER.onclick = e => {
+  if (e.ctrlKey || e.metaKey) return; // Ctrl-click handled on mousedown
+  const ar = e.target.closest && e.target.closest('[data-arrow]');
+  if (ar) { const g = grpOf(ar.dataset.arrow); if (g) { g.open = g.open === false; chg(); hier(); } return; }
+  const d = _hRowAt(e); if (!d || d.dataset.root) return;
+  const multi = !!(e.ctrlKey || e.metaKey);
+  if (d.dataset.gid) selectGroup(d.dataset.gid, multi);
+  else selectObjRow(+d.dataset.id, multi);
+  hier();
+};
+const _hAdd = $('#hAddGrp'); if (_hAdd) _hAdd.onclick = () => addGroupPrompt();
+
 $('#hq').oninput = hier;
 function mediaLabel(v) {
   if (v == null || v === '') return 'لا يوجد';
@@ -3629,7 +3996,6 @@ function mediaLabel(v) {
     return m ? (m.name || id) : id;
   }
   if (s.startsWith('data:')) return 'مرفق مضمّن';
-  if (s.length > 40) return s.slice(0, 28) + '…';
   return s;
 }
 function mediaKindFrom(mime, name) {
@@ -4967,7 +5333,8 @@ function inspect() {
   }
   h += `<div class="acts"><button data-a="up">${ic('up')}<i>طلوع</i></button><button data-a="down">${ic('down')}<i>نزول</i></button>`
     + `<button data-a="vis">${ic(o.hidden ? 'eyeoff' : 'eye')}<i>${o.hidden ? 'إظهار' : 'إخفاء'}</i></button><button data-a="dup">${ic('copy')}<i>نسخ</i></button><button data-a="del" class="red">${ic('trash')}<i>حذف</i></button></div>`;
-  el.innerHTML = h; updVis();
+  const _nSel = selIds().length;
+  el.innerHTML = (_nSel > 1 ? '<div class="sel-multi">✦ ' + _nSel + ' كائن محدد · الماوس بيحركهم كلهم · الحقول دي للكائن الأساسي</div>' : '') + h; updVis();
 }
 function refreshTf() {
   const o = OBJ.get(S.sel); if (!o) return;
@@ -5597,7 +5964,7 @@ async function openScriptItemMenu(id) {
 
 const _pNew = $('#pNew'), _pUp = $('#pUp');
 if (_pNew) _pNew.onclick = () => {
-  const s = {id: S.sid++, name: 'script_' + S.sid + '.js', code: TPL, enabled: true, p: {}, folder: codeCwd('script') || null};
+  const s = {id: S.sid++, name: 'script_' + S.sid + '.js', code: '', enabled: true, p: {}, folder: codeCwd('script') || null};
   S.scripts.push(s); pList(); openEd(s.id, 'script'); chg();
 };
 if (_pUp) _pUp.onclick = () => { const fl = $('#fl'); if (fl) { fl.dataset.m = 'js'; fl.click(); } };
@@ -5631,11 +5998,53 @@ function openEd(id, k) {
   const nameEl = $('#edName'), ta = $('#edT'), kind = $('#edKind');
   if (nameEl) nameEl.value = s.name || '';
   if (ta) ta.value = s.code || '';
+  try { if (ta) ta.scrollTop = 0; window.__edGutRender && window.__edGutRender(); } catch (_) {}
   if (kind) kind.textContent = edK === 'sobj' ? 'كائن برمجي' : 'ملف برمجة';
   showEd(true);
   try { const sm = document.getElementById('edSaveMsg'); if (sm) { sm.className = ''; sm.textContent = ''; } } catch (e) {}
   try { if (ta) ta.focus(); } catch (e) {}
 }
+/* ===== محرر الكود: أرقام الأسطر + زر مسح الكود ===== */
+(function wireCodeEditorExtras() {
+  const ta = document.getElementById('edT'), gut = document.getElementById('edGut'), clr = document.getElementById('edClear');
+  if (!ta || !gut) return;
+  const render = () => {
+    const n = Math.max(1, (ta.value.match(/\n/g) || []).length + 1);
+    if (gut.dataset.n !== String(n)) {
+      gut.dataset.n = String(n);
+      let t = ''; for (let i = 1; i <= n; i++) t += i + '\n';
+      gut.textContent = t;
+    }
+    gut.scrollTop = ta.scrollTop;
+  };
+  ta.addEventListener('input', render);
+  ta.addEventListener('scroll', render);
+  ta.addEventListener('keyup', render);
+  window.__edGutRender = render;
+  if (clr) clr.onclick = async () => {
+    if (ta.value === '') return;
+    let ok = true;
+    try { ok = await uiConfirm('تمسح كل الكود المكتوب في الملف ده؟'); } catch (_) {}
+    if (!ok) return;
+    ta.value = ''; render(); ta.focus();
+    try { chg(); } catch (_) {}
+  };
+})();
+
+/* ===== أسماء الملفات والمجلدات: سطر واحد، والخط بيصغر لحد ما يتسع ===== */
+function fitNameEl(el) {
+  if (!el || !el.isConnected || el.clientWidth === 0) return;
+  if (!el.dataset.fitBase) el.dataset.fitBase = String(parseFloat(getComputedStyle(el).fontSize) || 12);
+  let fs = +el.dataset.fitBase;
+  el.style.fontSize = fs + 'px';
+  while (el.scrollWidth > el.clientWidth + 1 && fs > 6) { fs -= .5; el.style.fontSize = fs + 'px'; }
+}
+function fitAllNames() {
+  document.querySelectorAll('#pList .pc-name, #sList .pc-name, #mfList .mf-name, #pCrumb .pc-name, #sCrumb .pc-name, #mfCrumb .mf-name, #pCrumb .mf-name, #sCrumb .mf-name').forEach(fitNameEl);
+}
+setInterval(() => { try { fitAllNames(); } catch (_) {} }, 500);
+addEventListener('resize', () => { try { fitAllNames(); } catch (_) {} });
+
 async function saveEd() {
   const flash = (msg, isErr) => {
     try {
@@ -5909,8 +6318,7 @@ const HawaWorldView = (() => {
     const speed = 6, flySpeed = 9;
     
     const joy = { x: 0, y: 0, active: false };
-    const isMob = !!(typeof MOB !== 'undefined' && MOB.on)
-      || ('ontouchstart' in window) || (navigator.maxTouchPoints > 1);
+    const isMob = !!(typeof MOB !== 'undefined' && MOB.on) || isMobileDevice();
     let joyEl = null, knobEl = null, lookZone = null;
 
     if (isMob && api.ov) {
@@ -6409,7 +6817,7 @@ async function openSobjItemMenu(id) {
 const _sNew = $('#sNew'), _sUp = $('#sUp');
 const _sUnit = $('#sUnitView');
 if (_sNew) _sNew.onclick = () => {
-  const d = {id: S.did++, name: 'كائن_' + S.did, code: STPL, p: {}, folder: codeCwd('sobj') || null};
+  const d = {id: S.did++, name: 'كائن_' + S.did, code: '', p: {}, folder: codeCwd('sobj') || null};
   S.sdefs.push(d); sList(); openEd(d.id, 'sobj'); chg();
 };
 if (_sUp) _sUp.onclick = () => { const fl = $('#fl'); if (fl) { fl.dataset.m = 'sobj'; fl.click(); } };
@@ -6536,7 +6944,7 @@ const StoreFS = {
     let info = null;
     try {
       const ctl = typeof AbortController === 'function' ? new AbortController() : null;
-      const to = ctl ? setTimeout(() => ctl.abort(), 2500) : 0;
+      const to = ctl ? setTimeout(() => ctl.abort(), 7000) : 0;
       const r = await fetch('/api/fs/ping', { cache: 'no-store', signal: ctl ? ctl.signal : undefined });
       if (to) clearTimeout(to);
       if (r.ok) info = await r.json();
@@ -6806,6 +7214,8 @@ const StoreFS = {
       version: 1,
       name: (data && data.name) || 'project',
       objs,
+      groups: JSON.parse(JSON.stringify((data && Array.isArray(data.groups)) ? data.groups : (S.groups || []))),
+      gnid: (data && data.gnid) || S.gnid || 1,
       scripts: JSON.parse(JSON.stringify(scripts)),
       sdefs: JSON.parse(JSON.stringify(sdefs)),
       scriptFolders: JSON.parse(JSON.stringify((data && data.scriptFolders) || S.scriptFolders || {})),
@@ -6876,6 +7286,8 @@ const StoreFS = {
       format: 'hawa-project-v3',
       name: lean.name,
       objs: lean.objs || [],
+      groups: Array.isArray(lean.groups) ? lean.groups : [],
+      gnid: lean.gnid,
       scripts: lean.scripts || [],
       sdefs: lean.sdefs || [],
       media,
@@ -7093,7 +7505,8 @@ function norm(o) {
   const sd = o.type === 'sobj' ? defOf(o.def) : null, big = !!sd && isBig(sd.code);
   return {id: S.nid++, def: o.def, name: o.name || d.n, type: o.type, pos: v3(o.pos, [0, 0, 0]), rot: v3(o.rot, [0, 0, 0]), scl: v3(o.scl, d.s),
     color: /^#[0-9a-f]{6}$/i.test(o.color) ? o.color : d.c, solid: o.solid != null ? !!o.solid : !!d.solid, hidden: !!o.hidden,
-    base: !!o.base || big, scripts: Array.isArray(o.scripts) ? o.scripts : [], p: {...(d.p || {}), ...(o.p || {})}};
+    base: !!o.base || big, scripts: Array.isArray(o.scripts) ? o.scripts : [], p: {...(d.p || {}), ...(o.p || {})},
+    grp: (typeof o.grp === 'string' || typeof o.grp === 'number') ? o.grp : null, ord: (typeof o.ord === 'number' && isFinite(o.ord)) ? o.ord : undefined};
 }
 function loadData(d, append) {
   if (!d) return;
@@ -7165,9 +7578,20 @@ function loadData(d, append) {
     S.did = Math.max(1, (d.did || 0), maxDid + 1);
     S.nid = 1;
   }
+  const gmap = {};
+  const gsrc = Array.isArray(d.groups) ? d.groups.filter(g => g && g.id != null) : [];
+  if (!append) S.groups = [];
+  for (const g of gsrc) {
+    const nid = append ? nextGid() : String(g.id);
+    gmap[String(g.id)] = nid;
+    S.groups.push({id: nid, name: String(g.name || 'مجموعة').slice(0, 60), parent: null, open: g.open !== false, ord: typeof g.ord === 'number' ? g.ord : undefined, color: typeof g.color === 'string' ? g.color : undefined});
+  }
+  for (const g of gsrc) { const me = grpOf(gmap[String(g.id)]); if (me && g.parent != null && gmap[String(g.parent)]) me.parent = gmap[String(g.parent)]; }
   for (const r of d.objs || []) {
     const o = norm(r);
     if (!o) continue;
+    o.grp = (r.grp != null && gmap[String(r.grp)] != null) ? gmap[String(r.grp)] : null;
+    o.ord = typeof r.ord === 'number' ? r.ord : undefined;
     
     if (!append && r.id != null) {
       o.id = +r.id;
@@ -7180,6 +7604,7 @@ function loadData(d, append) {
   }
   if (!append) {
     if (d.nid) S.nid = Math.max(S.nid, +d.nid);
+    if (d.gnid) S.gnid = Math.max(S.gnid || 1, +d.gnid || 1);
     if (d.player && typeof d.player === 'object' && typeof PCFG !== 'undefined') {
       try { Object.assign(PCFG, d.player); } catch (_) {}
     }
@@ -7225,6 +7650,7 @@ function projectPersistFields() {
     roomMinPlayersSetting: roomMin,
     roomFillExact: !!S.roomFillExact,
     snap: (S.snap === 0 || S.snap === .25 || S.snap === .5 || S.snap === 1) ? S.snap : .5,
+    padGame: !!S.padGame,
     player: (typeof PCFG !== 'undefined') ? JSON.parse(JSON.stringify(PCFG)) : null,
     builderCam: (typeof getBuilderCam === 'function') ? getBuilderCam() : null
   };
@@ -7237,6 +7663,7 @@ function applyProjectPersistFields(d) {
   S.allowScriptSpawn = true;
   if (d.roomMinEnabled != null) S.roomMinEnabled = !!d.roomMinEnabled;
   if (d.roomFillExact != null) S.roomFillExact = !!d.roomFillExact;
+  if (d.padGame != null) S.padGame = !!d.padGame;
   let rmp = d.roomMinPlayersSetting != null ? d.roomMinPlayersSetting : d.roomMinPlayers;
   if (rmp != null) S.roomMinPlayers = Math.max(2, Math.floor(+rmp || 2));
   if (d.snap === 0 || d.snap === .25 || d.snap === .5 || d.snap === 1) {
@@ -7257,6 +7684,7 @@ function packProjectSnapshot(name) {
     version: 3,
     name: name || (S && S._projName) || 'مشروع',
     objs: JSON.parse(JSON.stringify(S.objs)),
+    groups: JSON.parse(JSON.stringify(S.groups || [])),
     scripts: JSON.parse(JSON.stringify(S.scripts)),
     sdefs: JSON.parse(JSON.stringify(S.sdefs)),
     media: JSON.parse(JSON.stringify(S.media || {})),
@@ -8098,8 +8526,7 @@ function isMobileLike() {
     if (document.body && document.body.classList.contains('is-mobile')) return true;
   } catch (_) {}
   try {
-    return /Android|iPhone|iPad|iPod|Mobile|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
-      || (navigator.maxTouchPoints > 1 && Math.min(screen.width, screen.height) < 900);
+    return isMobileDevice();
   } catch (_) { return false; }
 }
 async function lockLandscapeIfMobile() {
@@ -10471,6 +10898,46 @@ function jkey(name) {
   if (/head|neck/.test(k)) return 'head';
   return null;
 }
+/* ===== مفاصل حرّة: أي مفصل قياسي أو مفصل مضاف من البرمجة ===== */
+function findJoint(rig, name) {
+  if (!rig) return null;
+  const raw = String(name == null ? '' : name).trim();
+  if (!raw) return null;
+  if (rig.custom && rig.custom[raw]) return rig.custom[raw];
+  const k = jkey(raw);
+  return k ? jointOf(rig, k) : null;
+}
+function addRigJoint(rig, parentName, name, opt) {
+  const raw = String(name == null ? '' : name).trim();
+  if (!rig || !raw) return null;
+  const exist = findJoint(rig, raw);
+  if (exist) return exist;
+  const parent = findJoint(rig, parentName) || rig.root;
+  const o = new T.Object3D();
+  o.name = 'hawaJoint:' + raw;
+  const p = opt && opt.pos, r = opt && opt.rot;
+  if (Array.isArray(p)) o.position.set(+p[0] || 0, +p[1] || 0, +p[2] || 0);
+  if (Array.isArray(r)) o.rotation.set(+r[0] || 0, +r[1] || 0, +r[2] || 0);
+  if (opt && opt.scale != null) o.scale.setScalar(+opt.scale || 1);
+  parent.add(o);
+  if (!rig.custom) rig.custom = {};
+  rig.custom[raw] = o;
+  return o;
+}
+function removeRigJoint(rig, name) {
+  const raw = String(name == null ? '' : name).trim();
+  if (!rig || !raw) return false;
+  if (rig.custom && rig.custom[raw]) {
+    const o = rig.custom[raw];
+    if (o.parent) o.parent.remove(o);
+    delete rig.custom[raw];
+    return true;
+  }
+  // المفاصل القياسية ما بتتشالش (الأنيميشن محتاجها) — بتترجع لوضعها الأصلي وتتقفل
+  const j = findJoint(rig, raw);
+  if (j) { j.rotation.set(0, 0, 0); return 'reset'; }
+  return false;
+}
 function jointOf(rig, key) {
   if (!rig) return null;
   switch (key) {
@@ -10857,9 +11324,10 @@ function bigGame(rt, o, root) {
       const target = (i == null || i === 0 || i === 'me') ? (NetMP.on ? NetMP.slot : 1) : i;
       const isLocal = !NetMP.on || +target === +NetMP.slot || target === 'me' || target === 'local';
       if (isLocal) {
-        const key = jkey(name), j = key && jointOf(rt.rig, key); if (!j) return;
+        const j = findJoint(rt.rig, name); if (!j) return;
         j.rotation.set(rx || 0, ry || 0, rz || 0);
-        if (opt && opt.lock) rt.locks.add(key); else if (opt && opt.lock === false) rt.locks.delete(key);
+        const lk = jkey(name) || String(name).trim();
+        if (opt && opt.lock) rt.locks.add(lk); else if (opt && opt.lock === false) rt.locks.delete(lk);
       } else {
         const limbs = {}; limbs[name] = [rx || 0, ry || 0, rz || 0];
         G2.controlPlayer(target, { limbs });
@@ -10868,11 +11336,11 @@ function bigGame(rt, o, root) {
     getBone: (i, name) => {
       const target = (i == null || i === 0 || i === 'me') ? (NetMP.on ? NetMP.slot : 1) : i;
       if (!NetMP.on || +target === +NetMP.slot) {
-        const key = jkey(name); return key ? jointOf(rt.rig, key) : null;
+        return findJoint(rt.rig, name);
       }
       const r = NetMP.remotes && NetMP.remotes.get(+target);
       if (!r || !r.rig) return null;
-      const key = jkey(name); return key ? jointOf(r.rig, key) : null;
+      return findJoint(r.rig, name);
     },
     setCamera: (i, cfg) => {
       // setCamera(cfg) or setCamera(slot, cfg)
@@ -11815,6 +12283,7 @@ const NetMP = {
   _onMsg(from, msg) {
     if (!msg || !msg.t) return;
     if (this._handleNetMsg(from, msg)) return;
+    if (msg.t === 'pad') { try { PadGate.onRemote(msg); } catch (_) {} if (this.isHost) this._relay(from, msg); return; }
     if (msg.t === 'leave' || msg.t === 'bye') {
       const slot = +(msg.slot || 0);
       const nm = msg.name || (this.remotes.get(slot) && this.remotes.get(slot).name) || 'لاعب';
@@ -12514,10 +12983,19 @@ const NetMP = {
       } catch (e) { console.warn('pcmd appearance', e); }
     }
     // —— مفاصل ——
+    if (cmd.joints && rt.rig) {
+      for (const op of [].concat(cmd.joints)) {
+        if (!op || typeof op !== 'object') continue;
+        try {
+          if (op.op === 'remove') removeRigJoint(rt.rig, op.name);
+          else addRigJoint(rt.rig, op.parent, op.name, op);
+        } catch (e) { console.warn('joint op', e); }
+      }
+    }
+    if (cmd.flying != null) rt.flying = !!cmd.flying;
     if (cmd.limbs && typeof cmd.limbs === 'object' && rt.rig) {
       for (const [name, rot] of Object.entries(cmd.limbs)) {
-        const key = jkey(name);
-        const j = key && jointOf(rt.rig, key);
+        const j = findJoint(rt.rig, name);
         if (!j || !rot) continue;
         if (Array.isArray(rot)) j.rotation.set(+rot[0] || 0, +rot[1] || 0, +rot[2] || 0);
         else if (typeof rot === 'object') j.rotation.set(+rot.x || 0, +rot.y || 0, +rot.z || 0);
@@ -12546,7 +13024,7 @@ const NetMP = {
     }
     // —— أي مفاتيح إضافية تتخزن في الحالة ——
     for (const k of Object.keys(cmd)) {
-      if (['pos','teleport','x','y','z','yaw','ang','pitch','velocity','locked','hold','speedMul','animLock','appearance','limbs','input','camera','state','prop','key','say','sayMs'].includes(k)) continue;
+      if (['pos','teleport','x','y','z','yaw','ang','pitch','velocity','locked','hold','speedMul','animLock','appearance','limbs','joints','flying','input','camera','state','prop','key','say','sayMs'].includes(k)) continue;
       this.setPlayerStateKey(this.slot, k, cmd[k]);
     }
   },
@@ -12695,6 +13173,10 @@ const OnlineMenu = {
     const conf = document.getElementById('pOnlineConfirm');
     const leaveOk = document.getElementById('pLeaveOk');
     const leaveCancel = document.getElementById('pLeaveCancel');
+    const offHome = document.getElementById('pOffHome');
+    if (offHome) offHome.addEventListener('click', e => { e.preventDefault(); this.leaveToHome(); });
+    const offGames = document.getElementById('pOffGames');
+    if (offGames) offGames.addEventListener('click', e => { e.preventDefault(); this.leaveToGames(); });
     if (menuBtn) menuBtn.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); this.toggle(); });
     if (close) close.addEventListener('click', e => { e.preventDefault(); this.hide(); });
     if (menu) menu.addEventListener('click', e => { if (e.target === menu) this.hide(); });
@@ -12736,7 +13218,7 @@ const OnlineMenu = {
   show() {
     this.ensure();
     const menu = document.getElementById('pOnlineMenu');
-    if (menu) { menu.classList.add('on'); menu.setAttribute('aria-hidden', 'false'); }
+    if (menu) { menu.classList.toggle('offline', !(typeof NetMP !== 'undefined' && NetMP.on)); menu.classList.add('on'); menu.setAttribute('aria-hidden', 'false'); }
     this.open = true;
     try { if (document.pointerLockElement) document.exitPointerLock(); } catch (_) {}
   },
@@ -12748,6 +13230,19 @@ const OnlineMenu = {
     this.open = false;
   },
   toggle() { if (this.open) this.hide(); else this.show(); },
+  leaveToGames() {
+    try { NetMP.announceLeave(); } catch (_) {}
+    try { NetMP.stop(); } catch (_) {}
+    try { VoiceChat.destroy(); } catch (_) {}
+    try {
+      sessionStorage.removeItem('hawa_play_meta');
+      sessionStorage.removeItem('hawa_play');
+    } catch (_) {}
+    try {
+      if (window.parent && window.parent !== window) { window.parent.location.href = '/games'; return; }
+    } catch (_) {}
+    try { location.href = '/games'; } catch (_) {}
+  },
   leaveToHome() {
     try { NetMP.announceLeave(); } catch (_) {}
     try { NetMP.stop(); } catch (_) {}
@@ -12759,17 +13254,17 @@ const OnlineMenu = {
     // لو جوا iframe (تبادل أكواد): رجّع الأب للرئيسية
     try {
       if (window.parent && window.parent !== window) {
-        window.parent.location.href = 'index.html';
+        window.parent.location.href = '/hawa%20engine';
         return;
       }
     } catch (_) {}
-    try { location.href = 'index.html'; } catch (_) {}
+    try { location.href = '/hawa%20engine'; } catch (_) {}
   },
   setupOnlineChrome() {
     this.ensure();
     try { document.body.classList.add('online-play'); } catch (_) {}
     const bar = document.getElementById('pOnlineBar');
-    if (bar) bar.classList.add('show');
+    if (bar) { bar.classList.add('show'); bar.classList.add('online'); }
     const home = document.getElementById('playHome');
     if (home) home.style.display = 'none';
     const top = document.getElementById('pTop');
@@ -12784,10 +13279,101 @@ const OnlineMenu = {
   }
 };
 
+setTimeout(() => { try { OnlineMenu.ensure(); } catch (_) {} }, 0);
+/* ===== الدراع (يد التحكم): شرط بدء اللعب + تنبيهات الانقطاع أثناء اللعب ===== */
+const PadGate = {
+  peers: new Map(),
+  _passUntil: 0,
+  _iv: null,
+  selfOk() { try { return !!(typeof HawaPad !== 'undefined' && HawaPad.isActive && HawaPad.isActive()); } catch (_) { return false; } },
+  online() { return !!(typeof NetMP !== 'undefined' && NetMP.on); },
+  selfName() { return (this.online() && NetMP.name) ? NetMP.name : 'أنت'; },
+  onRemote(msg) {
+    const k = msg.slot != null ? +msg.slot : String(msg.name || '?');
+    this.peers.set(k, {ok: !!msg.ok, name: String(msg.name || 'لاعب').slice(0, 30), t: Date.now()});
+    this._render();
+  },
+  roster() {
+    const out = [{self: true, name: this.selfName(), ok: this.selfOk()}];
+    if (this.online()) for (const [slot, r] of NetMP.remotes) {
+      const p = this.peers.get(slot), fresh = !!(p && Date.now() - p.t < 5000);
+      out.push({self: false, name: (r && r.name) || (p && p.name) || ('لاعب ' + slot), ok: !!(p && p.ok && fresh)});
+    }
+    return out;
+  },
+  allOk() { return !S.padGame || this.roster().every(x => x.ok); },
+  start() {
+    this.ensureDom();
+    if (this._iv) return;
+    this._iv = setInterval(() => {
+      try {
+        if (S.padGame && this.online()) NetMP.broadcast({t: 'pad', slot: NetMP.slot, name: NetMP.name, ok: this.selfOk()});
+      } catch (_) {}
+      this._render();
+    }, 800);
+  },
+  _render() {
+    const selfW = document.getElementById('padSelfWarn'), listW = document.getElementById('padWarnList');
+    if (!selfW || !listW) return;
+    const playing = S.mode === 'play' && S.padGame;
+    selfW.hidden = !(playing && !this.selfOk());
+    const others = playing ? this.roster().filter(x => !x.self && !x.ok) : [];
+    const html = others.map(x => '<div class="pw">🎮 اللاعب «' + esc(x.name) + '» انقطع اتصال الدراع الخاص به ويتم انتظار توصيله</div>').join('');
+    if (listW.dataset.k !== html) { listW.dataset.k = html; listW.innerHTML = html; }
+    listW.hidden = !html;
+  },
+  _renderGate() {
+    const st = document.getElementById('padGateStatus'), list = document.getElementById('padGateList');
+    if (!st || !list) return;
+    const me = this.selfOk();
+    st.textContent = me ? '✅ تم توصيل الدراع' : '❌ لم يتم توصيل الدراع';
+    st.style.color = me ? '#86efac' : '#fca5a5';
+    list.innerHTML = this.roster().map(x => '<div class="pg-row"><span>' + esc(x.name) + (x.self ? ' (أنت)' : '') + '</span><span>' + (x.ok ? '✅ متصل' : '❌ في انتظار التوصيل') + '</span></div>').join('');
+  },
+  ensureDom() {
+    if (document.getElementById('padGate')) return;
+    const wrap = document.createElement('div');
+    wrap.innerHTML = '<div id="padGate" class="pad-gate" hidden><div class="pg-box"><div class="pg-hd"><b>🎮 الدراع</b></div><div id="padGateStatus" class="pg-status"></div><p class="mut small">اللعبة دي فيها دراع بلايستيشن. الجيم هيبدأ لما كل اللاعبين يوصلوا الدراع.</p><div id="padGateList" class="pg-list"></div><button type="button" id="padGateCancel" class="pg-cancel">إلغاء</button></div></div>'
+      + '<div id="padSelfWarn" class="pad-self-warn" hidden>تم انقطاع اتصال الدراع قم بتوصيله الان</div><div id="padWarnList" class="pad-warn-list" hidden></div>';
+    while (wrap.firstChild) document.body.appendChild(wrap.firstChild);
+  },
+  needGate() { return !!S.padGame && !window.HAWA_PLAY_ONLY && Date.now() > this._passUntil; },
+  waitStart() {
+    if (!this.needGate()) return Promise.resolve(true);
+    this.start();
+    const gate = document.getElementById('padGate'), cancel = document.getElementById('padGateCancel');
+    if (!gate) return Promise.resolve(true);
+    gate.hidden = false;
+    return new Promise(resolve => {
+      let done = false, iv = null, okAt = 0;
+      const finish = v => {
+        if (done) return; done = true;
+        clearInterval(iv); gate.hidden = true; if (cancel) cancel.onclick = null;
+        if (v) this._passUntil = Date.now() + 15000;
+        resolve(v);
+      };
+      iv = setInterval(() => {
+        this._renderGate();
+        if (this.allOk()) { if (!okAt) okAt = Date.now(); if (Date.now() - okAt >= 1200) finish(true); }
+        else okAt = 0;
+      }, 250);
+      if (cancel) cancel.onclick = () => finish(false);
+      this._renderGate();
+    });
+  }
+};
+try {
+  PadGate.start();
+  const _pb = document.getElementById('bPadRail');
+  if (_pb) _pb.onclick = () => { S.padGame = !S.padGame; syncPadToggles(); chg(); PadGate._render(); tip(S.padGame ? 'الدراع مفعّل' : 'الدراع مُغلق'); };
+} catch (_) {}
 async function playStart(opts) {
+  if (PadGate.needGate()) { if (!(await PadGate.waitStart())) return; }
   try {
   const withBuild = !!(opts && opts.withBuild) && !window.HAWA_PLAY_ONLY;
   S.playEdit = !!withBuild;
+  setSpawnVis(false);
+  setTestUrl(withBuild ? 'half' : 'full');
   // إخفاء طبقة البناء فوراً عشان متظهرش ومضة قبل اللعب — إلا في وضع مع البناء
   try {
     const app = document.getElementById('app');
@@ -12901,6 +13487,7 @@ async function playStart(opts) {
     }
     try {
       if (online) {
+        try { document.getElementById('pOnlineBar')?.classList.remove('offline'); document.getElementById('pOnlineMenu')?.classList.remove('offline-menu'); } catch (_) {}
         try { OnlineMenu.setupOnlineChrome(); } catch (e) { console.warn(e); }
         if (voiceOn) {
           VoiceChat.ensureBtn();
@@ -12927,8 +13514,11 @@ async function playStart(opts) {
         try { VoiceChat.off(); } catch (_) {}
         const b = document.getElementById('pMic');
         if (b) { b.classList.remove('show'); b.style.display = 'none'; }
+        // أوفلاين: نفس أيقونة المحرك (أعلى يسار) بتفتح نافذة فيها الرجوع للرئيسية ولقائمة الألعاب
         const bar = document.getElementById('pOnlineBar');
-        if (bar) bar.classList.remove('show');
+        if (bar) { bar.classList.add('show'); bar.classList.add('offline'); }
+        const menuEl = document.getElementById('pOnlineMenu');
+        if (menuEl) menuEl.classList.add('offline-menu');
       }
     } catch (e) { console.warn(e); }
   })();
@@ -13039,8 +13629,21 @@ async function playStart(opts) {
       setSpeed(mul) { rt.speedMul = mul; },
       setColor(hex) { try { rt.rig.root.traverse(x => { if (x.isMesh && x.material && x.material.color) x.material.color.set(hex); }); } catch (_) {} },
       hideCape(v) { if (rt.rig.cape) rt.rig.cape.forEach(c => { c.visible = !v; }); },
-      setLimb(name, rx, ry, rz) { const j = jointOf(rt.rig, jkey(name)); if (j) j.rotation.set(rx || 0, ry || 0, rz || 0); }
+      setLimb(name, rx, ry, rz) { const j = findJoint(rt.rig, name); if (j) j.rotation.set(rx || 0, ry || 0, rz || 0); },
+      // مفاصل حرّة: أضف/احذف/اتحكم في أي مفصل (قياسي أو مضاف)
+      addJoint(parent, name, opt) { return addRigJoint(rt.rig, parent, name, opt); },
+      removeJoint(name) { return removeRigJoint(rt.rig, name); },
+      getJoint(name) { return findJoint(rt.rig, name); },
+      setJoint(name, rx, ry, rz) { const j = findJoint(rt.rig, name); if (j) j.rotation.set(+rx || 0, +ry || 0, +rz || 0); return !!j; },
+      listJoints() { const std = ['rArm','rForearm','lArm','lForearm','rLeg','rShin','rFoot','lLeg','lShin','lFoot','spine','head']; return std.concat(Object.keys((rt.rig && rt.rig.custom) || {})); },
+      // طيران: يلغي الجاذبية، Space طلوع و Shift نزول
+      setFlying(on) { rt.flying = !!on; if (on) { rt.v.y = 0; } },
+      isFlying() { return !!rt.flying; }
     },
+    // مفاصل وطيران للاعب أي جهاز (أونلاين): بتتبعت للجهاز المطلوب
+    addPlayerJoint(target, parent, name, opt) { return game.controlPlayer(target, { joints: [Object.assign({op: 'add', parent: parent, name: name}, opt || {})] }); },
+    removePlayerJoint(target, name) { return game.controlPlayer(target, { joints: [{op: 'remove', name: name}] }); },
+    setPlayerFlying(target, on) { return game.controlPlayer(target, { flying: !!on }); },
     
     setHud(html) {
       if (S.mode !== 'play') return;
@@ -13314,6 +13917,8 @@ return {
   }
 }
 function playStop() {
+  setSpawnVis(true);
+  setTestUrl(null);
   try { MOB.setPlay(false); } catch (_) {}
   try { TouchUI.hide(); } catch (_) {}
   try { clearVirtualKeys(); } catch (_) {}
@@ -13445,6 +14050,7 @@ function playStop() {
 
 function playStartFX(opts) {
   if (S.mode === 'play') return;
+  if (PadGate.needGate()) { PadGate.waitStart().then(ok => { if (ok) playStartFX(opts); }); return; }
   const withBuild = !!(opts && opts.withBuild);
   try {
     const FX = window.HawaFX;
@@ -13467,6 +14073,7 @@ function playStartFX(opts) {
 }
 function showTestChoice() {
   if (S.mode === 'play') { playStop(); return; }
+  if (document.body && document.body.classList.contains('is-mobile')) { playStartFX({ withBuild: false }); return; }
   const el = document.getElementById('testChoice');
   if (!el) { playStartFX(); return; }
   el.hidden = false; el.removeAttribute('hidden'); el.style.display = 'flex';
@@ -13702,10 +14309,15 @@ function play(dt) {
     v.x += (dx * sp - v.x) * kk; v.z += (dz * sp - v.z) * kk;
     rt.coy = rt.gr ? .1 : (rt.coy || 0) - dt;
     const sp1 = inp && keyDown('Space'); if (sp1 && !rt.spPrev) rt.jbuf = .13; rt.spPrev = sp1; rt.jbuf = (rt.jbuf || 0) - dt;
-    if (rt.jbuf > 0 && rt.coy > 0 && inp) { v.y = 10; rt.gr = false; rt.coy = 0; rt.jbuf = 0; rt.jumping = true; }
+    if (rt.jbuf > 0 && rt.coy > 0 && inp && !rt.flying) { v.y = 10; rt.gr = false; rt.coy = 0; rt.jbuf = 0; rt.jumping = true; }
     if (!sp1 && rt.jumping && v.y > 4) v.y *= Math.pow(.0005, dt);
     if (v.y <= 0) rt.jumping = false;
-    v.y = Math.max(-35, v.y - 28 * dt);
+    if (rt.flying) {
+      const up = inp && keyDown('Space'), dn = inp && (keyDown('ShiftLeft') || keyDown('ShiftRight'));
+      v.y = (up ? 7 : 0) - (dn ? 7 : 0); rt.jumping = false;
+    } else {
+      v.y = Math.max(-35, v.y - 28 * dt);
+    }
     const st = ++rt.stamp, L = [];
     for (let x = Math.floor((p.x - 1.5) / CELL); x <= Math.floor((p.x + 1.5) / CELL); x++) for (let z = Math.floor((p.z - 1.5) / CELL); z <= Math.floor((p.z + 1.5) / CELL); z++) {
       const a = rt.hash.get(x * 100003 + z); if (a) for (const b of a) if (b.q !== st) { b.q = st; L.push(b); }
@@ -14152,11 +14764,7 @@ const MOB = {
   jump: false,
   detect() {
     // الموبايل = جهاز لمس فعلاً (مش حجم الشاشة). تصغير نافذة الكمبيوتر ما يغيّرش الوضع.
-    const mq = (q) => (typeof matchMedia === 'function' && matchMedia(q).matches);
-    const coarseOnly = mq('(any-pointer:coarse)') && !mq('(any-pointer:fine)');
-    const touch = navigator.maxTouchPoints > 0 || 'ontouchstart' in window;
-    const fineMouse = mq('(any-pointer:fine)') && !mq('(pointer:coarse)');
-    this.on = !!(coarseOnly || (touch && !fineMouse && /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)));
+    this.on = isMobileDevice();
     document.body.classList.toggle('is-mobile', this.on);
     return this.on;
   },
@@ -14607,6 +15215,7 @@ function boot() {
   else d = readSession() || emb || null;
   if (d && d.objs) {
     clearAll();
+    S.groups = Array.isArray(d.groups) ? d.groups.filter(g => g && g.id != null).map(g => ({id: String(g.id), name: String(g.name || 'مجموعة').slice(0, 60), parent: g.parent != null ? String(g.parent) : null, open: g.open !== false, ord: typeof g.ord === 'number' ? g.ord : undefined, color: typeof g.color === 'string' ? g.color : undefined})) : [];
     
     try {
       S.media = (d.media && typeof d.media === 'object') ? JSON.parse(JSON.stringify(d.media)) : {};
@@ -14623,6 +15232,7 @@ function boot() {
       S.allowScriptSpawn = true;
       S.roomMinEnabled = !!d.roomMinEnabled;
       S.roomFillExact = !!d.roomFillExact;
+      S.padGame = !!d.padGame;
       S.roomMinPlayers = Math.max(2, Math.floor(+(d.roomMinPlayersSetting != null ? d.roomMinPlayersSetting : d.roomMinPlayers) || 2));
       if (d.player && typeof d.player === 'object') {
         window.__HAWA_PLAYER_LOCKED = true;
@@ -14699,7 +15309,7 @@ function boot() {
       try {
         if (!(d && d.objs && d.objs.length)) {
           await uiAlert('اللعبة مفيهاش بيانات كافية للتشغيل.\nالسبب: ملف اللعبة ما وصلش لوضع اللعب (ارفعه من «فتح اللعبة» قبل إنشاء/انضمام الرووم، أو أعد رفعه).');
-          location.href = 'game.html';
+          location.href = '/games';
           return;
         }
         playStart();
@@ -14764,6 +15374,28 @@ function boot() {
     const na = (a.objs && a.objs.length) || 0, nb = (b.objs && b.objs.length) || 0;
     return na >= nb ? a : b;
   }
+  // الموبايل (أو أي جهاز) ممكن يفتح والسيرفر مش واصل وقتها (واي فاي بطيء / التطبيق المحمّل).
+  // بنفضل نحاول نوصل بالتخزين المشترك، ولما يتوصل بنوحّد النسخة (الأحدث بين السيرفر والمتصفح).
+  async function reconnectSharedStore(tries) {
+    if (location.protocol === 'file:') return;
+    for (let i = 0; i < tries; i++) {
+      await new Promise(r => setTimeout(r, 4000));
+      if (StoreFS.mode === 'server' || StoreFS.mode === 'folder') return;
+      let ok = false;
+      try { ok = await StoreFS.initServer(); } catch (_) {}
+      if (ok) {
+        try {
+          const dShared = await StoreFS.loadPreferred();
+          const dLocal = peekLocalProject();
+          const d = pickNewerProject(dShared, dLocal);
+          if (d && d === dShared) loadData(d, false);
+          else if (d) scheduleSave(200);
+          tip('✔ اتوصل بالتخزين المشترك');
+        } catch (e) { console.warn('reconnect store', e); }
+        return;
+      }
+    }
+  }
   // تخزين صامت: سيرفر / مجلد / localStorage — من غير ما نطلب تفعيل كل ريفرش
   if (st === true) {
     try {
@@ -14796,6 +15428,7 @@ function boot() {
       StoreFS.needsGesture = false;
       await loadLocalProjectFallback();
     } catch (_) {}
+    reconnectSharedStore(15).catch(() => {});
   }
   try { INTRO.start(); } catch (e) { console.warn(e); try { INTRO.finish(true); } catch (_) {} }
   try { updStorageActBtn(); } catch (_) {}

@@ -20,9 +20,9 @@ except ImportError:
     from SocketServer import ThreadingTCPServer as ThreadingHTTPServer
 
 try:
-    from urllib.parse import urlparse, parse_qs
+    from urllib.parse import urlparse, parse_qs, unquote
 except ImportError:
-    from urlparse import urlparse, parse_qs
+    from urlparse import urlparse, parse_qs, unquote
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 os.chdir(ROOT)
@@ -514,6 +514,8 @@ class QuietHandler(SimpleHTTPRequestHandler):
 
     def end_headers(self):
         self.send_header("Cache-Control", "no-store")
+        if getattr(self, "_noindex", False):
+            self.send_header("X-Robots-Tag", "noindex, nofollow")
         self.send_header("Access-Control-Allow-Origin", "*")
         SimpleHTTPRequestHandler.end_headers(self)
 
@@ -531,6 +533,43 @@ class QuietHandler(SimpleHTTPRequestHandler):
             if handled is not None:
                 return
             return _json_response(self, {"ok": False, "error": "not found"}, 404)
+        p = parsed.path
+        qs = ("?" + parsed.query) if parsed.query else ""
+        # الصفحة الرئيسية: /hawa engine (بمسافة أو %20 أو شرطة)
+        if unquote(p).strip().lower() in ("/hawa engine", "/hawa-engine", "/hawa_engine", "/hawa%20engine"):
+            self.path = "/index.html" + qs
+            return SimpleHTTPRequestHandler.do_GET(self)
+        # أسماء الملفات القديمة -> الروابط الجديدة (الشريط بيتحدّث)
+        LEGACY = {"/index.html": "/", "/game.html": "/games", "/build.html": "/build", "/play.html": "/playing", "/game": "/games"}
+        if p in LEGACY:
+            self.send_response(302)
+            self.send_header("Location", LEGACY[p] + qs)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        if p.endswith(".html") and p != "/":
+            self.send_response(302)
+            self.send_header("Location", p[:-5] + qs)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        # الروابط الداخلية -> الملف الحقيقي
+        target = None
+        if p == "/games" or p.startswith("/games/"):
+            target = "/game.html"
+        elif p == "/playing":
+            target = "/play.html"
+        elif p in ("/test", "/testmode", "/build"):
+            target = "/build.html"
+        if target:
+            if p in ("/test", "/testmode", "/playing"):
+                self._noindex = True
+            self.path = target + qs
+            return SimpleHTTPRequestHandler.do_GET(self)
+        if p not in ("/", "") and not os.path.splitext(p)[1]:
+            name = p.lstrip("/")
+            if os.path.isfile(os.path.join(ROOT, name + ".html")):
+                self.path = "/" + name + ".html" + qs
         return SimpleHTTPRequestHandler.do_GET(self)
 
     def do_POST(self):
@@ -649,8 +688,8 @@ def main():
     write_lock_files(port)
     ips = _local_ips()
     base_local = "http://127.0.0.1:%d" % port
-    build_url = base_local + "/index.html"
-    game_url = base_local + "/game.html"
+    build_url = base_local + "/"
+    game_url = base_local + "/games"
 
     print("")
     print("========================================")
@@ -663,7 +702,7 @@ def main():
     print("  Game:   %s" % game_url)
     print("  --- LAN (نفس الواي فاي) ---")
     for ip in ips:
-        print("  LAN:    http://%s:%d/game.html" % (ip, port))
+        print("  LAN:    http://%s:%d/games" % (ip, port))
     print("  Keep this window OPEN.")
     print("  Stop: close window OR Ctrl+C OR STOP_SERVER.bat")
     print("========================================")

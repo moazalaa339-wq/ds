@@ -3,7 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Hawa Game</title>
+<title>Playing</title>
+<meta name="robots" content="noindex,nofollow">
+<script>(function(){if(location.pathname==="/playing"){try{if(!sessionStorage.getItem("hawa_play"))location.replace("/games");}catch(e){}}})();</script>
 <link rel="icon" type="image/png" href="favicon.png">
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
 <link rel="apple-touch-icon" href="favicon-180.png">
@@ -25,9 +27,14 @@
 #playHome:hover{box-shadow:0 0 0 1px #ffbe3d,0 0 22px rgba(255,190,61,.35);color:#fff}
 </style>
 <script src="hawa-fx.js"></script>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0b0912">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Hawa">
+<link rel="apple-touch-icon" href="favicon-180.png">
 </head>
 <body>
-<a id="playHome" class="hawa-icon-btn" href="index.html" title="الرئيسية"><span class="hawa-ico-frame" data-ic="home"></span><i>الرئيسية</i></a>
 
 <!-- ================= طبقة البناء (Build) ================= -->
 <div id="app">
@@ -158,7 +165,7 @@
   <div id="pTop">
     <button id="pExit" class="stop"><span data-ic="stop"></span>خروج للبناء<kbd>P</kbd></button>
   </div>
-  <div id="pOnlineBar">
+  <div id="pOnlineBar" class="show">
     <button type="button" id="pMenuBtn" title="قائمة الأونلاين"><img src="logo-64.png" alt="Hawa"></button>
     <button type="button" id="pMic" class="online-compact" title="المايك">
       <span class="mic-ico" aria-hidden="true">
@@ -190,6 +197,14 @@
       <button type="button" class="pom-item" id="pMuteAll">
         <span class="hawa-ico-frame" data-ic="mute"></span>
         <span id="pMuteAllLbl">كتم أصوات جميع اللاعبين</span>
+      </button>
+      <button type="button" class="pom-item" id="pOffHome">
+        <span class="hawa-ico-frame" data-ic="home"></span>
+        <span>الرجوع للرئيسية</span>
+      </button>
+      <button type="button" class="pom-item" id="pOffGames">
+        <span class="hawa-ico-frame" data-ic="prog"></span>
+        <span>الرجوع لقائمة الألعاب</span>
       </button>
       <button type="button" class="pom-item danger" id="pLeaveOnline">
         <span class="hawa-ico-frame" data-ic="leave"></span>

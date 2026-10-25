@@ -6,7 +6,8 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>Hawa Engine · بناء</title>
+<title>Build</title>
+<script>(function(){var p=location.pathname;if(p==="/test"||p==="/testmode"){try{sessionStorage.removeItem("hawa_test_ok")}catch(e){}location.replace("/build");}})();</script>
 <link rel="icon" type="image/png" href="favicon.png">
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
 <link rel="apple-touch-icon" href="favicon-180.png">
@@ -21,13 +22,19 @@
 
 <link rel="stylesheet" href="style.css">
 <script src="hawa-fx.js"></script>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0b0912">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Hawa">
+<link rel="apple-touch-icon" href="favicon-180.png">
 </head>
 <body>
 
 <!-- ================= طبقة البناء (Build) ================= -->
 <div id="app">
   <header id="bar">
-    <a id="bHome" class="home-btn hawa-icon-btn" href="index.html" title="الرئيسية"><span class="hawa-ico-frame" data-ic="home"></span><i>الرئيسية</i></a>
+    <a id="bHome" class="home-btn hawa-icon-btn" href="/hawa%20engine" title="الرئيسية"><span class="hawa-ico-frame" data-ic="home"></span><i>الرئيسية</i></a>
     <div class="brand"><span class="logo"><img src="logo.png" alt="Hawa"></span><div><b>Hawa</b> Engine<small>v2.25 · بناء</small></div></div>
 
     <nav class="tabs" id="secs">
@@ -71,6 +78,8 @@
       <button id="bSpawns" title="نقط البداية"><span data-ic="flag"></span><span class="snap-l" id="spawnN">0</span></button>
       <button id="bSnap" title="الشبكة"><span data-ic="grid"></span><span class="snap-l">0.5</span></button>
       <button id="bCoordRail" title="الإحداثيات"><span data-ic="grid"></span></button>
+      <button id="bPadRail" type="button" class="pad-rail-btn" title="تفعيل الدراع (كونترولر بلايستيشن)"><span class="pad-ico"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 6h10a4 4 0 0 1 3.9 4.9l-1 4.2A2.5 2.5 0 0 1 17.5 17.5l-1.4-1.6H7.9l-1.4 1.6A2.5 2.5 0 0 1 2.1 15.1l-1-4.2A4 4 0 0 1 7 6z"/><path d="M6.5 9.5v3M5 11h3"/><circle cx="15.5" cy="10" r=".7" fill="currentColor"/><circle cx="17.7" cy="12.2" r=".7" fill="currentColor"/></svg></span><i class="bcap">الدراع</i></button>
+      <div id="padStatLine" class="pad-stat-line" hidden></div>
     </div>
     <div class="rail-group bottom">
       <button id="bPar" class="on" title="اللوحات"><span data-ic="panel"></span></button>
@@ -127,8 +136,7 @@
     <button type="button" id="tglDock" class="pnl-tgl pnl-tgl-l" title="إخفاء / إظهار نافذة الأقسام" aria-label="إخفاء أو إظهار نافذة الأقسام"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
     <button type="button" id="tglSide" class="pnl-tgl pnl-tgl-r" title="إخفاء / إظهار نافذة المشهد" aria-label="إخفاء أو إظهار نافذة المشهد"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
 
-    <div id="modeChip" class="chip-top">🏗 بناء</div>
-    <div id="padChip" class="chip-top pad-chip" title="حالة يد التحكم">🎮 لا يوجد controller متصل</div>
+    <div id="modeChip" class="chip-top" hidden></div>
     <div id="marqueeBox" hidden></div>
 
     <div id="gz" hidden>
@@ -157,10 +165,23 @@
       <div id="paramBody" class="param-body"></div>
     </div>
     <div id="coordPanel" class="coord-panel" hidden>
-      <div class="cp-row"><b>X</b><span id="cx">0.000</span></div>
-      <div class="cp-row"><b>Y</b><span id="cy">0.000</span></div>
-      <div class="cp-row"><b>Z</b><span id="cz">0.000</span></div>
-      <div class="cp-row mut" id="cName">—</div>
+      <div class="cp-blk"><div class="cp-t">📷 الكاميرا</div>
+        <div class="cp-row"><b>X</b><span id="kx">0.000</span></div>
+        <div class="cp-row"><b>Y</b><span id="ky">0.000</span></div>
+        <div class="cp-row"><b>Z</b><span id="kz">0.000</span></div>
+      </div>
+      <div class="cp-blk"><div class="cp-t">🎯 المحدد</div>
+        <div class="cp-row"><b>X</b><span id="cx">0.000</span></div>
+        <div class="cp-row"><b>Y</b><span id="cy">0.000</span></div>
+        <div class="cp-row"><b>Z</b><span id="cz">0.000</span></div>
+        <div class="cp-row mut" id="cName">—</div>
+      </div>
+      <button type="button" id="dropBtn" class="cp-drop">⬇ إسقاط</button>
+      <div id="dropBlk" class="cp-blk" hidden><div class="cp-t">📍 النقطة</div>
+        <div class="cp-row"><b>X</b><span id="dx">0.000</span></div>
+        <div class="cp-row"><b>Y</b><span id="dy">0.000</span></div>
+        <div class="cp-row"><b>Z</b><span id="dz">0.000</span></div>
+      </div>
     </div>
     <div id="crosshair" hidden>+</div>
 
@@ -170,7 +191,7 @@
 
   <!-- لوحة المشهد والخصائص اليمين -->
   <aside id="side">
-    <div class="sub"><span>المشهد</span><span id="objCount" class="mut">0 كائن</span><button type="button" class="m-close" data-m-close aria-label="إغلاق">✕</button></div>
+    <div class="sub"><span>المشهد</span><span id="objCount" class="mut">0 كائن</span><button type="button" id="hAddGrp" class="h-add" title="مجموعة جديدة (أب يضم كائنات)">＋</button><button type="button" class="m-close" data-m-close aria-label="إغلاق">✕</button></div>
     <div class="search"><span data-ic="search"></span><input id="hq" placeholder="ابحث في المشهد"></div>
     <div id="hier"></div>
     <div class="sub"><span>الخصائص</span></div>
@@ -220,6 +241,8 @@
     <span class="mic-lbl">مكتوم</span>
     <span class="mic-bar"><i></i></span>
   </button>
+  <div id="padSelfWarn" class="pad-self-warn" hidden>تم انقطاع اتصال الدراع قم بتوصيله الان</div>
+  <div id="padWarnList" class="pad-warn-list" hidden></div>
   <div id="pResize" class="p-resize" hidden title="تغيير الحجم"></div>
 </div>
 
@@ -235,7 +258,8 @@
       <button type="button" id="edX" title="إغلاق" onclick="try{window.__hawaCloseEd&&window.__hawaCloseEd()}catch(e){alert(e)}">✕</button>
     </div>
     <div id="edSaveMsg" role="status"></div>
-    <textarea id="edT" spellcheck="false"></textarea>
+    <div class="ed-tools"><button type="button" id="edClear" class="ed-clear" title="مسح الكود المكتوب">🧹 مسح الكود المكتوب</button></div>
+    <div class="ed-wrap"><div id="edGut" class="ed-gut" aria-hidden="true"></div><textarea id="edT" spellcheck="false" wrap="off"></textarea></div>
   </div>
 </div>
 <input type="file" id="fl" accept=".json,.js,.txt" multiple hidden>
@@ -260,7 +284,7 @@
 <div id="mMore">
   <div class="mm-hd"><b>المزيد</b><button type="button" data-m-close aria-label="إغلاق">✕</button></div>
   <div class="mm-grid">
-    <a id="mmHome" class="mm-home hawa-icon-btn" href="index.html"><span class="hawa-ico-frame" data-ic="home"></span>الرئيسية</a>
+    <a id="mmHome" class="mm-home hawa-icon-btn" href="/hawa%20engine"><span class="hawa-ico-frame" data-ic="home"></span>الرئيسية</a>
     <button type="button" data-proxy="bPlayNet"><span>🌐</span>أونلاين / أوفلاين</button>
     <button type="button" data-proxy="bSave"><span>💾</span>حفظ</button>
     <button type="button" data-proxy="bStorage"><span>🗂</span>عرض التخزين</button>
@@ -349,6 +373,14 @@
     </div>
   </div>
 
+<div id="padGate" class="pad-gate" hidden>
+  <div class="pg-box">
+    <div class="pg-hd"><b>🎮 انتظار الدراع</b></div>
+    <div id="padGateStatus" class="pg-status"></div>
+        <div id="padGateList" class="pg-list"></div>
+    <button type="button" id="padGateCancel" class="pg-cancel">إلغاء</button>
+  </div>
+</div>
 <script src="three.min.js"></script>
 <script src="jszip.min.js"></script>
 <script src="peerjs.min.js"></script>
@@ -363,6 +395,24 @@ document.addEventListener('keydown',function(e){if(e.key==='Escape')m.removeAttr
 (function(){function go(e){var a=e.currentTarget;e.preventDefault();try{var s=document.getElementById('bSave');if(s)s.click()}catch(_){}
 setTimeout(function(){location.href=a.getAttribute('href')},120)}
 ['bHome','mmHome'].forEach(function(id){var el=document.getElementById(id);if(el)el.addEventListener('click',go)})})();
+</script>
+<script>
+(function(){
+  var SEL=['#rail button[title]','#bar > button[title]','#bar .seg button[title]','.pnl-tgl[title]','#progP .row button[title]','#sobjP .row button[title]'];
+  function addCaps(){
+    document.querySelectorAll(SEL.join(',')).forEach(function(b){
+      if(b.querySelector('i')) return;
+      var tx=''; b.childNodes.forEach(function(n){ if(!(n.nodeType===1 && n.classList && n.classList.contains('snap-l'))) tx+=n.textContent||''; });
+      if(tx.replace(/\s+/g,'').length>2) return;
+      var title=(b.getAttribute('title')||'').trim();
+      if(b.id==='tglDock') title='الأقسام'; else if(b.id==='tglSide') title='المشهد';
+      if(!title||b.classList.contains('m-close')||title.indexOf('إغلاق')>=0) return;
+      var cap=document.createElement('i'); cap.className='bcap'; cap.textContent=title;
+      b.appendChild(cap);
+    });
+  }
+  addCaps();
+})();
 </script>
 </body>
 </html>
