@@ -7840,7 +7840,23 @@ async function uploadProjectZip(file) {
         if (d && (d.objs || d.scripts || d.sdefs)) { data = d; break; }
       } catch (_) {}
     }
-    if (!data) { await uiAlert('الملف مالوش بيانات مشروع أو لعبة صالحة (project.json أو game.json)'); return; }
+    // حزمة اللعبة من الكمبيوتر ممكن يكون فيها game.json ناقص أو في game-data.js بس
+    if (!data) {
+      const gdName = Object.keys(zip.files).find(n => /(^|\/)game-data\.js$/i.test(n) && !zip.files[n].dir);
+      if (gdName) {
+        try {
+          const gd = await zip.file(gdName).async('string');
+          const i = gd.indexOf('=');
+          const d = JSON.parse(gd.slice(i + 1).trim().replace(/;\s*$/, ''));
+          if (d && (d.objs || d.scripts || d.sdefs)) data = d;
+        } catch (_) {}
+      }
+    }
+    if (!data) {
+      const names = Object.keys(zip.files).filter(n => !zip.files[n].dir).slice(0, 12).join('، ');
+      await uiAlert('الملف ده مش فيه مشروع أو لعبة قابلة للقراءة.\nالملفات اللي جوه: ' + (names || 'مفيش') + '\n\nلو ده زيب تحويل لعبة من الكمبيوتر لازم يكون فيه game.json أو game-data.js.');
+      return;
+    }
     if (!data || (!data.objs && !data.scripts && !data.sdefs)) {
       await uiAlert('ملف مشروع غير صالح');
       return;
@@ -7854,7 +7870,7 @@ async function uploadProjectZip(file) {
     } catch (_) {}
     
     if (!data.media) data.media = {};
-    const mediaFiles = Object.keys(zip.files).filter(n => n.startsWith('media/') && !zip.files[n].dir);
+    const mediaFiles = Object.keys(zip.files).filter(n => (n.startsWith('media/') || n.startsWith('assets/')) && !zip.files[n].dir && !/(^|\/)inline_/.test(n));
     for (const path of mediaFiles) {
       const base = path.split('/').pop() || '';
       const id = base.split('_')[0];
@@ -8298,8 +8314,8 @@ if (_storageModal) _storageModal.addEventListener('click', e => { if (e.target =
 $('#fl').onchange = async e => {
   const m = e.target.dataset.m;
   for (const f of e.target.files) {
-    const name = (f.name || '').toLowerCase();
-    if (name.endsWith('.zip')) { await uploadProjectZip(f); continue; }
+    const head = new Uint8Array(await f.slice(0, 4).arrayBuffer());
+    if (head[0] === 0x50 && head[1] === 0x4B) { await uploadProjectZip(f); continue; }
     const text = await f.text();
     if (m === 'js') { S.scripts.push({id: S.sid++, name: f.name, code: text, enabled: true, p: {}, folder: codeCwd('script') || null}); pList(); }
     else if (m === 'sobj') { const d = {id: S.did++, name: f.name.replace(/\.[^.]+$/, ''), code: text, p: {}, folder: codeCwd('sobj') || null}; S.sdefs.push(d); sList(); }
