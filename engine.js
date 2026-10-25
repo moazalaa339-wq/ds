@@ -12367,9 +12367,24 @@ const NetMP = {
         self._pendingEvt = [];
       }
       if (!self.isHost) {
-        const c = self.peer.connect(self.code, { reliable: true });
-        self._bindConn(c);
-        c.on('open', () => { c.send({ t: 'hello', slot: self.slot, name: self.name }); });
+        // الضيف بيحاول يوصل للمضيف لحد ما ينجح (المضيف ممكن يكون لسه بيفتح صفحة اللعب)
+        const tryConnect = (n) => {
+          let opened = false;
+          const c = self.peer.connect(self.code, { reliable: true });
+          c.on('open', () => {
+            opened = true;
+            self._bindConn(c);
+            try { c.send({ t: 'hello', slot: self.slot, name: self.name }); } catch (_) {}
+          });
+          c.on('error', () => {});
+          setTimeout(() => {
+            if (opened) return;
+            try { c.close(); } catch (_) {}
+            if (n < 15) tryConnect(n + 1);
+            else say('⚠ ما قدرتش أوصل للمضيف — تأكد إنه فاتح اللعبة والكود صح', 6000);
+          }, 2000);
+        };
+        tryConnect(1);
       } else say('🌐 المضيف جاهز · سلوت ' + self.slot, 2000);
     });
     this.peer.on('connection', c => {
@@ -12377,7 +12392,16 @@ const NetMP = {
       c.on('open', () => { try { VoiceChat.onPeerConnected(c.peer); } catch(_){} });
     });
     this.peer.on('call', call => { try { VoiceChat._answerCall(call); } catch(_){} });
-    this.peer.on('error', err => console.warn('Peer error', err));
+    this.peer.on('error', err => {
+      console.warn('Peer error', err);
+      // الكود لسه محجوز من صفحة اللعبة القديمة — نعيد المحاولة شوية
+      if (self.isHost && err && err.type === 'unavailable-id') {
+        self._idRetry = (self._idRetry || 0) + 1;
+        if (self._idRetry <= 10) {
+          setTimeout(() => { try { self.peer.destroy(); } catch (_) {} self._startPeer(); }, 1500);
+        } else say('⚠ الكود مش قادر يتفتح للمضيف — ابدأ اللعبة تاني', 6000);
+      }
+    });
   },
   _bindConn(c) {
     const self = this;
