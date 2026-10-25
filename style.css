@@ -2459,3 +2459,26 @@ body.ui-short:not(.is-mobile) #rail button{width:34px;height:34px}
 .pcard.is-on .pc-place-arrow{
   background:rgba(34,197,94,.45);box-shadow:0 0 0 1px rgba(74,222,128,.5);
 }
+
+
+/* —— حالة يد التحكم (Controller) —— */
+.pad-chip{
+  top:44px;
+  inset-inline-start:12px;
+  max-width:min(92vw,320px);
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  font-size:11px;
+  font-weight:700;
+  color:#fca5a5;
+  border-color:rgba(248,113,113,.35);
+  background:rgba(40,12,16,.75);
+}
+.pad-chip.on{
+  color:#86efac;
+  border-color:rgba(74,222,128,.4);
+  background:rgba(10,28,18,.78);
+}
+body:not(.is-mobile) .pad-chip{inset-inline-start:54px}
+body.is-mobile .pad-chip{top:8px;inset-inline-start:auto;inset-inline-end:8px;font-size:10px;padding:4px 8px}

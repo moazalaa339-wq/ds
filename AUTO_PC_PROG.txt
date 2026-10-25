@@ -683,7 +683,24 @@ Game.getAllPlayers()          → كل الموجودين (محلي+أونلاي
 Game.getNetPlayers()          → لاعبين السيرفر فقط
 Game.getRoster()              → قائمة الغرفة {id,name,isHost}
 Game.getNearestPlayer(mesh)   → أقرب لاعب للمجسم
-Game.isHost() Game.isOnline() Game.getMyNetId()
+Game.isHost() Game.hostSlot()
+
+=== GAMEPAD_PAD_V1 (يد التحكم / بلايستيشن) ===
+المحرك يدعم أي دراع (DualSense / DualShock / Xbox / Generic) في البناء واللعب أوفلاين وأونلاين (موبايل/كمبيوتر عبر متصفح يدعم Gamepad API).
+APIs داخل السكربت (أوفلاين وأونلاين):
+  Game.padConnected() → true/false
+  Game.padButton('cross'|'circle'|'square'|'triangle'|'l1'|'r1'|'l2'|'r2'|'up'|'down'|'left'|'right'|'l3'|'r3'|'share'|'options'|0..17)
+  Game.padAxis(0|1|2|3)  // 0,1 عصا شمال X/Y — 2,3 عصا يمين
+  Game.padStick('left'|'right') → {x,y}
+  Game.padVibrate(ms, strong0to1, weak0to1) / Game.padRumble(...)
+  Game.padState() → {connected,id,brand,axes,buttons,left,right}
+  Game.pad / Game.gamepad — نفس كائن HawaPad (isDown, value, stick, vibrate, on, state...)
+ملاحظات:
+- الأزرار والعصي تتحوّل تلقائياً لمفاتيح WASD/Space/E/F عشان أي كود قديم يشتغل من الدراع.
+- الاهتزاز يشتغل على المتصفحات اللي بتدعم vibrationActuator (كروم غالباً مع DualSense/DualShock).
+- في شريط البناء تظهر: «لا يوجد controller متصل» وتتغيّر لما يتوصل دراع بلايستيشن.
+ Game.getHost() Game.getRoomLeader() Game.isRoomLeader(slot|"me") Game.isOnline() Game.getMyNetId()
+  // قائد الرووم: Game.getHost() → {slot,name,position,isHost,...} | Game.isRoomLeader() | Game.hostSlot()
 ممنوع: findByName("لاعب")
 
 مثال قائمة أسماء داخل الكائن:

@@ -441,7 +441,9 @@ game.touch: show(list) hide() isDown(id) wasPressed(id) isMobile()
   cmd: {pos,teleport,yaw,appearance,state,limbs,input,camera,locked,hold,say,...}
   game.teleportPlayer / teleportAll / setPlayerAppearance / setPlayerState / givePlayer
   game.setCinematic({mode:"follow"|"orbit",targetSlot,offset,fov}) game.clearCinematic()
-  game.isNetworked() game.isHost() game.mySlot() game.onPlayerCmd(fn)
+  game.isNetworked() game.isHost() game.hostSlot() game.getHost() game.getRoomLeader() game.isRoomLeader(slot|me) game.mySlot() game.onPlayerCmd(fn)
+  game.pad / game.gamepad — يد التحكم: connected() isDown('cross'|'circle'|'square'|'triangle'|'l1'|'r1'|'l2'|'r2'|'up'|...) axis(0..3) stick('left'|'right') vibrate(ms,strong,weak) state() on(fn)
+  game.padButton(name) game.padAxis(i) game.padStick(w) game.padVibrate(ms) game.padState() game.padConnected()
 أطراف آمنة: game.setPlayerLimb(0,'rArm'|'rForearm'|'lArm'|'lForearm'|'spine',rx,ry,rz) — سالب X ≈ للأمام
 وسائط (قدرات مفتوحة — أمثلة مش قيود): type audio|video|image|file في defineParams → params data URL
   وسائل اختيارية: resolveMedia · playSound · playSpatialSound · stopSound · createVideoMesh · createImageMesh
@@ -715,6 +717,279 @@ const S = {objs:[], scripts:[], sdefs:[], sel:null, mode:'build', tool:'select',
 const OBJ = new Map(), MESH = new Map(), K = {};
 
 const VK = Object.create(null);
+
+/* ========== HawaPad: يد التحكم (PlayStation / Generic) ========== */
+const HawaPad = (() => {
+  const BTN = {
+    A: 0, B: 1, X: 2, Y: 3,
+    L1: 4, R1: 5, L2: 6, R2: 7,
+    SELECT: 8, START: 9, L3: 10, R3: 11,
+    UP: 12, DOWN: 13, LEFT: 14, RIGHT: 15,
+    HOME: 16, TOUCH: 17
+  };
+  // أسماء ودّية + مرادفات بلايستيشن
+  const ALIAS = {
+    cross: 0, circle: 1, square: 2, triangle: 3,
+    a: 0, b: 1, x: 2, y: 3,
+    l1: 4, r1: 5, l2: 6, r2: 7,
+    lb: 4, rb: 5, lt: 6, rt: 7,
+    share: 8, options: 9, select: 8, start: 9,
+    l3: 10, r3: 11,
+    dpadup: 12, dpaddown: 13, dpadleft: 14, dpadright: 15,
+    up: 12, down: 13, left: 14, right: 15,
+    ps: 16, home: 16, touchpad: 17, touch: 17
+  };
+  let pad = null;           // آخر Gamepad نشط
+  let index = -1;
+  let connected = false;
+  let id = '';
+  let brand = '';           // dualsense | dualshock | xbox | generic
+  let buttons = [];
+  let axes = [0, 0, 0, 0];
+  let prevButtons = [];
+  let listeners = [];
+  let lastUi = '';
+  let mapToKeys = true;     // يحوّل العصي/الأزرار لمفاتيح افتراضية للحركة
+  let dead = 0.18;
+
+  function detectBrand(gid) {
+    const s = String(gid || '').toLowerCase();
+    if (/dualsense|wireless controller.*054c.*0ce6|ps5|playstation 5/i.test(s) || /054c.*0ce6/.test(s)) return 'dualsense';
+    if (/dualshock|sony.*controller|playstation|054c.*09cc|054c.*05c4|054c.*0268/i.test(s)) return 'dualshock';
+    if (/xbox|xinput|045e/i.test(s)) return 'xbox';
+    if (s) return 'generic';
+    return '';
+  }
+  function brandLabel(b) {
+    if (b === 'dualsense') return 'DualSense (PS5)';
+    if (b === 'dualshock') return 'DualShock (PS4)';
+    if (b === 'xbox') return 'Xbox';
+    if (b === 'generic') return 'Generic';
+    return '';
+  }
+  function resolveBtn(name) {
+    if (typeof name === 'number') return name | 0;
+    const k = String(name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (k in ALIAS) return ALIAS[k];
+    if (k.toUpperCase() in BTN) return BTN[k.toUpperCase()];
+    return -1;
+  }
+  function snap() {
+    try {
+      if (typeof navigator === 'undefined' || !navigator.getGamepads) return null;
+      const list = navigator.getGamepads();
+      if (!list) return null;
+      // فضّل آخر index معروف لو لسه شغال
+      if (index >= 0 && list[index]) return list[index];
+      for (let i = 0; i < list.length; i++) {
+        if (list[i]) return list[i];
+      }
+    } catch (_) {}
+    return null;
+  }
+  function applyKeyMap(lx, ly, rx, ry, btns) {
+    if (!mapToKeys) return;
+    // عصا شمال → WASD
+    try {
+      setVirtualKey('KeyW', ly < -dead);
+      setVirtualKey('KeyS', ly > dead);
+      setVirtualKey('KeyA', lx < -dead);
+      setVirtualKey('KeyD', lx > dead);
+      // أزرار أساسية
+      const down = (i) => !!(btns[i] && (btns[i].pressed || btns[i].value > 0.5));
+      setVirtualKey('Space', down(0));           // Cross / A → قفز
+      setVirtualKey('ShiftLeft', down(1) || down(10)); // Circle / B أو L3 → جري
+      setVirtualKey('KeyE', down(2));            // Square / X → تفاعل
+      setVirtualKey('KeyF', down(3));            // Triangle / Y → أكشن
+      setVirtualKey('KeyQ', down(4));            // L1
+      setVirtualKey('KeyR', down(5));            // R1
+      // D-pad أسهم
+      setVirtualKey('ArrowUp', down(12));
+      setVirtualKey('ArrowDown', down(13));
+      setVirtualKey('ArrowLeft', down(14));
+      setVirtualKey('ArrowRight', down(15));
+      // في وضع البناء: R2/L2 طلوع نزول طيران
+      if (typeof S !== 'undefined' && S && S.mode === 'build' && S.fly) {
+        setVirtualKey('Space', down(0) || down(7) || ry < -dead); // R2 أو عصا يمين فوق
+        setVirtualKey('ShiftLeft', down(1) || down(6) || ry > dead);
+      }
+    } catch (_) {}
+  }
+  function updateUi() {
+    const el = document.getElementById('padChip');
+    if (!el) return;
+    let txt, on = false;
+    if (!connected || !pad) {
+      txt = '🎮 لا يوجد controller متصل';
+      on = false;
+    } else {
+      const bl = brandLabel(brand) || 'Controller';
+      txt = '🎮 متصل: ' + bl;
+      on = true;
+    }
+    if (txt !== lastUi) {
+      lastUi = txt;
+      el.textContent = txt;
+      el.classList.toggle('on', on);
+      el.title = connected ? (id || 'Controller') : 'وصّل يد بلايستيشن أو أي دراع USB/Bluetooth';
+    }
+  }
+  function poll() {
+    const g = snap();
+    const was = connected;
+    if (!g) {
+      connected = false; pad = null; index = -1; id = ''; brand = '';
+      buttons = []; axes = [0, 0, 0, 0];
+      if (was) {
+        try {
+          ['KeyW','KeyS','KeyA','KeyD','Space','ShiftLeft','KeyE','KeyF','KeyQ','KeyR','ArrowUp','ArrowDown','ArrowLeft','ArrowRight']
+            .forEach(k => { try { setVirtualKey(k, false); } catch (_) {} });
+        } catch (_) {}
+        try { listeners.forEach(fn => { try { fn({ type: 'disconnect' }); } catch (_) {} }); } catch (_) {}
+      }
+      updateUi();
+      return null;
+    }
+    pad = g;
+    index = g.index;
+    id = g.id || '';
+    brand = detectBrand(id);
+    connected = true;
+    const btns = g.buttons || [];
+    buttons = btns;
+    const ax = g.axes || [];
+    axes = [
+      Math.abs(ax[0] || 0) < dead ? 0 : (ax[0] || 0),
+      Math.abs(ax[1] || 0) < dead ? 0 : (ax[1] || 0),
+      Math.abs(ax[2] || 0) < dead ? 0 : (ax[2] || 0),
+      Math.abs(ax[3] || 0) < dead ? 0 : (ax[3] || 0)
+    ];
+    applyKeyMap(axes[0], axes[1], axes[2], axes[3], btns);
+    // pressed events
+    try {
+      for (let i = 0; i < btns.length; i++) {
+        const now = !!(btns[i] && (btns[i].pressed || btns[i].value > 0.5));
+        const prev = !!(prevButtons[i]);
+        if (now && !prev) {
+          listeners.forEach(fn => { try { fn({ type: 'down', button: i, index: i }); } catch (_) {} });
+        } else if (!now && prev) {
+          listeners.forEach(fn => { try { fn({ type: 'up', button: i, index: i }); } catch (_) {} });
+        }
+      }
+    } catch (_) {}
+    prevButtons = btns.map(b => !!(b && (b.pressed || b.value > 0.5)));
+    if (!was) {
+      try { listeners.forEach(fn => { try { fn({ type: 'connect', id, brand }); } catch (_) {} }); } catch (_) {}
+      try { tip('🎮 اتصلت يد التحكم: ' + (brandLabel(brand) || id || 'Controller')); } catch (_) {}
+    }
+    updateUi();
+    return g;
+  }
+  function isDown(name) {
+    const i = resolveBtn(name);
+    if (i < 0 || !buttons[i]) return false;
+    const b = buttons[i];
+    return !!(b.pressed || b.value > 0.5);
+  }
+  function value(name) {
+    const i = resolveBtn(name);
+    if (i < 0 || !buttons[i]) return 0;
+    const b = buttons[i];
+    return typeof b.value === 'number' ? b.value : (b.pressed ? 1 : 0);
+  }
+  function axis(i) {
+    i = +i || 0;
+    return axes[i] != null ? axes[i] : 0;
+  }
+  function stick(which) {
+    if (which === 'right' || which === 1 || which === 'r') return { x: axes[2] || 0, y: axes[3] || 0 };
+    return { x: axes[0] || 0, y: axes[1] || 0 };
+  }
+  function vibrate(ms, strong, weak) {
+    ms = Math.max(0, Math.min(5000, +ms || 200));
+    strong = Math.max(0, Math.min(1, strong == null ? 0.6 : +strong));
+    weak = Math.max(0, Math.min(1, weak == null ? 0.3 : +weak));
+    try {
+      const g = pad || snap();
+      if (!g) return false;
+      // DualSense / modern
+      if (g.vibrationActuator && typeof g.vibrationActuator.playEffect === 'function') {
+        g.vibrationActuator.playEffect('dual-rumble', {
+          startDelay: 0,
+          duration: ms,
+          strongMagnitude: strong,
+          weakMagnitude: weak
+        });
+        return true;
+      }
+      // بعض المتصفحات
+      if (g.hapticActuators && g.hapticActuators[0] && g.hapticActuators[0].pulse) {
+        g.hapticActuators[0].pulse(strong, ms);
+        return true;
+      }
+    } catch (e) { console.warn('pad vibrate', e); }
+    return false;
+  }
+  function stopVibrate() {
+    try {
+      const g = pad || snap();
+      if (g && g.vibrationActuator && g.vibrationActuator.reset) g.vibrationActuator.reset();
+      else vibrate(1, 0, 0);
+    } catch (_) {}
+  }
+  function on(fn) {
+    if (typeof fn === 'function') listeners.push(fn);
+    return () => { listeners = listeners.filter(f => f !== fn); };
+  }
+  function state() {
+    return {
+      connected: !!connected,
+      id,
+      brand,
+      brandLabel: brandLabel(brand),
+      index,
+      axes: axes.slice(),
+      buttons: buttons.map((b, i) => ({
+        index: i,
+        pressed: !!(b && (b.pressed || b.value > 0.5)),
+        value: b ? (typeof b.value === 'number' ? b.value : (b.pressed ? 1 : 0)) : 0
+      })),
+      left: stick('left'),
+      right: stick('right')
+    };
+  }
+  // أحداث المتصفح
+  try {
+    window.addEventListener('gamepadconnected', (e) => {
+      try {
+        index = e.gamepad ? e.gamepad.index : index;
+        poll();
+      } catch (_) {}
+    });
+    window.addEventListener('gamepaddisconnected', () => { poll(); });
+  } catch (_) {}
+
+  // تحديث دوري خفيف + مع حلقة الرسم
+  let _acc = 0;
+  function tick(dt) {
+    _acc += dt || 0.016;
+    if (_acc >= 0.033) { _acc = 0; poll(); }
+  }
+  // أول مسح بعد التحميل
+  try { setTimeout(() => { poll(); updateUi(); }, 400); } catch (_) {}
+
+  return {
+    BTN, poll, tick, isDown, pressed: isDown, value, axis, stick,
+    vibrate, rumble: vibrate, stopVibrate,
+    on, state, connected: () => !!connected,
+    id: () => id, brand: () => brand,
+    setMapToKeys(v) { mapToKeys = !!v; },
+    setDeadzone(v) { dead = Math.max(0.01, Math.min(0.5, +v || 0.18)); },
+    updateUi
+  };
+})();
+try { window.HawaPad = HawaPad; } catch (_) {}
+
 function keyDown(code) {
   const c = String(code || '');
   return !!(K[c] || VK[c]);
@@ -876,9 +1151,7 @@ function applyBuilderCam(c) {
 }
 
 function camUpdate() {
-  if (OB.t.y < 0) OB.t.y = 0;
-  const minS = (FLOOR_EPS - OB.t.y) / OB.dist;
-  if (Math.sin(OB.pitch) < minS) OB.pitch = Math.asin(clamp(minS, -1, 1));
+  // بناء حر: مفيش حد أدنى لـ Y (تحت الكانفس مسموح)
   const d = dirOf(OB.yaw, OB.pitch);
   cam.position.set(OB.t.x + OB.dist * d[0], OB.t.y + OB.dist * d[1], OB.t.z + OB.dist * d[2]);
   cam.lookAt(OB.t); cam.updateMatrixWorld(); S.dirty = 1;
@@ -888,7 +1161,7 @@ function lookAround(dx, dy) {
   const cp = cam.position.clone();
   OB.yaw -= dx * .0035; OB.pitch = clamp(OB.pitch + dy * .0035, -1.5, 1.5);
   const d = dirOf(OB.yaw, OB.pitch);
-  OB.t.set(cp.x - OB.dist * d[0], Math.max(0, cp.y - OB.dist * d[1]), cp.z - OB.dist * d[2]);
+  OB.t.set(cp.x - OB.dist * d[0], cp.y - OB.dist * d[1], cp.z - OB.dist * d[2]);
   camUpdate();
 }
 function resize() {
@@ -981,8 +1254,8 @@ function spotFor(info, h) {
   if (g) { c[0] = Math.round(c[0] / g) * g; c[2] = Math.round(c[2] / g) * g; }
   const top = ny > .5 || isR;
   let cen = c[1];
-  if (top) cen = h.p[1] + hy;            
-  else if (cen - hy < 0) cen = hy;       
+  if (top) cen = h.p[1] + hy;
+  // مسموح البناء تحت الكانفس (y سالب) — مش بنرفع للـ hy
   if (isR) return {p: [c[0], cen, c[2]], yc: cen, ok: true};
   return {p: [c[0], cen - hy + lo, c[2]], yc: cen, ok: true};
 }
@@ -2325,7 +2598,7 @@ function doDrag(e) {
     const dt = axT(ray(e).ray, pos, AX[ax]) - drag.t0;
     const nv = q(pos[ax] + dt, sn);
     if (ax === 0) RT.p.x = nv;
-    else if (ax === 1) RT.p.y = Math.max(0, nv);
+    else if (ax === 1) RT.p.y = nv;
     else RT.p.z = nv;
     RT.v.set(0, 0, 0);
     S.dirty = 1;
@@ -2435,7 +2708,7 @@ function fly(dt) {
   if (keyDown('KeyW') || keyDown('ArrowUp')) m.add(f); if (keyDown('KeyS') || keyDown('ArrowDown')) m.sub(f);
   if (keyDown('KeyD') || keyDown('ArrowRight')) m.add(r); if (keyDown('KeyA') || keyDown('ArrowLeft')) m.sub(r);
   if (keyDown('Space')) m.y += 1; if (keyDown('ShiftLeft') || keyDown('ShiftRight')) m.y -= 1;
-  if (m.lengthSq() > 0) { m.normalize(); OB.t.addScaledVector(m, (K.ControlLeft || K.ControlRight ? 4 : 14) * dt); OB.t.y = Math.max(0, OB.t.y); camUpdate(); }
+  if (m.lengthSq() > 0) { m.normalize(); OB.t.addScaledVector(m, (K.ControlLeft || K.ControlRight ? 4 : 14) * dt); camUpdate(); }
 }
 function pan(dx, dy) {
   const s = OB.dist * .0016, r = new T.Vector3(1, 0, 0).applyQuaternion(cam.quaternion), u = new T.Vector3(0, 1, 0).applyQuaternion(cam.quaternion);
@@ -10734,7 +11007,7 @@ function bigGame(rt, o, root) {
             name: r.name || ('لاعب ' + r.slot),
             username: r.name || ('لاعب ' + r.slot),
             local: false,
-            isHost: false,
+            isHost: !!(NetMP.hostSlot != null && +r.slot === +NetMP.hostSlot),
             mesh: (r.rig && r.rig.root) || null,
             position: { x: pos.x || 0, y: pos.y || 0, z: pos.z || 0 },
             avatar: null,
@@ -10754,7 +11027,7 @@ function bigGame(rt, o, root) {
         const list = [{ id: 'slot_' + NetMP.slot, name: NetMP.name || 'لاعب', slot: NetMP.slot, isHost: !!NetMP.isHost }];
         if (NetMP.remotes) {
           for (const r of NetMP.remotes.values()) {
-            list.push({ id: 'slot_' + r.slot, name: r.name || ('لاعب ' + r.slot), slot: r.slot, isHost: false });
+            list.push({ id: 'slot_' + r.slot, name: r.name || ('لاعب ' + r.slot), slot: r.slot, isHost: !!(NetMP.hostSlot != null && +r.slot === +NetMP.hostSlot) });
           }
         }
         return list;
@@ -10771,6 +11044,32 @@ function bigGame(rt, o, root) {
     getPing: () => (NetMP.on ? (NetMP.pingMs != null ? NetMP.pingMs : null) : null),
     isNetworked: () => !!NetMP.on,
     isHost: () => !!(NetMP.on && NetMP.isHost),
+    hostSlot: () => (NetMP.on ? (+NetMP.hostSlot || 1) : 1),
+    getHost: () => {
+      try {
+        const all = (typeof G2 !== 'undefined' && G2.getAllPlayers) ? G2.getAllPlayers() : [];
+        const hs = NetMP.on ? (+NetMP.hostSlot || 1) : 1;
+        return all.find(p => p && (+p.slot === hs || p.isHost)) || all.find(p => p && p.local) || null;
+      } catch (_) { return null; }
+    },
+    getRoomLeader: () => (typeof G2 !== 'undefined' && G2.getHost) ? G2.getHost() : null,
+    isRoomLeader: (slot) => {
+      if (!NetMP.on) return true;
+      if (slot == null || slot === 'me' || slot === 0) return !!NetMP.isHost;
+      return +slot === +NetMP.hostSlot;
+    },
+
+    /* —— يد التحكم (PlayStation / أي دراع) —— */
+    pad: typeof HawaPad !== 'undefined' ? HawaPad : null,
+    gamepad: typeof HawaPad !== 'undefined' ? HawaPad : null,
+    padConnected: () => !!(typeof HawaPad !== 'undefined' && HawaPad.connected && HawaPad.connected()),
+    padButton: (name) => (typeof HawaPad !== 'undefined' && HawaPad.isDown) ? HawaPad.isDown(name) : false,
+    padAxis: (i) => (typeof HawaPad !== 'undefined' && HawaPad.axis) ? HawaPad.axis(i) : 0,
+    padStick: (which) => (typeof HawaPad !== 'undefined' && HawaPad.stick) ? HawaPad.stick(which) : { x: 0, y: 0 },
+    padVibrate: (ms, strong, weak) => (typeof HawaPad !== 'undefined' && HawaPad.vibrate) ? HawaPad.vibrate(ms, strong, weak) : false,
+    padRumble: (ms, strong, weak) => (typeof HawaPad !== 'undefined' && HawaPad.vibrate) ? HawaPad.vibrate(ms, strong, weak) : false,
+    padState: () => (typeof HawaPad !== 'undefined' && HawaPad.state) ? HawaPad.state() : { connected: false },
+    onPad: (fn) => (typeof HawaPad !== 'undefined' && HawaPad.on) ? HawaPad.on(fn) : (() => {}),
     mySlot: () => (NetMP.on ? NetMP.slot : 1),
 
     /* —— تحكم مفتوح بأي لاعب (محلي / أونلاين) —— */
@@ -11200,7 +11499,7 @@ function groundFollow(rt, b, dt) {
 }
 
 const NetMP = {
-  on: false, role: 'off', code: null, slot: 1, isHost: false, name: 'لاعب',
+  on: false, role: 'off', code: null, slot: 1, isHost: false, hostSlot: 1, name: 'لاعب',
   peer: null, conns: new Map(), remotes: new Map(), objs: new Map(), 
   acc: 0, ready: false, seq: 0,
   
@@ -11213,6 +11512,10 @@ const NetMP = {
     this.on = true; this.role = meta.isHost ? 'host' : 'guest';
     this.isHost = !!meta.isHost; this.code = meta.code ? String(meta.code).trim().toUpperCase() : 'CODES';
     this.slot = +meta.slot || 1; this.name = meta.playerName || 'لاعب';
+    // قائد الرووم: من الميتا أو المضيف المحلي أو افتراضي 1
+    let hs = meta.hostSlot != null ? +meta.hostSlot : (meta.players && meta.players.find(p => p && (p.host || p.isHost)) ? +(meta.players.find(p => p && (p.host || p.isHost)).slot) : null);
+    if (this.isHost) hs = this.slot;
+    this.hostSlot = (hs != null && !isNaN(hs)) ? hs : 1;
     this.voice = meta.voice != null ? !!meta.voice : true;
     this.conns = new Map(); this.remotes = new Map(); this.objs = new Map();
     this.ready = false; this.acc = 0; this.seq = 0;
@@ -11531,8 +11834,11 @@ const NetMP = {
     }
     if (msg.t === 'hello' && this.isHost) {
       const c = this.conns.get(from);
-      if (c) try { c.send({ t: 'hi', slot: this.slot, name: this.name }); } catch (e) {}
+      if (c) try { c.send({ t: 'hi', slot: this.slot, name: this.name, hostSlot: this.slot }); } catch (e) {}
       return;
+    }
+    if (msg.t === 'hi' && msg.hostSlot != null) {
+      this.hostSlot = +msg.hostSlot || this.hostSlot || 1;
     }
     if (msg.t === 'state') {
       this._applyState(from, msg);
@@ -12806,6 +13112,32 @@ async function playStart(opts) {
     /* —— تحكم مفتوح باللاعبين (أونلاين/أوفلاين) —— */
     isNetworked: () => !!NetMP.on,
     isHost: () => !!(NetMP.on && NetMP.isHost),
+    hostSlot: () => (NetMP.on ? (+NetMP.hostSlot || 1) : 1),
+    getHost: () => {
+      try {
+        const all = typeof game !== 'undefined' && game.getAllPlayers ? game.getAllPlayers() : [];
+        const hs = NetMP.on ? (+NetMP.hostSlot || 1) : 1;
+        return all.find(p => p && (+p.slot === hs || p.isHost)) || all.find(p => p && p.local) || null;
+      } catch (_) { return null; }
+    },
+    getRoomLeader: () => (typeof game !== 'undefined' && game.getHost) ? game.getHost() : null,
+    isRoomLeader: (slot) => {
+      if (!NetMP.on) return true;
+      if (slot == null || slot === 'me' || slot === 0) return !!NetMP.isHost;
+      return +slot === +NetMP.hostSlot;
+    },
+
+    /* —— يد التحكم (PlayStation / أي دراع) —— */
+    pad: typeof HawaPad !== 'undefined' ? HawaPad : null,
+    gamepad: typeof HawaPad !== 'undefined' ? HawaPad : null,
+    padConnected: () => !!(typeof HawaPad !== 'undefined' && HawaPad.connected && HawaPad.connected()),
+    padButton: (name) => (typeof HawaPad !== 'undefined' && HawaPad.isDown) ? HawaPad.isDown(name) : false,
+    padAxis: (i) => (typeof HawaPad !== 'undefined' && HawaPad.axis) ? HawaPad.axis(i) : 0,
+    padStick: (which) => (typeof HawaPad !== 'undefined' && HawaPad.stick) ? HawaPad.stick(which) : { x: 0, y: 0 },
+    padVibrate: (ms, strong, weak) => (typeof HawaPad !== 'undefined' && HawaPad.vibrate) ? HawaPad.vibrate(ms, strong, weak) : false,
+    padRumble: (ms, strong, weak) => (typeof HawaPad !== 'undefined' && HawaPad.vibrate) ? HawaPad.vibrate(ms, strong, weak) : false,
+    padState: () => (typeof HawaPad !== 'undefined' && HawaPad.state) ? HawaPad.state() : { connected: false },
+    onPad: (fn) => (typeof HawaPad !== 'undefined' && HawaPad.on) ? HawaPad.on(fn) : (() => {}),
     mySlot: () => (NetMP.on ? NetMP.slot : 1),
     getMyName: () => (NetMP.on ? (NetMP.name || 'لاعب') : 'لاعب'),
     getRemotePlayers: () => (NetMP.on && NetMP.remotes ? Array.from(NetMP.remotes.values()) : []),
@@ -12827,7 +13159,7 @@ async function playStart(opts) {
           const pos = (r.rig && r.rig.root && r.rig.root.position) || r.tp || { x: 0, y: 0, z: 0 };
           out.push({
             id: 'slot_' + r.slot, slot: r.slot, name: r.name || ('لاعب ' + r.slot), username: r.name || ('لاعب ' + r.slot),
-            local: false, isHost: false, mesh: r.rig && r.rig.root,
+            local: false, isHost: !!(NetMP.hostSlot != null && +r.slot === +NetMP.hostSlot), mesh: r.rig && r.rig.root,
             position: { x: pos.x || 0, y: pos.y || 0, z: pos.z || 0 },
             yaw: r.ta || 0, locked: false,
             state: (NetMP.getPlayerState ? Object.assign({}, NetMP.getPlayerState(r.slot)) : {})
@@ -13493,6 +13825,7 @@ let last = performance.now(), fc = 0, ft = last;
 function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(.05, (now - last) / 1000); last = now;
+  try { if (typeof HawaPad !== 'undefined' && HawaPad.tick) HawaPad.tick(dt); } catch (_) {}
   if (S.mode === 'play') play(dt);
   // بناء أو اختبار+بناء: أدوات المحرر
   if (S.mode === 'build' || S.playEdit) {
