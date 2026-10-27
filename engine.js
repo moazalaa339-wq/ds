@@ -3729,15 +3729,22 @@ function syncPadToggles() {
   const on = !!S.padGame;
   for (const id of ['padTgl', 'spPadGame']) { const el = document.getElementById(id); if (el && el.checked !== on) el.checked = on; }
   const rb = document.getElementById('bPadRail');
-  if (rb) rb.classList.toggle('on', on);
-  // جملة حالة الدراع: تظهر بس لو الدراع مفعّل وإحنا في البناء
+  if (rb) {
+    rb.classList.toggle('on', on);
+    rb.setAttribute('aria-pressed', on ? 'true' : 'false');
+    try {
+      const cap = rb.querySelector('.bcap');
+      if (cap) cap.textContent = on ? 'مفعّل' : 'الدراع';
+    } catch (_) {}
+  }
+  // حالة الدراع: بناء أو اختبار نصفي
   const line = document.getElementById('padStatLine');
   if (line) {
-    const show = on && S.mode === 'build';
+    const show = on && (S.mode === 'build' || !!S.playEdit);
     line.hidden = !show;
     if (show) {
       let ok = false; try { ok = !!PadGate.selfOk(); } catch (_) {}
-      const txt = ok ? 'حالة الدراع: متصل ✅' : 'حالة الدراع: غير متصل · اضغط على أي زر للتفعيل';
+      const txt = ok ? 'متصل ✅' : 'غير متصل';
       if (line.textContent !== txt) line.textContent = txt;
       line.classList.toggle('ok', ok);
     }
@@ -7602,7 +7609,7 @@ function histMsg(info, dir) {
 }
 function histCommit() {
   HIST.timer = 0;
-  if (HIST.busy || S.mode !== 'build' || S.playEdit) return;
+  if (HIST.busy) return; if (S.mode !== 'build' && !S.playEdit) return; if (S.mode === 'play' && !S.playEdit) return;
   let cur; try { cur = histState(); } catch (_) { return; }
   const key = JSON.stringify(cur);
   if (!HIST.last) { HIST.last = { key, st: cur }; histUi(); return; }
@@ -7633,7 +7640,9 @@ function histApply(st, info, dir) {
   histUi();
 }
 function histUndo() {
-  if (S.mode !== 'build' || S.playEdit) return;
+  // مسموح في البناء والاختبار النصفي
+  if (S.mode !== 'build' && !S.playEdit) return;
+  if (S.mode === 'play' && !S.playEdit) return;
   histCommit();
   const it = HIST.undo.pop();
   if (!it) { try { tip('لا يوجد شيء للتراجع'); } catch (_) {} return; }
@@ -7641,7 +7650,8 @@ function histUndo() {
   histApply(it.st, it.info, 'undo');
 }
 function histRedo() {
-  if (S.mode !== 'build' || S.playEdit) return;
+  if (S.mode !== 'build' && !S.playEdit) return;
+  if (S.mode === 'play' && !S.playEdit) return;
   histCommit();
   const it = HIST.redo.pop();
   if (!it) { try { tip('لا يوجد شيء للتقديم'); } catch (_) {} return; }
@@ -7661,7 +7671,9 @@ function histUi() {
   if (u) u.onclick = e => { e.preventDefault(); histUndo(); };
   if (r) r.onclick = e => { e.preventDefault(); histRedo(); };
   document.addEventListener('keydown', e => {
-    if (!(e.ctrlKey || e.metaKey) || S.mode !== 'build' || S.playEdit) return;
+    if (!(e.ctrlKey || e.metaKey)) return;
+    if (S.mode !== 'build' && !S.playEdit) return;
+    if (S.mode === 'play' && !S.playEdit) return;
     const t = e.target;
     if (t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable)) return;
     if (e.code === 'KeyZ' && !e.shiftKey) { e.preventDefault(); histUndo(); }
@@ -13800,7 +13812,19 @@ const PadGate = {
 try {
   PadGate.start();
   const _pb = document.getElementById('bPadRail');
-  if (_pb) _pb.onclick = () => { S.padGame = !S.padGame; syncPadToggles(); chg(); PadGate._render(); tip(S.padGame ? 'الدراع مفعّل' : 'الدراع مُغلق'); };
+  if (_pb) _pb.onclick = () => {
+    S.padGame = !S.padGame;
+    try { syncPadToggles(); } catch (_) {}
+    try { chg(); } catch (_) {}
+    try { PadGate._render(); } catch (_) {}
+    let ok = false;
+    try { ok = !!(typeof HawaPad !== 'undefined' && HawaPad.isActive && HawaPad.isActive()); } catch (_) {}
+    if (S.padGame) {
+      tip(ok ? '🎮 الدراع مفعّل · متصل ✅' : '🎮 الدراع مفعّل · وصّل يد التحكم واضغط أي زر');
+    } else {
+      tip('الدراع مُغلق');
+    }
+  };
 } catch (_) {}
 async function playStart(opts) {
   if (PadGate.needGate()) { if (!(await PadGate.waitStart())) return; }
