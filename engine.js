@@ -2508,20 +2508,17 @@ function ugizmo() {
   if (!o) { gizmo.visible = false; if (g) g.hidden = true; return; }
   // أظهر كل أوضاع الجيزمو للكائنات العادية
   try { $$('#gz [data-g]').forEach(b => { b.style.display = ''; }); } catch (_) {}
-  let px = +o.pos[0] || 0;
-  let py = o.base ? (+o.pos[1] || 0) + (+o.scl[1] || 1) / 2 : (+o.pos[1] || 0);
-  let pz = +o.pos[2] || 0;
+  // دائمًا من بيانات الكائن o.pos — مش من مكان اللاعب ولا world position
+  const _px = Array.isArray(o.pos) ? +o.pos[0] : 0;
+  const _py = Array.isArray(o.pos) ? +o.pos[1] : 0;
+  const _pz = Array.isArray(o.pos) ? +o.pos[2] : 0;
+  const _sx = Array.isArray(o.scl) ? +o.scl[1] : 1;
+  let px = isFinite(_px) ? _px : 0;
+  let py = o.base ? (isFinite(_py) ? _py : 0) + (isFinite(_sx) ? _sx : 1) / 2 : (isFinite(_py) ? _py : 0);
+  let pz = isFinite(_pz) ? _pz : 0;
+  // في الاختبار النصفي: ثبّت الميش على o.pos عشان متتلخبطش مع حركة اللاعب
   if (S.playEdit) {
-    try {
-      const mm = MESH.get(o.id);
-      if (mm) {
-        const wp = new T.Vector3();
-        mm.updateMatrixWorld(true);
-        mm.getWorldPosition(wp);
-        px = wp.x; pz = wp.z;
-        py = o.base ? wp.y + (+o.scl[1] || 1) / 2 : wp.y;
-      }
-    } catch (_) {}
+    try { tf(o); } catch (_) {}
   }
   const _mids = selIds();
   if (_mids.length > 1) {
@@ -2572,6 +2569,7 @@ function clickCenter() {
         setGz('move');
         try { selHelper(); } catch (_) {}
         try { ugizmo(); } catch (_) {}
+        try { if (S.showCoord) updCoord(); } catch (_) {}
         S.dirty = 1;
         return;
       }
@@ -2767,6 +2765,7 @@ function click(e) {
         setGz('move');
         try { selHelper(); } catch (_) {}
         try { ugizmo(); } catch (_) {}
+        try { if (S.showCoord) updCoord(); } catch (_) {}
         S.dirty = 1;
         return;
       }
@@ -3824,32 +3823,58 @@ function updCoord() {
   const f = v => (+v).toFixed(3), setT = (id, v) => { const el = $(id); if (el && el.textContent !== v) el.textContent = v; };
   // كاميرا البناء أو كاميرا اللعب حسب الوضع
   try {
-    if (S.playEdit || S.mode === 'build') {
-      if (cam && cam.position) { setT('#kx', f(cam.position.x)); setT('#ky', f(cam.position.y)); setT('#kz', f(cam.position.z)); }
+    let px = null, py = null, pz = null;
+    if ((S.playEdit || S.mode === 'build') && cam && cam.position) {
+      px = cam.position.x; py = cam.position.y; pz = cam.position.z;
     } else if (S.mode === 'play' && RT && RT.cam && RT.cam.position) {
-      setT('#kx', f(RT.cam.position.x)); setT('#ky', f(RT.cam.position.y)); setT('#kz', f(RT.cam.position.z));
+      px = RT.cam.position.x; py = RT.cam.position.y; pz = RT.cam.position.z;
     } else if (cam && cam.position) {
-      setT('#kx', f(cam.position.x)); setT('#ky', f(cam.position.y)); setT('#kz', f(cam.position.z));
+      px = cam.position.x; py = cam.position.y; pz = cam.position.z;
     }
-  } catch (_) {}
-  // المحدد: في الاختبار النصفي اعرض الكائن المختار لو موجود، وإلا اللاعب
-  if (S.playEdit) {
-    const o = (S.sel != null && S.sel !== '__player__') ? OBJ.get(S.sel) : null;
-    if (o) {
-      setT('#cx', f(o.pos[0])); setT('#cy', f(o.pos[1])); setT('#cz', f(o.pos[2])); setT('#cName', (o.name || o.type) + ' · id=' + o.id);
-    } else if (S.sel === '__player__' && RT && RT.p) {
-      setT('#cx', f(RT.p.x)); setT('#cy', f(RT.p.y)); setT('#cz', f(RT.p.z)); setT('#cName', 'اللاعب · اختبار نصفي');
-    } else if (RT && RT.p) {
-      setT('#cx', f(RT.p.x)); setT('#cy', f(RT.p.y)); setT('#cz', f(RT.p.z)); setT('#cName', 'اللاعب · اختبار نصفي');
+    if (px != null && isFinite(+px) && isFinite(+py) && isFinite(+pz)) {
+      setT('#kx', f(px)); setT('#ky', f(py)); setT('#kz', f(pz));
     } else {
+      setT('#kx', '—'); setT('#ky', '—'); setT('#kz', '—');
+    }
+  } catch (_) {
+    setT('#kx', '—'); setT('#ky', '—'); setT('#kz', '—');
+  }
+  // المحدد: كائن = o.pos فقط | لاعب = RT.p فقط | بدون خلط
+  try {
+    let shown = false;
+    if (S.sel === '__player__') {
+      if (RT && RT.p) {
+        const x = +RT.p.x, y = +RT.p.y, z = +RT.p.z;
+        if (isFinite(x) && isFinite(y) && isFinite(z)) {
+          setT('#cx', f(x)); setT('#cy', f(y)); setT('#cz', f(z));
+          setT('#cName', 'اللاعب');
+          shown = true;
+        }
+      }
+    } else if (S.sel != null && S.sel !== '__player__') {
+      let o = OBJ.get(S.sel);
+      if (!o && (typeof S.sel === 'string' || typeof S.sel === 'number')) {
+        try { o = OBJ.get(+S.sel) || OBJ.get(String(S.sel)); } catch (_) {}
+      }
+      if (o && Array.isArray(o.pos)) {
+        const x = +o.pos[0], y = +o.pos[1], z = +o.pos[2];
+        setT('#cx', isFinite(x) ? f(x) : '—');
+        setT('#cy', isFinite(y) ? f(y) : '—');
+        setT('#cz', isFinite(z) ? f(z) : '—');
+        setT('#cName', (o.name || o.type || 'كائن') + ' · id=' + o.id);
+        shown = true;
+      }
+    }
+    if (!shown && S.mode === 'play' && !S.playEdit && RT && RT.p) {
+      setT('#cx', f(+RT.p.x)); setT('#cy', f(+RT.p.y)); setT('#cz', f(+RT.p.z));
+      setT('#cName', 'اللاعب · وضع الاختبار');
+      shown = true;
+    }
+    if (!shown) {
       setT('#cx', '—'); setT('#cy', '—'); setT('#cz', '—'); setT('#cName', 'لا يوجد تحديد');
     }
-  } else if (S.mode === 'play' && RT && RT.p) {
-    setT('#cx', f(RT.p.x)); setT('#cy', f(RT.p.y)); setT('#cz', f(RT.p.z)); setT('#cName', 'اللاعب · وضع الاختبار');
-  } else {
-    const o = OBJ.get(S.sel);
-    if (o) { setT('#cx', f(o.pos[0])); setT('#cy', f(o.pos[1])); setT('#cz', f(o.pos[2])); setT('#cName', o.name + ' · id=' + o.id); }
-    else { setT('#cx', '—'); setT('#cy', '—'); setT('#cz', '—'); setT('#cName', 'لا يوجد تحديد'); }
+  } catch (_) {
+    setT('#cx', '—'); setT('#cy', '—'); setT('#cz', '—'); setT('#cName', 'لا يوجد تحديد');
   }
   if (DROPP.pt) { setT('#dx', f(DROPP.pt[0])); setT('#dy', f(DROPP.pt[1])); setT('#dz', f(DROPP.pt[2])); }
   const blk = $('#dropBlk'); if (blk) blk.hidden = !DROPP.pt;
@@ -3884,6 +3909,17 @@ if (_bCoordRail) {
     toggleCoord();
   };
 }
+try {
+  const _ds = document.getElementById('bDeselect');
+  if (_ds) _ds.onclick = (e) => { try { e.preventDefault(); } catch (_) {} sel(null); try { tip('تم إلغاء التحديد'); tipNow('تم إلغاء التحديد', 1400); } catch (_) {} };
+} catch (_) {}
+try {
+  const _ut = document.getElementById('bUndoTop');
+  const _rt = document.getElementById('bRedoTop');
+  if (_ut) _ut.onclick = (e) => { e.preventDefault(); histUndo(); };
+  if (_rt) _rt.onclick = (e) => { e.preventDefault(); histRedo(); };
+} catch (_) {}
+
 $('#gz').onclick = e => {
   const b = e.target.closest('button'); if (!b) return;
   if (b.dataset.g) setGz(b.dataset.g);
@@ -7775,12 +7811,10 @@ function histRedo() {
   histApply(it.st, it.info, 'redo');
 }
 function histUi() {
-  const u = document.getElementById('bUndo'), r = document.getElementById('bRedo');
-  if (u) u.disabled = !HIST.undo.length;
-  if (r) r.disabled = !HIST.redo.length;
-  const mu = document.getElementById('mUndo'), mr = document.getElementById('mRedo');
-  if (mu) mu.disabled = !HIST.undo.length;
-  if (mr) mr.disabled = !HIST.redo.length;
+  const idsU = ['bUndo', 'bUndoTop', 'mUndo'];
+  const idsR = ['bRedo', 'bRedoTop', 'mRedo'];
+  for (const id of idsU) { const el = document.getElementById(id); if (el) el.disabled = !HIST.undo.length; }
+  for (const id of idsR) { const el = document.getElementById(id); if (el) el.disabled = !HIST.redo.length; }
   // موبايل: رجوع/تقديم في الشريط العلوي فقط (تحت متكررش)
   // ظاهرين في البناء والاختبار النصفي
   try {
@@ -15525,6 +15559,8 @@ const MOB = {
     const mR = document.getElementById('mRedo');
     if (mU) mU.onclick = (e) => { e.preventDefault(); try { histUndo(); } catch (_) {} };
     if (mR) mR.onclick = (e) => { e.preventDefault(); try { histRedo(); } catch (_) {} };
+    const mDs = document.getElementById('mDeselect');
+    if (mDs) mDs.onclick = (e) => { e.preventDefault(); try { sel(null); tip('تم إلغاء التحديد'); tipNow('تم إلغاء التحديد', 1400); } catch (_) {} };
     const mSt = document.getElementById('mStorageBtn');
     if (mSt) mSt.onclick = () => { try { showStorageInfo(); } catch (_) {} };
     const mAct = document.getElementById('mStorageAct');

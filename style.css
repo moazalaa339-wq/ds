@@ -3711,3 +3711,187 @@ body.is-mobile.play-edit.mob-live #mRun {
   visibility: hidden !important;
   pointer-events: none !important;
 }
+
+
+/* ===== v2.80 شريط علوي: ترجيع/تقديم + تسميات الأزرار + إلغاء ===== */
+body:not(.is-mobile) #bar .bar-hist {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-inline-end: 6px;
+  padding: 2px 4px;
+  border-radius: 10px;
+  background: rgba(8,6,12,.35);
+  border: 1px solid rgba(255,214,150,.14);
+}
+body:not(.is-mobile) #bar .bar-hist button {
+  min-width: 44px;
+  height: 34px;
+  padding: 0 8px;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  border-radius: 8px;
+}
+body:not(.is-mobile) #bar .bar-hist button span {
+  font-size: 15px;
+  line-height: 1;
+}
+body:not(.is-mobile) #bar .bar-hist button i {
+  display: block !important;
+  font-style: normal;
+  font-size: 9px;
+  font-weight: 800;
+  color: #cfc6b8;
+  max-width: none;
+  overflow: visible;
+}
+body:not(.is-mobile) #bar .bar-hist button:disabled {
+  opacity: .35;
+}
+
+/* تسميات تحت كل أزرار الشريط الجانبي (كمبيوتر + موبايل) */
+body:not(.is-mobile) #rail button {
+  overflow: visible !important;
+  margin-bottom: 10px;
+}
+body:not(.is-mobile) #rail button .bcap {
+  display: block !important;
+  position: absolute !important;
+  top: 48px !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  width: max-content !important;
+  max-width: 70px !important;
+  font-style: normal !important;
+  font-size: 8.5px !important;
+  font-weight: 700 !important;
+  color: #9d94ad !important;
+  text-align: center !important;
+  white-space: nowrap !important;
+  pointer-events: none !important;
+  margin: 0 !important;
+}
+body:not(.is-mobile) #rail button.on .bcap {
+  color: #7ff0dc !important;
+}
+body:not(.is-mobile) #rail .rail-hist button .bcap {
+  top: 36px !important;
+  font-size: 8px !important;
+}
+
+body.is-mobile #rail button {
+  overflow: visible !important;
+}
+body.is-mobile #rail button .bcap {
+  display: block !important;
+  position: absolute !important;
+  left: 50% !important;
+  bottom: -1px !important;
+  transform: translateX(-50%) !important;
+  width: max-content !important;
+  max-width: 54px !important;
+  font-style: normal !important;
+  font-size: 7px !important;
+  font-weight: 800 !important;
+  color: #cfc6b8 !important;
+  text-align: center !important;
+  white-space: nowrap !important;
+  pointer-events: none !important;
+  margin: 0 !important;
+  z-index: 2 !important;
+}
+body.is-mobile #rail button.on .bcap {
+  color: #9ff5e8 !important;
+}
+body.is-mobile #rail [data-tool="boxdel"].on .bcap,
+body.is-mobile #rail [data-tool="boxdel"].on .tool-bcap {
+  color: #fecaca !important;
+}
+body.is-mobile #rail [data-tool="boxsel"].on .bcap,
+body.is-mobile #rail [data-tool="boxsel"].on .tool-bcap {
+  color: #bbf7d0 !important;
+}
+
+/* زر إلغاء التحديد */
+#bDeselect .bcap { color: #fca5a5 !important; }
+body.is-mobile #mDeselect {
+  display: inline-flex !important;
+  min-width: 36px !important;
+  height: 34px !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+
+/* ===== v2.81 تسميات موبايل لكل الأزرار + ترجيع/تقديم فوق واضحة ===== */
+body.is-mobile #rail {
+  overflow: visible !important;
+}
+body.is-mobile #rail button {
+  overflow: visible !important;
+  position: relative !important;
+  min-height: 36px !important;
+  padding-bottom: 10px !important;
+}
+body.is-mobile #rail button .bcap,
+body.is-mobile #rail button .tool-bcap {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  position: absolute !important;
+  left: 50% !important;
+  bottom: 0 !important;
+  transform: translateX(-50%) !important;
+  width: max-content !important;
+  max-width: 58px !important;
+  font-style: normal !important;
+  font-size: 7px !important;
+  line-height: 1.05 !important;
+  font-weight: 800 !important;
+  color: #d8d0c2 !important;
+  text-align: center !important;
+  white-space: nowrap !important;
+  pointer-events: none !important;
+  z-index: 3 !important;
+}
+
+/* شريط علوي كمبيوتر: ترجيع/تقديم بس بالاسم */
+body:not(.is-mobile) #bar #barHistTop,
+body:not(.is-mobile) #bar .bar-hist {
+  display: inline-flex !important;
+  visibility: visible !important;
+  align-items: center;
+  gap: 4px;
+  margin-inline: 4px;
+}
+body:not(.is-mobile) #bar .bar-hist button {
+  min-width: 48px !important;
+  height: 36px !important;
+  flex-direction: column !important;
+  gap: 1px !important;
+}
+body:not(.is-mobile) #bar .bar-hist button i {
+  display: block !important;
+  font-style: normal !important;
+  font-size: 10px !important;
+  font-weight: 800 !important;
+  color: #e8dfd0 !important;
+  max-width: none !important;
+  overflow: visible !important;
+}
+body:not(.is-mobile) #bar .bar-hist button span {
+  font-size: 16px !important;
+}
+/* امنع أي tooltip CSS يكتب Ctrl */
+body:not(.is-mobile) #bar .bar-hist button[title]:hover::after {
+  content: none !important;
+  display: none !important;
+}
+#railHist button[title]:hover::after {
+  content: none !important;
+  display: none !important;
+}

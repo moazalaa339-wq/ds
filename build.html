@@ -67,31 +67,36 @@
         <button id="bWipe" class="danger-btn" title="حذف المشروع والبدا من جديد">🗑<i>حذف المشروع والبدا من جديد</i></button>
       </div>
     </details>
-    <button id="bTest" class="go" title="اختبر (P)"><span data-ic="play"></span>اختبر</button>
-    <button id="bFullscreen" type="button" title="ملء الشاشة">⛶</button>
+    <div class="bar-hist" id="barHistTop">
+      <button id="bUndoTop" type="button" title="ترجيع" aria-label="ترجيع"><span>↶</span><i>ترجيع</i></button>
+      <button id="bRedoTop" type="button" title="تقديم" aria-label="تقديم"><span>↷</span><i>تقديم</i></button>
+    </div>
+    <button id="bTest" class="go" title="اختبر (P)"><span data-ic="play"></span><i>اختبر</i></button>
+    <button id="bFullscreen" type="button" title="ملء الشاشة"><span>⛶</span><i>ملء</i></button>
   </header>
 
   <!-- شريط الأدوات الجانبي -->
   <nav id="rail">
     <div class="rail-group" id="tools">
-      <button data-tool="select" class="on" title="تحديد"><span data-ic="cursor"></span></button>
-      <button data-tool="place" title="وضع"><span data-ic="plus"></span></button>
-      <button data-tool="delete" title="حذف"><span data-ic="trash"></span></button>
+      <button data-tool="select" class="on" title="تحديد"><span data-ic="cursor"></span><i class="bcap">تحديد</i></button>
+      <button data-tool="place" title="وضع"><span data-ic="plus"></span><i class="bcap">وضع</i></button>
+      <button data-tool="delete" title="حذف"><span data-ic="trash"></span><i class="bcap">حذف</i></button>
       <button data-tool="boxdel" title="حذف محيطي" id="bBoxDel" aria-label="حذف محيطي" class="tool-cap"><span data-ic="marquee"></span><i class="bcap tool-bcap">حذف محيطي</i></button>
       <button data-tool="boxsel" title="تحديد محيطي" id="bBoxSel" aria-label="تحديد محيطي" class="tool-cap"><span data-ic="objects"></span><i class="bcap tool-bcap">تحديد محيطي</i></button>
+      <button type="button" id="bDeselect" title="إلغاء التحديد" aria-label="إلغاء التحديد"><span data-ic="reset"></span><i class="bcap">إلغاء</i></button>
     </div>
     <div class="rail-group">
-      <button id="bSpawns" title="نقط البداية"><span data-ic="flag"></span><span class="snap-l" id="spawnN">0</span></button>
-      <button id="bCoordRail" title="الإحداثيات"><span data-ic="grid"></span></button>
-      <button id="bPadRail" type="button" class="pad-rail-btn" title="تفعيل الدراع (كونترولر بلايستيشن)"><span class="pad-ico"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 6h10a4 4 0 0 1 3.9 4.9l-1 4.2A2.5 2.5 0 0 1 17.5 17.5l-1.4-1.6H7.9l-1.4 1.6A2.5 2.5 0 0 1 2.1 15.1l-1-4.2A4 4 0 0 1 7 6z"/><path d="M6.5 9.5v3M5 11h3"/><circle cx="15.5" cy="10" r=".7" fill="currentColor"/><circle cx="17.7" cy="12.2" r=".7" fill="currentColor"/></svg></span><i class="bcap">الدراع</i></button>
+      <button id="bSpawns" title="نقط البداية"><span data-ic="flag"></span><span class="snap-l" id="spawnN">0</span><i class="bcap">نقاط</i></button>
+      <button id="bCoordRail" title="الإحداثيات"><span data-ic="grid"></span><i class="bcap">إحداثيات</i></button>
+      <button id="bPadRail" type="button" class="pad-rail-btn" title="تفعيل الدراع (كونترولر بلايستيشن)"><span class="pad-ico"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 6h10a4 4 0 0 1 3.9 4.9l-1 4.2A2.5 2.5 0 0 1 17.5 17.5l-1.4-1.6H7.9l-1.4 1.6A2.5 2.5 0 0 1 2.1 15.1l-1-4.2A4 4 0 0 1 7 6z"/><path d="M6.5 9.5v3M5 11h3"/><circle cx="15.5" cy="10" r=".7" fill="currentColor"/><circle cx="17.7" cy="12.2" r=".7" fill="currentColor"/></svg></span><i class="bcap">دراع</i></button>
       <div class="rail-hist" id="railHist">
-        <button id="bUndo" type="button" title="رجوع (Ctrl+Z)" aria-label="رجوع">↶</button>
-        <button id="bRedo" type="button" title="تقديم (Ctrl+Y)" aria-label="تقديم">↷</button>
+        <button id="bUndo" type="button" title="ترجيع" aria-label="ترجيع">↶<i class="bcap">ترجيع</i></button>
+        <button id="bRedo" type="button" title="تقديم" aria-label="تقديم">↷<i class="bcap">تقديم</i></button>
       </div>
       <div id="padStatLine" class="pad-stat-line" hidden></div>
     </div>
     <div class="rail-group bottom">
-      <button id="bPar" class="on" title="اللوحات"><span data-ic="panel"></span></button>
+      <button id="bPar" class="on" title="اللوحات"><span data-ic="panel"></span><i class="bcap">لوحات</i></button>
     </div>
   </nav>
 
@@ -288,9 +293,10 @@
   </div>
   <button type="button" id="mSideBtn" aria-label="المشهد والخصائص"><span>📋</span><i>مشهد</i></button>
   <div class="m-bar-hist" id="mBarHist">
-    <button type="button" id="mUndo" aria-label="رجوع" title="رجوع"><span>↶</span><i>رجوع</i></button>
+    <button type="button" id="mUndo" aria-label="ترجيع" title="ترجيع"><span>↶</span><i>ترجيع</i></button>
     <button type="button" id="mRedo" aria-label="تقديم" title="تقديم"><span>↷</span><i>تقديم</i></button>
   </div>
+  <button type="button" id="mDeselect" aria-label="إلغاء التحديد" title="إلغاء التحديد"><span>⊘</span><i>إلغاء</i></button>
   <button type="button" id="mStorageAct" hidden class="m-storage-act" aria-label="تفعيل التخزين"><span>📂</span><i>تخزين</i></button>
   <span class="m-grow"></span>
   <button type="button" id="mMoreBtn" aria-label="المزيد"><span>⋯</span><i>المزيد</i></button>
