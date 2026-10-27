@@ -2742,9 +2742,11 @@ function click(e) {
   const rc = ray(e), r = rc.ray;
   if (DROPP.mode) { const dh = castRay(r); if (dh) dropPlace(dh); else tip('⚠ اضغط على سطح'); return; }
   if (e.ctrlKey && !S.pick && S.tool === 'select') { const hc = pickObj(rc); if (hc != null) selectObjRow(hc, true); hier(); return; }
-  if (S.pick) {                         
+  if (S.pick) {
+    // وضع الالتقاط: اختيار كائن أو إلغاء التحديد عند الضغط على فراغ
     const hid = pickObj(rc);
-    if (hid != null) { sel(hid); if (!S.showCoord) toggleCoord(); } else tip('');
+    if (hid != null) sel(hid);
+    else sel(null);
     return;
   }
   if (S.tool === 'place' || S.tool === 'respawn' || S.tool === 'online_spawn') {
@@ -3857,9 +3859,8 @@ function updCoord() {
 const _dropBtn = $('#dropBtn'); if (_dropBtn) _dropBtn.onclick = () => dropToggle();
 function toggleCoord() {
   S.showCoord = !S.showCoord;
-  // في الاختبار النصفي: متفعّلش وضع الالتقاط تلقائي (بيبوّظ التحديد)
-  if (!S.playEdit) S.pick = S.showCoord;
-  else if (!S.showCoord) S.pick = false;
+  // الإحداثيات مستقلة عن وضع الالتقاط — عشان تقدر تلغي التحديد عادي
+  // متفعّلش S.pick مع فتح الإحداثيات
   const panel = $('#coordPanel');
   if (panel) {
     panel.hidden = !S.showCoord;

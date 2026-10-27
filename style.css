@@ -3298,26 +3298,7 @@ body.is-mobile:not(.play-on) #mAct{
 
 /* ===== v2.74 إصلاحات موبايل: شيل الدوائر + المزيد من فوق + الدراع ظاهر ===== */
 
-/* احذف أزرار الطلوع/النزول الدائرية الخضراء/الصفراء العائمة (موبايل وكمبيوتر) */
-#mAct,
-#mJump,
-#mRun,
-body.is-mobile #mAct,
-body.is-mobile #mJump,
-body.is-mobile #mRun,
-body.is-mobile:not(.play-on) #mAct,
-body.is-mobile:not(.play-on) #mJump,
-body.is-mobile:not(.play-on) #mRun,
-body.is-mobile.play-edit #mAct,
-body.is-mobile.play-edit:not(.mob-live) #mAct,
-body.is-mobile:not(.pure-play) #mAct {
-  display: none !important;
-  visibility: hidden !important;
-  pointer-events: none !important;
-  width: 0 !important;
-  height: 0 !important;
-  opacity: 0 !important;
-}
+/* v2.79: أزرار الطلوع/النزول رجعت للبناء والاختبار النصفي */
 
 /* قائمة المزيد: تفتح من تحت الشريط العلوي مش فوق الشريط السفلي */
 body.is-mobile #mMore{
@@ -3578,4 +3559,155 @@ body.is-mobile #rail [data-tool="boxsel"].on {
 }
 #rail [data-tool="boxsel"].on {
   color: #86efac !important;
+}
+
+
+/* ===== v2.78 تسميات تحت حذف/تحديد محيطي على الموبايل ===== */
+body.is-mobile #rail [data-tool="boxdel"],
+body.is-mobile #rail [data-tool="boxsel"] {
+  position: relative !important;
+  overflow: visible !important;
+  min-width: 44px !important;
+  max-width: 56px !important;
+  height: 40px !important;
+  padding-bottom: 2px !important;
+}
+body.is-mobile #rail [data-tool="boxdel"] .tool-bcap,
+body.is-mobile #rail [data-tool="boxsel"] .tool-bcap {
+  display: block !important;
+  position: absolute !important;
+  left: 50% !important;
+  bottom: -2px !important;
+  transform: translateX(-50%) !important;
+  width: max-content !important;
+  max-width: 56px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  font-style: normal !important;
+  font-size: 7.5px !important;
+  line-height: 1.1 !important;
+  font-weight: 800 !important;
+  color: #cfc6b8 !important;
+  text-align: center !important;
+  white-space: nowrap !important;
+  pointer-events: none !important;
+  z-index: 2 !important;
+}
+body.is-mobile #rail [data-tool="boxdel"].on .tool-bcap {
+  color: #fecaca !important;
+}
+body.is-mobile #rail [data-tool="boxsel"].on .tool-bcap {
+  color: #bbf7d0 !important;
+}
+/* على الديسكتوب برضو تسمية صغيرة تحت الزر */
+body:not(.is-mobile) #rail [data-tool="boxdel"] .tool-bcap,
+body:not(.is-mobile) #rail [data-tool="boxsel"] .tool-bcap {
+  display: block !important;
+  position: absolute !important;
+  top: 52px !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  width: max-content !important;
+  max-width: 72px !important;
+  font-size: 8.5px !important;
+  font-weight: 700 !important;
+  color: #9d94ad !important;
+  text-align: center !important;
+  white-space: nowrap !important;
+  pointer-events: none !important;
+}
+
+
+/* ===== v2.79 طلوع/نزول ظاهرين في البناء + الاختبار النصفي ===== */
+body.is-mobile:not(.pure-play) #mTouch,
+body.is-mobile.play-edit:not(.mob-live) #mTouch,
+body.is-mobile:not(.play-on) #mTouch {
+  display: block !important;
+  visibility: visible !important;
+  pointer-events: none !important;
+  z-index: 28 !important;
+}
+body.is-mobile:not(.pure-play) #mJoy,
+body.is-mobile.play-edit:not(.mob-live) #mJoy,
+body.is-mobile:not(.play-on) #mJoy {
+  display: block !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+  position: fixed !important;
+  left: max(10px, env(safe-area-inset-left, 0px)) !important;
+  right: auto !important;
+  bottom: calc(var(--m-rail, 52px) + var(--m-safe-b, 0px) + 14px) !important;
+  width: 96px !important;
+  height: 96px !important;
+  z-index: 55 !important;
+}
+body.is-mobile:not(.pure-play) #mAct,
+body.is-mobile.play-edit:not(.mob-live) #mAct,
+body.is-mobile:not(.play-on) #mAct {
+  display: flex !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  pointer-events: none !important;
+  position: fixed !important;
+  right: max(10px, env(safe-area-inset-right, 0px)) !important;
+  left: auto !important;
+  bottom: calc(var(--m-rail, 52px) + var(--m-safe-b, 0px) + 14px) !important;
+  top: auto !important;
+  flex-direction: column-reverse !important;
+  gap: 10px !important;
+  width: auto !important;
+  height: auto !important;
+  z-index: 55 !important;
+}
+body.is-mobile:not(.pure-play) #mAct button,
+body.is-mobile.play-edit:not(.mob-live) #mAct button,
+body.is-mobile:not(.play-on) #mAct button,
+body.is-mobile:not(.pure-play) #mJump,
+body.is-mobile:not(.pure-play) #mRun,
+body.is-mobile.play-edit:not(.mob-live) #mJump,
+body.is-mobile.play-edit:not(.mob-live) #mRun,
+body.is-mobile:not(.play-on) #mJump,
+body.is-mobile:not(.play-on) #mRun {
+  display: flex !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  width: 58px !important;
+  height: 58px !important;
+  min-width: 58px !important;
+  min-height: 58px !important;
+  border-radius: 50% !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 1px !important;
+  font-weight: 900 !important;
+  font-size: 11px !important;
+  color: #f8fafc !important;
+  background: rgba(15, 23, 42, .78) !important;
+  border: 2px solid rgba(255, 214, 150, .55) !important;
+  box-shadow: 0 8px 20px rgba(0,0,0,.4) !important;
+}
+body.is-mobile:not(.pure-play) #mJump,
+body.is-mobile.play-edit:not(.mob-live) #mJump,
+body.is-mobile:not(.play-on) #mJump {
+  background: rgba(34, 197, 94, .42) !important;
+  border-color: rgba(74, 222, 128, .75) !important;
+}
+body.is-mobile:not(.pure-play) #mRun,
+body.is-mobile.play-edit:not(.mob-live) #mRun,
+body.is-mobile:not(.play-on) #mRun {
+  background: rgba(251, 191, 36, .38) !important;
+  border-color: rgba(251, 191, 36, .7) !important;
+}
+/* لعب كامل / اختبار حي: اخفي أدوات البناء */
+body.is-mobile.pure-play #mAct,
+body.is-mobile.pure-play #mJump,
+body.is-mobile.pure-play #mRun,
+body.is-mobile.play-edit.mob-live #mAct,
+body.is-mobile.play-edit.mob-live #mJump,
+body.is-mobile.play-edit.mob-live #mRun {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
 }
