@@ -3508,3 +3508,25 @@ body.is-mobile #tip {
   bottom: calc(var(--m-rail, 52px) + var(--m-safe-b, 0px) + 18px) !important;
   pointer-events: none !important;
 }
+
+
+/* ===== v2.76 رجوع/تقديم ظاهرين في الاختبار النصفي ومش بيخرجوا ===== */
+body.play-edit #railHist,
+body.play-edit #rail .rail-hist {
+  display: flex !important;
+  visibility: visible !important;
+}
+body.play-edit #mBarHist {
+  display: inline-flex !important;
+  visibility: visible !important;
+}
+/* موبايل: تحت لسه مخفي (مفيش تكرار) */
+body.is-mobile.play-edit #railHist,
+body.is-mobile.play-edit #rail .rail-hist {
+  display: none !important;
+  visibility: hidden !important;
+}
+body.is-mobile.play-edit #mBarHist {
+  display: inline-flex !important;
+  visibility: visible !important;
+}

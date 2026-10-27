@@ -7630,16 +7630,71 @@ function histSchedule() {
 }
 function histApply(st, info, dir) {
   HIST.busy = true;
+  const keepPlay = !!(S.playEdit && (S.mode === 'play' || S.mode === 'build') && RT);
   try {
     const copy = JSON.parse(JSON.stringify(st));
     // الميديا الحالية تفضل زي ما هي
     copy.media = S.media; copy.mediaOrder = S.mediaOrder; copy.mediaFolders = S.mediaFolders;
+    HIST._skipPlayStop = keepPlay;
     loadData(copy, false);
+    HIST._skipPlayStop = false;
+    // لو كنا في اختبار نصفي: فضّل فيه ومتخرجش
+    if (keepPlay) {
+      try {
+        S.playEdit = true;
+        S.mode = 'play';
+        document.body.classList.add('play-edit', 'play-on');
+        document.body.classList.remove('pure-play');
+        try { document.documentElement.classList.add('play-edit'); } catch (_) {}
+        const app = document.getElementById('app');
+        if (app) { app.hidden = false; app.removeAttribute('hidden'); app.style.display = ''; app.style.visibility = ''; }
+      } catch (_) {}
+      try { resyncPlayEditAfterHist(); } catch (e) { console.warn('resync playEdit hist', e); }
+    }
     HIST.last = { key: JSON.stringify(st), st };
   } catch (e) { console.warn('hist apply', e); }
-  finally { HIST.busy = false; }
+  finally {
+    HIST.busy = false;
+    try { HIST._skipPlayStop = false; } catch (_) {}
+  }
   try { tip(histMsg(info, dir)); } catch (_) {}
   histUi();
+}
+function resyncPlayEditAfterHist() {
+  if (!RT || !S.playEdit) return;
+  const liveIds = new Set(S.objs.map(o => +o.id));
+  // امسح من المشهد اللي اتحذفوا في الرجوع
+  for (const id of [...MESH.keys()]) {
+    if (liveIds.has(+id)) continue;
+    try {
+      const o = OBJ.get(id) || { id };
+      if (typeof purgeLiveObject === 'function') purgeLiveObject(o);
+    } catch (_) {}
+    try {
+      const m = MESH.get(id);
+      if (m) { try { scene.remove(m); } catch (__) {} }
+      MESH.delete(id); OBJ.delete(id);
+    } catch (_) {}
+  }
+  // حدّث / أدخل الموجودين
+  for (const o of S.objs) {
+    try {
+      const m = MESH.get(o.id);
+      if (!m) {
+        try { mk(o); } catch (_) {}
+        try { injectLiveObject(o); } catch (_) {}
+      } else {
+        try { tf(o); look(o); } catch (_) {}
+        try { refreshLiveCollision(o); } catch (_) {}
+        try {
+          if (o.type === 'sobj' && !o.hidden) refreshPreview(o);
+        } catch (_) {}
+      }
+    } catch (_) {}
+  }
+  try { hier(); pList(); sList(); inspect(); } catch (_) {}
+  try { ugizmo(); selHelper(); } catch (_) {}
+  S.dirty = 1;
 }
 function histUndo() {
   // مسموح في البناء والاختبار النصفي
@@ -7667,14 +7722,14 @@ function histUi() {
   const mu = document.getElementById('mUndo'), mr = document.getElementById('mRedo');
   if (mu) mu.disabled = !HIST.undo.length;
   if (mr) mr.disabled = !HIST.redo.length;
-  // في الاختبار النصفي: اخفِ أزرار الرجوع/التقديم
-  const hideHist = !!(S && S.playEdit);
+  // موبايل: رجوع/تقديم في الشريط العلوي فقط (تحت متكررش)
+  // ظاهرين في البناء والاختبار النصفي
   try {
-    document.body.classList.toggle('hide-hist', hideHist);
+    document.body.classList.remove('hide-hist');
     const rh = document.getElementById('railHist');
     const mh = document.getElementById('mBarHist');
-    if (rh) rh.hidden = hideHist || !!(typeof MOB !== 'undefined' && MOB.on); // موبايل: تحت متكررش
-    if (mh) mh.hidden = hideHist; // فوق: يختفي في النصفي فقط
+    if (rh) rh.hidden = !!(typeof MOB !== 'undefined' && MOB.on);
+    if (mh) mh.hidden = false;
   } catch (_) {}
 }
 (function bindHist() {
@@ -7828,7 +7883,8 @@ function loadData(d, append) {
   } catch (_) {}
   if (d && d.mid) S.mid = Math.max(S.mid || 1, +d.mid || 1);
 
-  if (S.mode === 'play') try { playStop(); } catch (_) {}
+  // أثناء الرجوع/التقديم في الاختبار النصفي: متخرجش من الاختبار
+  if (S.mode === 'play' && !(HIST && HIST._skipPlayStop)) try { playStop(); } catch (_) {}
   if (Array.isArray(d)) { d = {objs: d}; append = true; }
   if (!append) {
     clearAll();
