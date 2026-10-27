@@ -409,7 +409,7 @@ for (const cat of CATS) cat[1] = cat[1].map(k => (DEF[k] || k.startsWith('pf:'))
 
 
 const PL = {value:'القيمة',power:'قوة النط',axis:'المحور 0=X 1=Y 2=Z',amp:'المسافة',speed:'السرعة',intensity:'الشدة',range:'المدى',slot:'رقم اللاعب 1–8'};
-const HINT = { select:'', place:'', delete:'', boxdel:'', online_spawn:'', respawn:'' };
+const HINT = { select:'', place:'', delete:'', boxdel:'', boxsel:'', online_spawn:'', respawn:'' };
 const STPL = `// @param speed = 2
 // @param color = #ffaa00
 function onStart(self, game) {}
@@ -2579,7 +2579,7 @@ function clickCenter() {
   }
   const h = pickObj(rc);
   if (S.tool === 'delete') { if (h != null) delObj(h); return; }
-  if (S.tool === 'boxdel') return;
+  if (S.tool === 'boxdel' || S.tool === 'boxsel') return;
   sel(h);
 }
 const AX = [new T.Vector3(1, 0, 0), new T.Vector3(0, 1, 0), new T.Vector3(0, 0, 1)];
@@ -2772,7 +2772,7 @@ function click(e) {
   }
   const h = pickObj(rc);
   if (S.tool === 'delete') { if (h != null) delObj(h); return; }
-  if (S.tool === 'boxdel') return;
+  if (S.tool === 'boxdel' || S.tool === 'boxsel') return;
   sel(h);
 }
 
@@ -2915,6 +2915,13 @@ cv.addEventListener('pointerdown', e => {
     mv.moved = 0;
     return;
   }
+  if (e.button === 0 && S.tool === 'boxsel') {
+    const p = _vpLocal(e);
+    S.boxsel = { x0: p.x, y0: p.y, x1: p.x, y1: p.y };
+    _marqueeShow(S.boxsel);
+    mv.moved = 0;
+    return;
+  }
   // أثناء وضع كائن: تجاهل محاور الجيزمو عشان تقدر تحط حول الكائن المختار
   if (DROPP.mode) return;
   if (e.button === 0 && S.sel != null && gizmo.visible && !placingTool && !S.pick) {
@@ -2923,7 +2930,7 @@ cv.addEventListener('pointerdown', e => {
     if (hh) { const rec = HIT.find(h => h.m === hh.object); if (rec) { startDrag(rec, e); mv.moved = 99; gzHit = true; } }
   }
   // تحديد بالمستطيل: ضغط شمال مطوّل في البناء (من غير Ctrl) على أرض فاضية
-  if (e.button === 0 && !gzHit && !drag && S.mode === 'build' && S.tool === 'select' && !S.pick && !e.ctrlKey && !e.metaKey && !DROPP.mode && !placingTool && !(typeof MOB !== 'undefined' && MOB.on) && e.pointerType !== 'touch') {
+  if (e.button === 0 && !gzHit && !drag && (S.mode === 'build' || S.playEdit) && S.tool === 'select' && !S.pick && !e.ctrlKey && !e.metaKey && !DROPP.mode && !placingTool && !(typeof MOB !== 'undefined' && MOB.on) && e.pointerType !== 'touch') {
     const p = _vpLocal(e);
     S.boxsel = { x0: p.x, y0: p.y, x1: p.x, y1: p.y };
     mv.moved = 0;
@@ -2953,7 +2960,7 @@ cv.addEventListener('pointermove', e => {
     lx = e.clientX; ly = e.clientY;
     return;
   }
-  if (mv && S.boxsel && mv.b === 0 && !drag) {
+  if (mv && S.boxsel && mv.b === 0 && !drag && (S.tool === 'boxsel' || S.tool === 'select')) {
     const p = _vpLocal(e);
     S.boxsel.x1 = p.x; S.boxsel.y1 = p.y;
     _marqueeShow(S.boxsel);
@@ -2986,13 +2993,19 @@ cv.addEventListener('pointerup', e => {
   if (S.boxdel && S.tool === 'boxdel') {
     const n = _marqueeDelete(S.boxdel);
     S.boxdel = null; _marqueeShow(null);
-    if (n > 0) { tip('🗑 اتحذف ' + n + ' كائن'); hier(); chg(); }
-    else tip('مفيش كائنات جوه المستطيل');
+    const msg = n > 0 ? ('🗑 اتحذف ' + n + ' كائن') : 'مفيش كائنات جوه المستطيل';
+    try { tip(msg); tipNow(msg, 2000); } catch (_) {}
+    if (n > 0) { hier(); chg(); }
     return;
   }
-  if (S.boxsel) {
+  if (S.boxsel && (S.tool === 'boxsel' || S.tool === 'select')) {
     const bx = S.boxsel; S.boxsel = null; _marqueeShow(null);
-    if (m.moved >= 5) { _marqueeSelect(bx, e.shiftKey || false); tip('تم تحديد ' + selIds().length + ' كائن'); return; }
+    if (m.moved >= 5) {
+      _marqueeSelect(bx, e.shiftKey || false);
+      const msg = 'تم تحديد ' + selIds().length + ' كائن';
+      try { tip(msg); tipNow(msg, 1800); } catch (_) {}
+      return;
+    }
   }
   if (drag) { endDrag(true); return; }
   
@@ -3118,8 +3131,10 @@ function setTool(t) {
   const brs = document.getElementById('bRs'); if (brs) brs.classList.toggle('on', t === 'respawn');
   const bsp = document.getElementById('bSpawns'); if (bsp) bsp.classList.toggle('on', t === 'respawn' || t === 'online_spawn');
   updOnRsBtn();
-  cv.style.cursor = t === 'select' ? 'default' : (t === 'boxdel' ? 'crosshair' : 'crosshair');
-  if (t !== 'boxdel') { S.boxdel = null; _marqueeShow && _marqueeShow(null); }
+  cv.style.cursor = (t === 'select') ? 'default' : 'crosshair';
+  if (t !== 'boxdel') { S.boxdel = null; }
+  if (t !== 'boxsel') { S.boxsel = null; }
+  if (t !== 'boxdel' && t !== 'boxsel') { try { _marqueeShow && _marqueeShow(null); } catch (_) {} }
   $('#tip').textContent = HINT[t] || '';
   S.tr = null; S.tapArm = null; ghKey = '';
   // عند أداة الوضع: جهّز شعاع منتصف الشاشة فوراً عشان الجوست يبان قبل ما الماوس يتحرك
@@ -3257,12 +3272,15 @@ if (_bSpawns) _bSpawns.onclick = () => openSpawnsPanel();
 
 const _bRs = document.getElementById('bRs'); if (_bRs) _bRs.onclick = () => openSpawnsPanel();
 const _bOnRs = document.getElementById('bOnRs'); if (_bOnRs) _bOnRs.onclick = () => openSpawnsPanel();
-$('#bSnap').onclick = () => {
-  const L = [0, .25, .5, 1];
-  S.snap = L[(L.indexOf(S.snap) + 1) % 4];
-  try { $('#bSnap .snap-l').textContent = S.snap ? String(S.snap) : 'حر'; } catch (_) {}
-  try { chg(); } catch (_) {}
-};
+try {
+  const _bSnap = $('#bSnap');
+  if (_bSnap) _bSnap.onclick = () => {
+    const L = [0, .25, .5, 1];
+    S.snap = L[(L.indexOf(S.snap) + 1) % 4];
+    try { $('#bSnap .snap-l').textContent = S.snap ? String(S.snap) : 'حر'; } catch (_) {}
+    try { chg(); } catch (_) {}
+  };
+} catch (_) {}
 
 const HAWA_ASSET_NAMES = ['game', 'play-runtime.js', 'three.min.js', 'peerjs.min.js', 'jszip.min.js'];
 const HAWA_ASSETS = {}; 
@@ -3802,8 +3820,29 @@ function dropToggle() {
 function updCoord() {
   if (!S.showCoord) return;
   const f = v => (+v).toFixed(3), setT = (id, v) => { const el = $(id); if (el && el.textContent !== v) el.textContent = v; };
-  if (cam && cam.position) { setT('#kx', f(cam.position.x)); setT('#ky', f(cam.position.y)); setT('#kz', f(cam.position.z)); }
-  if (S.mode === 'play' && RT) {
+  // كاميرا البناء أو كاميرا اللعب حسب الوضع
+  try {
+    if (S.playEdit || S.mode === 'build') {
+      if (cam && cam.position) { setT('#kx', f(cam.position.x)); setT('#ky', f(cam.position.y)); setT('#kz', f(cam.position.z)); }
+    } else if (S.mode === 'play' && RT && RT.cam && RT.cam.position) {
+      setT('#kx', f(RT.cam.position.x)); setT('#ky', f(RT.cam.position.y)); setT('#kz', f(RT.cam.position.z));
+    } else if (cam && cam.position) {
+      setT('#kx', f(cam.position.x)); setT('#ky', f(cam.position.y)); setT('#kz', f(cam.position.z));
+    }
+  } catch (_) {}
+  // المحدد: في الاختبار النصفي اعرض الكائن المختار لو موجود، وإلا اللاعب
+  if (S.playEdit) {
+    const o = (S.sel != null && S.sel !== '__player__') ? OBJ.get(S.sel) : null;
+    if (o) {
+      setT('#cx', f(o.pos[0])); setT('#cy', f(o.pos[1])); setT('#cz', f(o.pos[2])); setT('#cName', (o.name || o.type) + ' · id=' + o.id);
+    } else if (S.sel === '__player__' && RT && RT.p) {
+      setT('#cx', f(RT.p.x)); setT('#cy', f(RT.p.y)); setT('#cz', f(RT.p.z)); setT('#cName', 'اللاعب · اختبار نصفي');
+    } else if (RT && RT.p) {
+      setT('#cx', f(RT.p.x)); setT('#cy', f(RT.p.y)); setT('#cz', f(RT.p.z)); setT('#cName', 'اللاعب · اختبار نصفي');
+    } else {
+      setT('#cx', '—'); setT('#cy', '—'); setT('#cz', '—'); setT('#cName', 'لا يوجد تحديد');
+    }
+  } else if (S.mode === 'play' && RT && RT.p) {
     setT('#cx', f(RT.p.x)); setT('#cy', f(RT.p.y)); setT('#cz', f(RT.p.z)); setT('#cName', 'اللاعب · وضع الاختبار');
   } else {
     const o = OBJ.get(S.sel);
@@ -3818,13 +3857,32 @@ function updCoord() {
 const _dropBtn = $('#dropBtn'); if (_dropBtn) _dropBtn.onclick = () => dropToggle();
 function toggleCoord() {
   S.showCoord = !S.showCoord;
-  S.pick = S.showCoord;
-  const panel = $('#coordPanel'); if (panel) panel.hidden = !S.showCoord;
+  // في الاختبار النصفي: متفعّلش وضع الالتقاط تلقائي (بيبوّظ التحديد)
+  if (!S.playEdit) S.pick = S.showCoord;
+  else if (!S.showCoord) S.pick = false;
+  const panel = $('#coordPanel');
+  if (panel) {
+    panel.hidden = !S.showCoord;
+    try {
+      panel.style.display = S.showCoord ? '' : 'none';
+      panel.style.visibility = S.showCoord ? 'visible' : 'hidden';
+      panel.style.pointerEvents = S.showCoord ? 'auto' : 'none';
+      panel.style.zIndex = '10050';
+    } catch (_) {}
+  }
   syncCoordRailBtn();
-  tip(S.showCoord ? 'الإحداثيات مفعّلة' : 'الإحداثيات مُغلقة');
+  try { tip(S.showCoord ? 'الإحداثيات مفعّلة' : 'الإحداثيات مُغلقة'); } catch (_) {}
+  try { tipNow(S.showCoord ? 'الإحداثيات مفعّلة' : 'الإحداثيات مُغلقة', 1800); } catch (_) {}
+  try { if (S.showCoord) updCoord(); } catch (_) {}
   S.dirty = 1;
 }
-const _bCoordRail = $('#bCoordRail'); if (_bCoordRail) _bCoordRail.onclick = () => toggleCoord();
+const _bCoordRail = $('#bCoordRail');
+if (_bCoordRail) {
+  _bCoordRail.onclick = (e) => {
+    try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
+    toggleCoord();
+  };
+}
 $('#gz').onclick = e => {
   const b = e.target.closest('button'); if (!b) return;
   if (b.dataset.g) setGz(b.dataset.g);

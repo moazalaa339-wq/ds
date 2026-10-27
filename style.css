@@ -3530,3 +3530,52 @@ body.is-mobile.play-edit #mBarHist {
   display: inline-flex !important;
   visibility: visible !important;
 }
+
+
+/* ===== v2.77 إحداثيات في النصفي + شيل الشبكة + تحديد/حذف محيطي ===== */
+#bSnap { display: none !important; }
+
+/* لوحة الإحداثيات ظاهرة وقابلة للتفاعل في الاختبار النصفي */
+body.play-edit #coordPanel,
+body.play-on.play-edit #coordPanel {
+  z-index: 10050 !important;
+  pointer-events: auto !important;
+}
+body.play-edit #coordPanel:not([hidden]) {
+  display: block !important;
+  visibility: visible !important;
+}
+body.is-mobile.play-edit #coordPanel {
+  top: calc(var(--m-top, 52px) + var(--m-safe-t, 0px) + 8px) !important;
+  inset-inline-start: 6px !important;
+  max-width: min(48vw, 200px) !important;
+  font-size: 10px !important;
+  z-index: 10050 !important;
+}
+
+/* أزرار الحذف/التحديد المحيطي واضحة على الموبايل */
+body.is-mobile #rail [data-tool="boxdel"],
+body.is-mobile #rail [data-tool="boxsel"] {
+  display: inline-flex !important;
+  visibility: visible !important;
+  min-width: 32px !important;
+  max-width: 48px !important;
+}
+body.is-mobile #rail [data-tool="boxdel"].on {
+  color: #fecaca !important;
+  background: rgba(239, 68, 68, .22) !important;
+  box-shadow: 0 0 0 1px rgba(248, 113, 113, .55) inset !important;
+  border-radius: 8px !important;
+}
+body.is-mobile #rail [data-tool="boxsel"].on {
+  color: #bbf7d0 !important;
+  background: rgba(34, 197, 94, .2) !important;
+  box-shadow: 0 0 0 1px rgba(74, 222, 128, .5) inset !important;
+  border-radius: 8px !important;
+}
+#rail [data-tool="boxdel"].on {
+  color: #fecaca !important;
+}
+#rail [data-tool="boxsel"].on {
+  color: #86efac !important;
+}
