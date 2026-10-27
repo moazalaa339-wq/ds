@@ -1814,14 +1814,105 @@ body.is-mobile .r label input[type=number] {
   }
 }
 
-/* وضع اللعب: إخفاء شريط الحركة/القفز/الجري الافتراضي — يظهر فقط عبر game.touch.show */
-body.is-mobile.play-on #mTouch,
-body.is-mobile.play-on #mJoy,
-body.is-mobile.play-on #mAct,
-body.play-on #mTouch {
+/* وضع اللعب الكامل فقط: إخفاء جويستيك البناء — في الاختبار النصفي (play-edit) يفضل ظاهر زي البناء العادي */
+body.is-mobile.play-on:not(.play-edit) #mTouch,
+body.is-mobile.play-on:not(.play-edit) #mJoy,
+body.is-mobile.play-on:not(.play-edit) #mAct,
+body.play-on:not(.play-edit) #mTouch {
   display: none !important;
   visibility: hidden !important;
   pointer-events: none !important;
+}
+/* في الاختبار النصفي على الموبايل: فعّل لمس البناء صراحة */
+body.is-mobile.play-edit #mTouch,
+body.is-mobile.play-edit #mJoy,
+body.is-mobile.play-edit #mAct {
+  display: block !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+}
+body.is-mobile.play-edit #mAct {
+  display: flex !important;
+}
+/* لما المستخدم يختار «اختبار» من مبدّل الموبايل (ملء الشاشة): اخفي جويستيك البناء */
+body.is-mobile.play-edit.mob-live #mTouch,
+body.is-mobile.play-edit.mob-live #mJoy,
+body.is-mobile.play-edit.mob-live #mAct {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+
+/* زر الاختبار على الموبايل وهو جوّه الاختبار: أحمر + مربع */
+body.is-mobile #mTestBtn.in-test,
+body.is-mobile.play-on #mTestBtn,
+body.is-mobile.in-test #mTestBtn {
+  background: linear-gradient(180deg, #ef4444, #b91c1c) !important;
+  border-color: #f87171 !important;
+  color: #fff !important;
+  box-shadow: 0 6px 18px rgba(239, 68, 68, .35) !important;
+}
+body.is-mobile #mTestBtn.in-test i,
+body.is-mobile.play-on #mTestBtn i,
+body.is-mobile.in-test #mTestBtn i {
+  color: #fee2e2 !important;
+}
+body.is-mobile #mTestBtn.in-test span,
+body.is-mobile.play-on #mTestBtn span {
+  font-size: 16px;
+  line-height: 1;
+  font-weight: 900;
+}
+
+/* سطح المكتب: أيقونة الإيقاف + أحمر في أي وضع اختبار */
+body.play-on #bTest,
+body.in-test #bTest,
+#bTest.in-test {
+  background: linear-gradient(180deg, #ef4444, #b91c1c) !important;
+  border-color: #f87171 !important;
+  color: #fff !important;
+  box-shadow: 0 8px 22px rgba(239, 68, 68, .3) !important;
+}
+body.play-on #bTest:hover,
+#bTest.in-test:hover {
+  background: linear-gradient(180deg, #f87171, #dc2626) !important;
+}
+
+/* شارة واضحة على الموبايل إنك جوّه الاختبار */
+#mTestBadge {
+  display: none;
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10050;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(239, 68, 68, .95), rgba(153, 27, 27, .95));
+  border: 1px solid #fca5a5;
+  color: #fff;
+  font: 800 12px/1.2 system-ui, sans-serif;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .35);
+  pointer-events: none;
+  letter-spacing: .2px;
+}
+#mTestBadge b {
+  font-size: 14px;
+  line-height: 1;
+}
+body.is-mobile.play-on #mTestBadge,
+body.is-mobile.in-test #mTestBadge {
+  display: inline-flex;
+}
+#mTestBadge[hidden] {
+  display: none !important;
+}
+#mTestBadge.half {
+  background: linear-gradient(180deg, rgba(245, 158, 11, .95), rgba(180, 83, 9, .95));
+  border-color: #fcd34d;
 }
 #pHelp:empty,
 #pHelp[hidden] {
@@ -2634,3 +2725,123 @@ body.play-edit.is-mobile #mobViewSw{position:fixed;top:calc(env(safe-area-inset-
 body.play-edit.is-mobile.mob-live #play{position:fixed!important;inset:0!important;top:0!important;left:0!important;right:0!important;bottom:0!important;width:100%!important;height:100%!important;min-width:0!important;min-height:0!important;border:none!important;border-radius:0!important;z-index:10040!important}
 body.play-edit.is-mobile.mob-live #app{visibility:hidden!important;pointer-events:none!important}
 body.play-edit.is-mobile.mob-live #mobViewSw{top:calc(env(safe-area-inset-top,0px) + 10px)}
+
+/* ===== ترتيب شريط البناء + رجوع/تقديم تحت الدراع ===== */
+body:not(.is-mobile) #bar{
+  gap:6px !important;
+  padding:0 8px !important;
+}
+body:not(.is-mobile) #bar .seg-proj{
+  gap:3px;
+  padding:2px;
+}
+body:not(.is-mobile) #bar .seg-proj button{
+  min-width:36px;
+  height:36px;
+  padding:0 8px;
+  font-size:12px;
+}
+body:not(.is-mobile) #bar .tabs button{
+  height:36px;
+  padding:0 10px;
+  font-size:12.5px;
+}
+body:not(.is-mobile) #bar .brand{
+  gap:6px;
+  padding-inline-end:4px;
+}
+body:not(.is-mobile) #bar .brand .logo{
+  width:28px;height:28px;
+}
+body:not(.is-mobile) #bar .brand b{font-size:13px}
+body:not(.is-mobile) #bar .brand small{font-size:9px;opacity:.7}
+body:not(.is-mobile) #bar #bTest{
+  height:36px;padding:0 14px;font-size:13px;
+}
+body:not(.is-mobile) #bar #bFullscreen{
+  width:36px;height:36px;padding:0;
+}
+body:not(.is-mobile) #bar .menu summary{
+  height:36px;min-width:36px;padding:0 10px;
+}
+body:not(.is-mobile) #bar .playnet-chip{
+  height:36px;padding:0 10px;font-size:12px;
+}
+body:not(.is-mobile) #bar #bMyFiles{
+  height:36px;padding:0 10px;
+}
+
+.rail-hist{
+  display:flex;
+  flex-direction:row;
+  gap:4px;
+  justify-content:center;
+  margin:6px 0 2px;
+  width:100%;
+}
+.rail-hist button{
+  width:28px !important;
+  height:28px !important;
+  min-width:28px !important;
+  padding:0 !important;
+  border-radius:8px !important;
+  font-size:14px !important;
+  line-height:1 !important;
+  color:#d8d0c2 !important;
+  background:rgba(8,6,12,.55) !important;
+  border:1px solid rgba(255,214,150,.18) !important;
+}
+.rail-hist button:hover{
+  color:#fff !important;
+  border-color:rgba(45,226,196,.5) !important;
+  background:rgba(45,226,196,.12) !important;
+}
+body:not(.is-mobile) #rail .rail-hist button::before{display:none !important}
+body.is-mobile .rail-hist{
+  flex-direction:row;
+  margin:0 4px;
+  gap:4px;
+}
+body.is-mobile .rail-hist button{
+  width:34px !important;
+  height:34px !important;
+  min-width:34px !important;
+  font-size:15px !important;
+}
+
+/* تقليل زحمة الموبايل في شريط البناء */
+body.is-mobile #mBar button{
+  min-height:36px;
+  padding:6px 8px;
+  font-size:11px;
+  gap:2px;
+}
+body.is-mobile #mMore .mm-grid{
+  gap:6px;
+  padding:8px;
+}
+body.is-mobile #mMore .mm-grid button,
+body.is-mobile #mMore .mm-grid a{
+  min-height:40px;
+  padding:8px 10px;
+  font-size:12px;
+}
+
+/* منع ظهور popups/tooltips على الموبايل وفي أوضاع اللعب */
+body.is-mobile #rail button[title]:hover::after,
+body.is-mobile #rail button[title]:focus::after,
+body.is-mobile #rail button[title]:active::after,
+body.play-on #rail button[title]:hover::after,
+body.play-on #bar button[title]:hover::after,
+body.online-play #rail button[title]:hover::after {
+  content: none !important;
+  display: none !important;
+}
+body.is-mobile.play-on #mBuildHint,
+body.is-mobile.online-play #mBuildHint {
+  display: none !important;
+}
+/* إخفاء أي عناصر تحذير عائمة زائدة أثناء اللعب على الموبايل إن لم تكن ضرورية */
+body.is-mobile.play-on:not(.play-edit) .pad-stat-line {
+  display: none !important;
+}

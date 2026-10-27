@@ -8038,8 +8038,8 @@ async function uploadProjectZip(file) {
   }
 }
 async function wipeProjectTotal() {
-  for (let i = 1; i <= 3; i++) {
-    const ok = await uiConfirm('تأكيد ' + i + ' من 3\n\nهذا سيحذف محتوى المشروع الحالي (كائنات، برمجة، كائنات برمجية، وسائط).\nمكان التخزين اللي محدد هيفضل زي ما هو.\nهل أنت متأكد؟');
+  for (let i = 1; i <= 4; i++) {
+    const ok = await uiConfirm('تأكيد ' + i + ' من 4\n\nهذا سيحذف محتوى المشروع الحالي (كائنات، برمجة، كائنات برمجية، وسائط).\nمكان التخزين اللي محدد هيفضل زي ما هو.\nهل أنت متأكد؟');
     if (!ok) { try { tip('تم إلغاء الحذف'); } catch (_) {} return; }
   }
   try { if (S.mode === 'play') playStop(); } catch (_) {}
@@ -12527,7 +12527,10 @@ const NetMP = {
           c.on('open', () => {
             opened = true;
             self._bindConn(c);
-            try { c.send({ t: 'hello', slot: self.slot, name: self.name }); } catch (_) {}
+            try {
+              const app = (typeof self._appearance === 'function') ? self._appearance() : null;
+              c.send({ t: 'hello', slot: self.slot, name: self.name, app });
+            } catch (_) {}
           });
           c.on('error', () => {});
           setTimeout(() => {
@@ -12542,7 +12545,10 @@ const NetMP = {
     });
     this.peer.on('connection', c => {
       self._bindConn(c);
-      c.on('open', () => { try { VoiceChat.onPeerConnected(c.peer); } catch(_){} });
+      c.on('open', () => {
+        try { VoiceChat.onPeerConnected(c.peer); } catch(_){}
+        try { self._appK = null; self._appT = 0; self.acc = 99; } catch(_){}
+      });
     });
     this.peer.on('call', call => { try { VoiceChat._answerCall(call); } catch(_){} });
     this.peer.on('error', err => {
@@ -12593,13 +12599,48 @@ const NetMP = {
       if (this.isHost) this._relay(from, msg);
       return;
     }
-    if (msg.t === 'hello' && this.isHost) {
-      const c = this.conns.get(from);
-      if (c) try { c.send({ t: 'hi', slot: this.slot, name: this.name, hostSlot: this.slot }); } catch (e) {}
+    if (msg.t === 'hello') {
+      // إنشاء الريموت فوراً من الطرفين + إرسال مظهر فوري عشان الاتنين يشوفوا بعض
+      try {
+        if (msg.slot != null && +msg.slot !== this.slot) {
+          this._ensureRemote(+msg.slot, msg.name, from, msg.app || null);
+        }
+      } catch (_) {}
+      if (this.isHost) {
+        const c = this.conns.get(from);
+        if (c) {
+          try {
+            c.send({
+              t: 'hi',
+              slot: this.slot,
+              name: this.name,
+              hostSlot: this.slot,
+              app: this._appearance ? this._appearance() : null,
+              roster: (this._roster || []).map(p => ({ slot: p.slot, name: p.name, host: !!(p.host || p.isHost) }))
+            });
+          } catch (e) {}
+        }
+        // امسح كاش المظهر عشان التكت الجاي يبعت app كامل
+        try { this._appK = null; this._appT = 0; } catch (_) {}
+        try { this.acc = 99; } catch (_) {}
+      }
       return;
     }
-    if (msg.t === 'hi' && msg.hostSlot != null) {
-      this.hostSlot = +msg.hostSlot || this.hostSlot || 1;
+    if (msg.t === 'hi') {
+      if (msg.hostSlot != null) this.hostSlot = +msg.hostSlot || this.hostSlot || 1;
+      try {
+        if (msg.slot != null && +msg.slot !== this.slot) {
+          this._ensureRemote(+msg.slot, msg.name, from, msg.app || null);
+        }
+        if (Array.isArray(msg.roster)) {
+          for (const p of msg.roster) {
+            if (!p || p.slot == null || +p.slot === this.slot) continue;
+            this._ensureRemote(+p.slot, p.name, null, null);
+          }
+        }
+        this._appK = null; this._appT = 0;
+        this.acc = 99;
+      } catch (_) {}
     }
     if (msg.t === 'state') {
       this._applyState(from, msg);
@@ -13797,6 +13838,7 @@ async function playStart(opts) {
     };
   } catch (_) { S._playBackup = null; }
   sel(null); S.mode = 'play'; syncMarks(); S.err = []; S.fly = false; updModes();
+  try { syncTestBtnUI(); } catch (_) {}
   const playEl = document.getElementById('play');
   const appEl = document.getElementById('app');
   if (playEl) { playEl.hidden = false; playEl.style.display = ''; }
@@ -14298,6 +14340,7 @@ function playStop() {
   setSpawnVis(true);
   setTestUrl(null);
   try { MOB.setPlay(false); } catch (_) {}
+  try { syncTestBtnUI(); } catch (_) {}
   try { TouchUI.hide(); } catch (_) {}
   try { clearVirtualKeys(); } catch (_) {}
 
@@ -14390,6 +14433,7 @@ function playStop() {
   try { disposePlayView(); } catch (_) {}
   S.playEdit = false;
   playFocus = false; playLocked = false;
+  try { syncTestBtnUI(); } catch (_) {}
   // أعد معاينات البناء بعد الخروج من الاختبار
   try {
     for (const o of S.objs) {
@@ -14424,6 +14468,7 @@ function playStop() {
   attach(vp);
   setTool(S.tool); sel(null); camUpdate(); updModes(); refNames = null; syncMarks();
   try { endDrag(false); mv = null; MOB.resetBuildTouch(); MOB.detect(); MOB.syncPads(); setTimeout(() => { try { MOB.detect(); MOB.syncPads(); resize(); } catch (_) {} }, 120); } catch (_) {}
+  try { syncTestBtnUI(); } catch (_) {}
 }
 
 function playStartFX(opts) {
@@ -14449,6 +14494,69 @@ function playStartFX(opts) {
     try { playStart({ withBuild }).catch(err => console.error(err)); } catch (_) {}
   }
 }
+
+function syncTestBtnUI() {
+  const inTest = !!(S && S.mode === 'play');
+  const stopSvg = (typeof ic === 'function') ? ic('stop') : '■';
+  const playSvg = (typeof ic === 'function') ? ic('play') : '▶';
+  try {
+    const b = document.getElementById('bTest');
+    if (b) {
+      b.classList.toggle('in-test', inTest);
+      const span = b.querySelector('[data-ic], span');
+      if (span) {
+        if (inTest) {
+          span.setAttribute('data-ic', 'stop');
+          span.innerHTML = stopSvg;
+        } else {
+          span.setAttribute('data-ic', 'play');
+          span.innerHTML = playSvg;
+        }
+      }
+      // نص الزر إن وُجد نص خام
+      const txt = [...b.childNodes].find(n => n.nodeType === 3 && n.textContent.trim());
+      if (txt) txt.textContent = inTest ? 'إيقاف' : 'اختبر';
+      else {
+        // احتفظ بالأيقونة وغيّر title
+      }
+      b.title = inTest ? 'إيقاف الاختبار (P)' : 'اختبر (P)';
+      b.setAttribute('aria-label', inTest ? 'إيقاف الاختبار' : 'اختبر');
+    }
+  } catch (_) {}
+  try {
+    const m = document.getElementById('mTestBtn');
+    if (m) {
+      m.classList.toggle('in-test', inTest);
+      m.classList.toggle('go', !inTest);
+      const span = m.querySelector('span');
+      const lab = m.querySelector('i');
+      if (span) span.innerHTML = inTest ? '■' : '▶';
+      if (lab) lab.textContent = inTest ? 'إيقاف' : 'اختبر';
+      m.setAttribute('aria-label', inTest ? 'إيقاف الاختبار' : 'اختبر');
+      m.title = inTest ? 'إيقاف الاختبار — اضغط للخروج' : 'اختبر';
+    }
+  } catch (_) {}
+  try {
+    document.body.classList.toggle('in-test', inTest);
+    let badge = document.getElementById('mTestBadge');
+    if (inTest) {
+      if (!badge) {
+        badge = document.createElement('div');
+        badge.id = 'mTestBadge';
+        badge.setAttribute('aria-live', 'polite');
+        badge.innerHTML = '<b>■</b><span>وضع الاختبار</span>';
+        document.body.appendChild(badge);
+      }
+      badge.hidden = false;
+      badge.classList.toggle('half', !!(S && S.playEdit));
+      const sp = badge.querySelector('span');
+      if (sp) sp.textContent = (S && S.playEdit) ? 'اختبار + بناء' : 'وضع الاختبار';
+    } else if (badge) {
+      badge.hidden = true;
+    }
+  } catch (_) {}
+}
+
 function showTestChoice() {
   if (S.mode === 'play') { playStop(); return; }
   const el = document.getElementById('testChoice');
@@ -15294,11 +15402,9 @@ const MOB = {
       const bh = document.getElementById('mBuildHint'); if (bh) bh.hidden = true;
       return;
     }
-    // في وضع الاختبار+البناء: خلّي شريط البناء ظاهر
+    // في وضع الاختبار+البناء: خلّي شريط البناء وجويستيك البناء ظاهرين زي البناء العادي
     const play = !!this.playOn && !S.playEdit;
     const mt = document.getElementById('mTouch');
-    
-    
     if (mt) mt.hidden = !!play;
     const mb = document.getElementById('mBar');
     if (mb) mb.hidden = !!play;
@@ -15306,10 +15412,12 @@ const MOB = {
     if (bh) bh.hidden = !!play;
     const jb = document.getElementById('mJump'), rb = document.getElementById('mRun');
     if (jb && rb && !play) {
+      // بناء عادي أو اختبار نصفي: طلوع/نزول للكاميرا
       jb.innerHTML = '<b>▲</b><span>طلوع</span>';
       rb.innerHTML = '<b>▼</b><span>نزول</span>';
       jb.setAttribute('aria-label', 'طلوع'); rb.setAttribute('aria-label', 'نزول');
     }
+    try { syncTestBtnUI(); } catch (_) {}
   },
   _bindJoy() {
     const zone = document.getElementById('mJoy');
@@ -15405,7 +15513,7 @@ const MOB = {
     this.buildTouch = null;
     this.lookTouch = null;
     cv.addEventListener('touchstart', e => {
-      if (!this.on || S.mode !== 'build') return;
+      if (!this.on || (S.mode !== 'build' && !S.playEdit)) return;
       
       
       if (e.targetTouches.length >= 2) {
@@ -15445,7 +15553,7 @@ const MOB = {
       if (S.tool === 'place' || S.tool === 'respawn' || S.tool === 'online_spawn') { S.tr = { x: t.clientX, y: t.clientY }; S.dirty = 1; }
     }, { passive: false });
     cv.addEventListener('touchmove', e => {
-      if (!this.on || S.mode !== 'build') return;
+      if (!this.on || (S.mode !== 'build' && !S.playEdit)) return;
       if (typeof drag !== 'undefined' && drag) {
         e.preventDefault();
         if (drag.pid == null && e.targetTouches[0]) { try { doDrag({ clientX: e.targetTouches[0].clientX, clientY: e.targetTouches[0].clientY }); } catch (_) {} }
@@ -15480,7 +15588,7 @@ const MOB = {
       }
     }, { passive: false });
     cv.addEventListener('touchend', e => {
-      if (!this.on || S.mode !== 'build') return;
+      if (!this.on || (S.mode !== 'build' && !S.playEdit)) return;
       if (this.pinch && e.targetTouches.length < 2) {
         this.pinch = null;
         const r = e.targetTouches[0];

@@ -53,10 +53,6 @@
     <button id="bPlayNet" type="button" class="playnet-chip" title="حالة المشروع">❓<i>—</i></button>
     <button id="bMyFiles" type="button" title="ملفاتي">📁<i>ملفاتي</i></button>
 
-    <div class="seg seg-hist">
-      <button id="bUndo" type="button" title="رجوع (Ctrl+Z)"><i>↶ رجوع</i></button>
-      <button id="bRedo" type="button" title="تقديم (Ctrl+Y)"><i>↷ تقديم</i></button>
-    </div>
     <div class="seg seg-proj">
       <button id="bSave" title="حفظ فوري (الحفظ تلقائي دائماً)"><span data-ic="save"></span><i>حفظ</i></button>
       <button id="bProjDown" title="تحميل المشروع"><span data-ic="save"></span><i>تحميل</i></button>
@@ -68,7 +64,7 @@
         <button id="bSaveMenu" title="حفظ فوري (الحفظ تلقائي دائماً)" data-proxy="bSave"><span data-ic="save"></span><i>حفظ فوري</i></button>
         <button id="bStorage" title="عرض التخزين">💾<i>عرض التخزين</i></button>
         <button id="bConvert" class="go convert-btn" type="button" title="تحويل إلى لعبة">📦<i>تحويل إلى لعبة</i></button>
-        <button id="bWipe" class="danger-btn" title="حذف الكلي">🗑<i>حذف الكلي</i></button>
+        <button id="bWipe" class="danger-btn" title="حذف المشروع والبدا من جديد">🗑<i>حذف المشروع والبدا من جديد</i></button>
       </div>
     </details>
     <button id="bTest" class="go" title="اختبر (P)"><span data-ic="play"></span>اختبر</button>
@@ -88,6 +84,10 @@
       <button id="bSnap" title="الشبكة"><span data-ic="grid"></span><span class="snap-l">0.5</span></button>
       <button id="bCoordRail" title="الإحداثيات"><span data-ic="grid"></span></button>
       <button id="bPadRail" type="button" class="pad-rail-btn" title="تفعيل الدراع (كونترولر بلايستيشن)"><span class="pad-ico"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 6h10a4 4 0 0 1 3.9 4.9l-1 4.2A2.5 2.5 0 0 1 17.5 17.5l-1.4-1.6H7.9l-1.4 1.6A2.5 2.5 0 0 1 2.1 15.1l-1-4.2A4 4 0 0 1 7 6z"/><path d="M6.5 9.5v3M5 11h3"/><circle cx="15.5" cy="10" r=".7" fill="currentColor"/><circle cx="17.7" cy="12.2" r=".7" fill="currentColor"/></svg></span><i class="bcap">الدراع</i></button>
+      <div class="rail-hist" id="railHist">
+        <button id="bUndo" type="button" title="رجوع (Ctrl+Z)" aria-label="رجوع">↶</button>
+        <button id="bRedo" type="button" title="تقديم (Ctrl+Y)" aria-label="تقديم">↷</button>
+      </div>
       <div id="padStatLine" class="pad-stat-line" hidden></div>
     </div>
     <div class="rail-group bottom">
@@ -302,7 +302,7 @@
     <button type="button" data-proxy="bProjUp"><span>⬆</span>رفع المشروع</button>
     <button type="button" data-proxy="bConvert" class="mm-convert"><span>📦</span>تحويل إلى لعبة</button>
     <button type="button" data-proxy="bFullscreen"><span>⛶</span>ملء الشاشة</button>
-    <button type="button" data-proxy="bWipe" class="mm-danger"><span>🗑</span>حذف الكلي</button>
+    <button type="button" data-proxy="bWipe" class="mm-danger"><span>🗑</span>حذف المشروع والبدا من جديد</button>
   </div>
 </div>
 <div id="mTouch" hidden>

@@ -291,7 +291,7 @@ button.on{border-color:rgba(45,226,196,.6);background:linear-gradient(180deg,rgb
       <!-- تبادل الأكواد -->
       <div id="codesBox" style="display:none;flex-direction:column;gap:12px;margin-top:8px;padding:12px;border:1px solid #2a3a5a;border-radius:12px;background:#0b1424">
         <div style="font-weight:800;color:#7ff0dc">تبادل الأكواد (بدون سيرفر)</div>
-        <div class="msg" style="opacity:.85">عدد الردود = عدد نقط الأونلاين − 1. <b>كل سلوت له كود عرض مختلف</b> — انسخ عرض السلوت للضيف ده بالذات، والرد يتنحط على نفس السلوت.</div>
+        <div class="msg" style="opacity:.85"></div>
         <div id="codesHostPane" style="display:none;flex-direction:column;gap:8px">
           <label>① كود العرض (انسخه وابعتّه للضيف)</label>
           <textarea id="codesOfferOut" rows="4" readonly style="width:100%;direction:ltr;text-align:left;font:12px/1.4 Consolas,monospace;background:#060a12;color:#e2e8f0;border:1px solid #334;border-radius:8px;padding:8px"></textarea>
@@ -330,9 +330,7 @@ button.on{border-color:rgba(45,226,196,.6);background:linear-gradient(180deg,rgb
         <div class="msg" id="hostCodeHelp"></div>
         <div class="row" style="margin-top:6px">
           <button type="button" id="btnCopyCode">📋 نسخ الكود</button>
-          <button type="button" id="btnCopyInvite" class="pri">📨 نسخ رسالة الدعوة</button>
         </div>
-        <textarea id="hostInvite" readonly rows="6" style="width:100%;margin-top:8px;direction:rtl;font:12px/1.6 Cairo,Tahoma,sans-serif;background:#060a12;color:#e2e8f0;border:1px solid #334;border-radius:8px;padding:8px"></textarea>
       </div>
 
       <div class="lobby" id="lobby">
@@ -687,14 +685,14 @@ function setNetType(t) {
   const peerLanCreate = document.getElementById('createPeerLanFields');
   const codesHint = document.getElementById('joinCodesHint');
   if (t === 'peerjs') {
-    if (hint) hint.textContent = '🌐 إنترنت (PeerJS): لاعبين من أي مكان — محتاج إنترنت عند الكل، والكود قصير.';
+    if (hint) hint.textContent = '';
     if (lanInfo) lanInfo.style.display = 'none';
     if (codesBox) codesBox.style.display = 'none';
     if (peerLanJoin) peerLanJoin.style.display = 'flex';
     if (peerLanCreate) peerLanCreate.style.display = 'flex';
     if (codesHint) codesHint.style.display = 'none';
   } else if (t === 'lan') {
-    if (hint) hint.textContent = '📡 شبكة محلية (LAN): نفس الواي فاي بس — المضيف يشغّل START_SERVER.bat والضيوف يفتحوا اللعبة من رابطه.';
+    if (hint) hint.textContent = '';
     if (lanInfo) {
       lanInfo.style.display = 'block';
       lanInfo.textContent = 'جاري قراءة عنوان الشبكة المحلية…';
@@ -710,7 +708,7 @@ function setNetType(t) {
       lanInfo.textContent = '✔ LAN جاهز · IP: ' + ips + (j.port ? (' · منفذ ' + j.port) : '');
     }).catch(() => { if (lanInfo) lanInfo.textContent = '⚠ السيرفر المحلي غير متاح — شغّل START_SERVER.bat'; });
   } else {
-    if (hint) hint.textContent = 'من غير بايثون ومن غير PeerJS — تبادل أكواد العرض/الرد يدوياً (واتساب وغيرها)';
+    if (hint) hint.textContent = '';
     if (lanInfo) lanInfo.style.display = 'none';
     if (codesBox) codesBox.style.display = 'none'; // يظهر فقط بعد اختيار إنشاء أو انضمام
     if (peerLanJoin) peerLanJoin.style.display = 'none';
@@ -735,7 +733,7 @@ const _setNT = setNetType;
 setNetType = function (t) {
   _setNT(t);
   const n = $('#joinNetNote');
-  if (n) n.textContent = t === 'lan' ? '📡 LAN: لازم تفتح اللعبة من رابط المضيف (http://IP:المنفذ/game) وتكون على نفس الواي فاي، وبعدين الصق الكود.' : (t === 'peerjs' ? '🌐 إنترنت: اكتب اسم الرووم والكود زي ما المضيف بعتهم.' : '');
+  if (n) n.textContent = '';
   try { probeNet(); } catch (_) {}
 };
 setNetType(netType);
@@ -789,20 +787,17 @@ async function showHostCode(n, rn) {
   let how = '', url = '';
   if (netType === 'lan') {
     url = await lanJoinUrl();
-    how = '📡 شبكة محلية (LAN) — لازم تكون على نفس الواي فاي مع المضيف.\n' +
-      (url ? 'افتح الرابط ده: ' + url + '\n' : 'اطلب من المضيف رابط اللعبة (http://IP:المنفذ/game).\n') +
-      'بعدين: أونلاين ← انضمام ← شبكة محلية ← الصق الكود.';
+    how = '';
     if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
-      if (help) { help.className = 'msg'; help.textContent = url ? 'الضيوف لازم يفتحوا الرابط ده (مش localhost): ' + url : 'الضيوف مش هيقدروا يدخلوا من localhost — شارك IP جهازك والمنفذ.'; }
-    } else if (help) { help.className = 'msg ok'; help.textContent = 'ابعت الكود + الرابط لأصدقائك على نفس الواي فاي'; }
+      if (help) { help.textContent = ''; }
+    } else if (help) { help.textContent = ''; }
   } else {
     const pub = /^https?:$/.test(location.protocol) && !/^(localhost|127\.|192\.168\.|10\.)/.test(location.hostname);
     url = pub ? location.origin + location.pathname : '';
-    how = '🌐 إنترنت (PeerJS) — محتاج إنترنت.\n' + (url ? 'افتح: ' + url + '\n' : '') +
-      'بعدين: أونلاين ← انضمام ← إنترنت ← اكتب اسم الرووم والكود.';
-    if (help) { help.className = 'msg ok'; help.textContent = 'ابعت اسم الرووم والكود لأصدقائك لينضموا'; }
+    how = '';
+    if (help) { help.textContent = ''; }
   }
-  if (inv) inv.value = '🎮 تعالى العب معايا' + (gname ? ' «' + gname + '»' : '') + '\nاسم الرووم: ' + (rn || '—') + '\nكود الشبكة: ' + code + '\n' + how;
+  if (inv) inv.value = '';
   return code;
 }
 (function wireCopy() {
@@ -812,9 +807,8 @@ async function showHostCode(n, rn) {
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(done).catch(() => { const t = $('#hostInvite'); if (t) { t.select(); document.execCommand('copy'); done(); } });
     else { const t = $('#hostInvite'); if (t) { t.value = t.value || txt; t.select(); document.execCommand('copy'); done(); } }
   };
-  const a = $('#btnCopyCode'), b = $('#btnCopyInvite');
+  const a = $('#btnCopyCode');
   if (a) a.onclick = () => { const c = ($('#hostCode') || {}).textContent || ''; if (/^[A-Z0-9-]{4,}$/i.test(c)) cp(c, '✔ تم نسخ الكود'); };
-  if (b) b.onclick = () => cp(($('#hostInvite') || {}).value || '', '✔ تم نسخ رسالة الدعوة');
 })();
 probeNet();
 /* رابط دعوة: ?net=lan|peerjs&room=..&code=.. يعبّي الانضمام تلقائياً */

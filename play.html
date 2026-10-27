@@ -5,7 +5,21 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Playing</title>
 <meta name="robots" content="noindex,nofollow">
-<script>(function(){if(/\/play(\.html)?$/.test(location.pathname)){try{if(!sessionStorage.getItem("hawa_play"))location.replace("game.html");}catch(e){}}})();</script>
+<script>(function(){
+if(!/\/play(\.html)?$/.test(location.pathname))return;
+try{
+  var m=null;
+  try{m=JSON.parse(sessionStorage.getItem("hawa_play_meta")||"null")}catch(e){}
+  // ريفريش أثناء جيم أونلاين → رجوع لقائمة الألعاب (مش استئناف)
+  if(m && m.mode==="online"){
+    try{sessionStorage.removeItem("hawa_play_meta")}catch(e){}
+    try{sessionStorage.removeItem("hawa_play")}catch(e){}
+    location.replace("game.html");
+    return;
+  }
+  if(!sessionStorage.getItem("hawa_play"))location.replace("game.html");
+}catch(e){}
+})();</script>
 <link rel="icon" type="image/png" href="favicon.png">
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
 <link rel="apple-touch-icon" href="favicon-180.png">
@@ -211,7 +225,7 @@
         <span>الخروج من الأونلاين والرجوع للرئيسية</span>
       </button>
     </div>
-    <div class="pom-hint">المايك من الأيقونة أعلى اليسار</div>
+    
   </div>
 </div>
 <div id="pOnlineConfirm" aria-hidden="true">
