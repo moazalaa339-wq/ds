@@ -500,12 +500,12 @@ body.is-mobile:not(.play-on) #mBuildHint{display:block}
   #mJoy{
     pointer-events:auto;position:absolute;
     left:max(10px,env(safe-area-inset-left));
-    bottom:max(56px,calc(52px + var(--m-safe-b)));
+    bottom:calc(var(--m-rail,68px) + var(--m-safe-b) + 10px);
     width:100px;height:100px;border-radius:50%;
     background:rgba(15,23,42,.42);border:2px solid rgba(255,214,150,.4);
     touch-action:none;z-index:17;
   }
-  body.is-mobile.play-on #mJoy{bottom:max(18px,calc(14px + var(--m-safe-b)));}
+  body.is-mobile.play-on:not(.play-edit) #mJoy{bottom:max(18px,calc(14px + var(--m-safe-b)));}
   #mJoyKnob{
     position:absolute;left:50%;top:50%;width:44px;height:44px;margin:-22px 0 0 -22px;
     border-radius:50%;background:rgba(45,226,196,.55);border:2px solid rgba(186,230,253,.85);
@@ -514,9 +514,12 @@ body.is-mobile:not(.play-on) #mBuildHint{display:block}
   #mAct{
     pointer-events:none;position:absolute;
     right:max(10px,env(safe-area-inset-right));
-    bottom:max(18px,calc(14px + var(--m-safe-b)));
-    display:flex;flex-direction:column-reverse;gap:12px;align-items:center;
+    bottom:calc(var(--m-rail,68px) + var(--m-safe-b) + 10px);
+    display:flex;flex-direction:column-reverse;gap:10px;align-items:center;
     z-index:17;
+  }
+  body.is-mobile.play-on:not(.play-edit) #mAct{
+    bottom:max(18px,calc(14px + var(--m-safe-b)));
   }
   #mAct button{
     pointer-events:auto;width:58px;height:58px;border-radius:50%;font-weight:800;font-size:11px;
@@ -1823,16 +1826,24 @@ body.play-on:not(.play-edit) #mTouch {
   visibility: hidden !important;
   pointer-events: none !important;
 }
-/* في الاختبار النصفي على الموبايل: فعّل لمس البناء صراحة */
-body.is-mobile.play-edit #mTouch,
-body.is-mobile.play-edit #mJoy,
-body.is-mobile.play-edit #mAct {
+/* في الاختبار النصفي على الموبايل: طبقة اللمس شفافة للتمرير للكانفاس — الأزرار فقط تستقبل اللمس */
+body.is-mobile.play-edit #mTouch {
+  display: block !important;
+  visibility: visible !important;
+  pointer-events: none !important;
+}
+body.is-mobile.play-edit #mJoy {
   display: block !important;
   visibility: visible !important;
   pointer-events: auto !important;
 }
 body.is-mobile.play-edit #mAct {
   display: flex !important;
+  visibility: visible !important;
+  pointer-events: none !important;
+}
+body.is-mobile.play-edit #mAct button {
+  pointer-events: auto !important;
 }
 /* لما المستخدم يختار «اختبار» من مبدّل الموبايل (ملء الشاشة): اخفي جويستيك البناء */
 body.is-mobile.play-edit.mob-live #mTouch,
@@ -2844,4 +2855,79 @@ body.is-mobile.online-play #mBuildHint {
 /* إخفاء أي عناصر تحذير عائمة زائدة أثناء اللعب على الموبايل إن لم تكن ضرورية */
 body.is-mobile.play-on:not(.play-edit) .pad-stat-line {
   display: none !important;
+}
+
+
+/* ===== موبايل: طلوع/نزول فوق شريط الأدوات السفلي + لمس البناء يعمل ===== */
+body.is-mobile:not(.play-on) #mTouch,
+body.is-mobile.play-edit:not(.mob-live) #mTouch {
+  display: block !important;
+  visibility: visible !important;
+  pointer-events: none !important; /* يمرر اللمس للكانفاس */
+}
+body.is-mobile:not(.play-on) #mJoy,
+body.is-mobile.play-edit:not(.mob-live) #mJoy {
+  display: block !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+  bottom: calc(var(--m-rail, 68px) + var(--m-safe-b, 0px) + 12px) !important;
+  z-index: 30 !important;
+}
+body.is-mobile:not(.play-on) #mAct,
+body.is-mobile.play-edit:not(.mob-live) #mAct {
+  display: flex !important;
+  visibility: visible !important;
+  pointer-events: none !important;
+  flex-direction: column-reverse !important;
+  gap: 10px !important;
+  right: max(10px, env(safe-area-inset-right, 0px)) !important;
+  bottom: calc(var(--m-rail, 68px) + var(--m-safe-b, 0px) + 12px) !important;
+  z-index: 30 !important;
+}
+body.is-mobile:not(.play-on) #mAct button,
+body.is-mobile.play-edit:not(.mob-live) #mAct button {
+  pointer-events: auto !important;
+  width: 56px !important;
+  height: 56px !important;
+  border-radius: 50% !important;
+  font-weight: 900 !important;
+  font-size: 12px !important;
+  box-shadow: 0 6px 18px rgba(0,0,0,.4) !important;
+}
+/* تأكد إن كانفاس البناء يستقبل اللمس */
+body.is-mobile #vp,
+body.is-mobile #cv,
+body.is-mobile.play-edit:not(.mob-live) #vp,
+body.is-mobile.play-edit:not(.mob-live) #cv {
+  pointer-events: auto !important;
+  touch-action: none !important;
+}
+/* شريط الأدوات السفلي فوق الأزرار العائمة بمسافة واضحة */
+body.is-mobile #rail {
+  z-index: 25 !important;
+}
+
+
+/* إزالة زر النافذة المستقلة (⧉) وشارة وضع الاختبار نهائياً */
+#pPopOut,
+button#pPopOut,
+.p-dock-btn#pPopOut {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+}
+#mTestBadge,
+body.is-mobile.play-on #mTestBadge,
+body.is-mobile.in-test #mTestBadge,
+body.in-test #mTestBadge,
+body.play-on #mTestBadge {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
 }

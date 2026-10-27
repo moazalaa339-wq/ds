@@ -2897,8 +2897,13 @@ cv.addEventListener('pointerdown', e => {
     if (!MOB.on && !document.pointerLockElement && cv.requestPointerLock) cv.requestPointerLock();
     return;
   }
-  // في وضع النصفين: لو الماوس تبع الاختبار متتعاملش مع البناء
-  if (S.playEdit && _playViewFocused()) return;
+  // في وضع النصفين: لو التركيز على نافذة الاختبار متتعاملش مع البناء
+  // على الموبايل (من غير mob-live) نخلّي البناء يشتغل عادي: تدوير/تحديد/لاعب
+  if (S.playEdit && _playViewFocused()) {
+    const isMob = !!(typeof MOB !== 'undefined' && MOB.on);
+    const live = !!(document.body && document.body.classList.contains('mob-live'));
+    if (!(isMob && !live)) return;
+  }
   cv.setPointerCapture(e.pointerId); lx = e.clientX; ly = e.clientY; mv = {b: e.button, moved: 0};
   let gzHit = false;
   const placingTool = (S.tool === 'place' || S.tool === 'respawn' || S.tool === 'online_spawn');
@@ -2929,11 +2934,15 @@ cv.addEventListener('pointermove', e => {
     if (document.pointerLockElement === cv || e.buttons & 1) { RT.yaw -= e.movementX * .0035; RT.pitch = clamp(RT.pitch + e.movementY * .0035, -.3, 1.3); }
     return;
   }
-  // في الاختبار+البناء مع التركيز: الكاميرا تبع اللعب مش البناء
+  // في الاختبار+البناء مع التركيز: الكاميرا تبع اللعب مش البناء (ديسكتوب)
   if (S.playEdit && playLocked && RT) {
-    RT.yaw -= e.movementX * .0035;
-    RT.pitch = clamp(RT.pitch + e.movementY * .0035, -.3, 1.3);
-    return;
+    const isMob = !!(typeof MOB !== 'undefined' && MOB.on);
+    const live = !!(document.body && document.body.classList.contains('mob-live'));
+    if (!(isMob && !live)) {
+      RT.yaw -= e.movementX * .0035;
+      RT.pitch = clamp(RT.pitch + e.movementY * .0035, -.3, 1.3);
+      return;
+    }
   }
   if (document.pointerLockElement === cv) { lookAround(e.movementX, e.movementY); return; }
   if (mv && S.boxdel && mv.b === 0 && S.tool === 'boxdel') {
@@ -7660,6 +7669,8 @@ function histUi() {
     document.body.classList.toggle('mob-live', !!live);
     if (bB) bB.classList.toggle('on', !live);
     if (bL) bL.classList.toggle('on', !!live);
+    try { if (typeof MOB !== 'undefined' && MOB.syncPads) MOB.syncPads(); } catch (_) {}
+    try { if (typeof MOB !== 'undefined' && MOB.resetBuildTouch) MOB.resetBuildTouch(); } catch (_) {}
     try { window.dispatchEvent(new Event('resize')); } catch (_) {}
   };
   if (bB) bB.onclick = () => window.__hawaMobLive(false);
@@ -14538,22 +14549,9 @@ function syncTestBtnUI() {
   } catch (_) {}
   try {
     document.body.classList.toggle('in-test', inTest);
-    let badge = document.getElementById('mTestBadge');
-    if (inTest) {
-      if (!badge) {
-        badge = document.createElement('div');
-        badge.id = 'mTestBadge';
-        badge.setAttribute('aria-live', 'polite');
-        badge.innerHTML = '<b>■</b><span>وضع الاختبار</span>';
-        document.body.appendChild(badge);
-      }
-      badge.hidden = false;
-      badge.classList.toggle('half', !!(S && S.playEdit));
-      const sp = badge.querySelector('span');
-      if (sp) sp.textContent = (S && S.playEdit) ? 'اختبار + بناء' : 'وضع الاختبار';
-    } else if (badge) {
-      badge.hidden = true;
-    }
+    // شيل شارة «وضع الاختبار» نهائياً (موبايل وكمبيوتر)
+    const badge = document.getElementById('mTestBadge');
+    if (badge) { try { badge.remove(); } catch (_) { badge.hidden = true; } }
   } catch (_) {}
 }
 
@@ -14705,8 +14703,9 @@ function bindPlayEditChrome() {
   }
   const popBtn = document.getElementById('pPopOut');
   if (popBtn) {
-    popBtn.hidden = false;
-    popBtn.onclick = () => openPlayPopup();
+    popBtn.hidden = true;
+    popBtn.style.display = 'none';
+    popBtn.onclick = null;
   }
   // زر إخفاء/إظهار النافذة الصغيرة (لما البوب أب مفتوح)
   let hideBtn = document.getElementById('pHideEmbed');
@@ -14926,7 +14925,9 @@ function frame(now) {
   if (S.mode === 'play') play(dt);
   // بناء أو اختبار+بناء: أدوات المحرر
   if (S.mode === 'build' || S.playEdit) {
-    const playHasMouse = S.playEdit && _playViewFocused();
+    const isMob = !!(typeof MOB !== 'undefined' && MOB.on);
+    const live = !!(document.body && document.body.classList.contains('mob-live'));
+    const playHasMouse = S.playEdit && _playViewFocused() && !(isMob && !live);
     if (!playHasMouse) {
       if (keyDown('KeyW') || keyDown('KeyA') || keyDown('KeyS') || keyDown('KeyD') || keyDown('ArrowUp') || keyDown('ArrowDown') || keyDown('ArrowLeft') || keyDown('ArrowRight') || keyDown('Space') || keyDown('ShiftLeft') || keyDown('ShiftRight')) fly(dt);
     }
@@ -15402,20 +15403,26 @@ const MOB = {
       const bh = document.getElementById('mBuildHint'); if (bh) bh.hidden = true;
       return;
     }
-    // في وضع الاختبار+البناء: خلّي شريط البناء وجويستيك البناء ظاهرين زي البناء العادي
-    const play = !!this.playOn && !S.playEdit;
+    // بناء / اختبار نصفي: جويستيك + طلوع/نزول ظاهرين فوق شريط الأدوات
+    // لعب كامل فقط: نخفي أدوات البناء
+    const purePlay = !!this.playOn && !S.playEdit;
+    const live = !!(document.body && document.body.classList.contains('mob-live'));
+    const showBuildPads = !purePlay && !live;
     const mt = document.getElementById('mTouch');
-    if (mt) mt.hidden = !!play;
+    if (mt) mt.hidden = !showBuildPads;
     const mb = document.getElementById('mBar');
-    if (mb) mb.hidden = !!play;
+    if (mb) mb.hidden = !!purePlay;
     const bh = document.getElementById('mBuildHint');
-    if (bh) bh.hidden = !!play;
+    if (bh) bh.hidden = !showBuildPads;
     const jb = document.getElementById('mJump'), rb = document.getElementById('mRun');
-    if (jb && rb && !play) {
-      // بناء عادي أو اختبار نصفي: طلوع/نزول للكاميرا
+    if (jb && rb && showBuildPads) {
       jb.innerHTML = '<b>▲</b><span>طلوع</span>';
       rb.innerHTML = '<b>▼</b><span>نزول</span>';
       jb.setAttribute('aria-label', 'طلوع'); rb.setAttribute('aria-label', 'نزول');
+    } else if (jb && rb && purePlay) {
+      jb.innerHTML = 'قفز';
+      rb.innerHTML = 'جري';
+      jb.setAttribute('aria-label', 'قفز'); rb.setAttribute('aria-label', 'جري');
     }
     try { syncTestBtnUI(); } catch (_) {}
   },
@@ -15467,8 +15474,19 @@ const MOB = {
     const run = document.getElementById('mRun');
     const hold = (el, key, flag) => {
       if (!el) return;
-      const on = e => { e.preventDefault(); e.stopPropagation(); setVirtualKey(key, 1); this[flag] = true; el.classList.add('on'); };
-      const off = e => { e.preventDefault(); setVirtualKey(key, 0); this[flag] = false; el.classList.remove('on'); };
+      const on = e => {
+        e.preventDefault(); e.stopPropagation();
+        // في البناء / الاختبار النصفي: طلوع/نزول كاميرا عبر Space/Shift → fly()
+        setVirtualKey(key, 1);
+        this[flag] = true;
+        el.classList.add('on');
+      };
+      const off = e => {
+        e.preventDefault();
+        setVirtualKey(key, 0);
+        this[flag] = false;
+        el.classList.remove('on');
+      };
       el.addEventListener('pointerdown', on);
       el.addEventListener('pointerup', off);
       el.addEventListener('pointerleave', off);
