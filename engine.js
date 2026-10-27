@@ -2707,6 +2707,18 @@ function pickObj(rc) {
   for (const x of rc.intersectObjects(allMeshes(), true)) { let m = x.object; while (m && m.userData.id == null) m = m.parent; if (m) return m.userData.id; }
   return null;
 }
+// مكان HUD السكربتات: في الاختبار النصفي جوه النافذة الصغيرة، وفي الاختبار الكامل فوق الشاشة
+function _hudPlace(el) {
+  const emb = S.playEdit ? document.getElementById('play') : null;
+  const key = emb ? 'emb' : 'body';
+  if (el.dataset.host === key) return el;
+  el.dataset.host = key;
+  (emb || document.body).appendChild(el);
+  el.style.cssText = emb
+    ? 'position:absolute;left:8px;bottom:8px;z-index:20;pointer-events:none;max-width:calc(100% - 16px);font:13px/1.4 system-ui,sans-serif;color:#e8f0ff;'
+    : 'position:fixed;left:12px;bottom:12px;z-index:50;pointer-events:none;max-width:min(420px,90vw);font:13px/1.4 system-ui,sans-serif;color:#e8f0ff;';
+  return el;
+}
 function setTestUrl(mode) {
   try {
     if (window.HAWA_PLAY_ONLY) return;
@@ -2716,7 +2728,7 @@ function setTestUrl(mode) {
       document.title = mode === 'half' ? 'Test Mode (Half)' : 'Test Mode';
     } else {
       sessionStorage.removeItem('hawa_test_ok');
-      if (/[?&]test(mode)?(&|=|$)/.test(location.search)) history.replaceState(null, '', 'build');
+      if (/[?&]test(mode)?(&|=|$)/.test(location.search)) history.replaceState(null, '', 'build.html');
       document.title = 'Build';
     }
   } catch (_) {}
@@ -2906,7 +2918,7 @@ cv.addEventListener('pointerdown', e => {
     if (hh) { const rec = HIT.find(h => h.m === hh.object); if (rec) { startDrag(rec, e); mv.moved = 99; gzHit = true; } }
   }
   // تحديد بالمستطيل: ضغط شمال مطوّل في البناء (من غير Ctrl) على أرض فاضية
-  if (e.button === 0 && !gzHit && !drag && S.mode === 'build' && S.tool === 'select' && !S.pick && !e.ctrlKey && !e.metaKey && !DROPP.mode && !placingTool) {
+  if (e.button === 0 && !gzHit && !drag && S.mode === 'build' && S.tool === 'select' && !S.pick && !e.ctrlKey && !e.metaKey && !DROPP.mode && !placingTool && !(typeof MOB !== 'undefined' && MOB.on) && e.pointerType !== 'touch') {
     const p = _vpLocal(e);
     S.boxsel = { x0: p.x, y0: p.y, x1: p.x, y1: p.y };
     mv.moved = 0;
@@ -3695,7 +3707,7 @@ async function convertToGameImpl() {
   };
   try { bindParamPanel(); } catch (_) {}
 })();
-{ const _bo = document.getElementById('bOpenGame'); if (_bo) _bo.onclick = () => { window.open('game', '_blank'); }; }
+{ const _bo = document.getElementById('bOpenGame'); if (_bo) _bo.onclick = () => { window.open('game.html', '_blank'); }; }
 S.showCoord = false; S.pick = false;
 S.boxdel = null; 
 setInterval(() => { try { HawaPad.updateUi(); } catch (_) {} try { syncPadToggles(); } catch (_) {} }, 1000);
@@ -7530,6 +7542,129 @@ function save() {
 
 let svT; let rfT;
 /** needSave مستقل عن S.dirty — دورة الرسم بتصفر dirty كل فريم */
+// ===== رجوع / تقديم (Undo / Redo) — زي يونيتي: كل تعديل بيتسجل، ورسالة واضحة بالعملية =====
+const HIST = { undo: [], redo: [], last: null, timer: 0, busy: false, max: 120 };
+function histState() {
+  const d = packProjectSnapshot('hist');
+  // الميديا والمجلدات مش جزء من التراجع (عشان ماتتكررش ومايبقاش الحجم كبير)
+  for (const k of ['exportedAt', 'savedAt', 'builderCam', 'media', 'mediaOrder', 'mediaFolders']) delete d[k];
+  return d;
+}
+function histDescribe(a, b) {
+  const ma = new Map((a.objs || []).map(o => [o.id, o]));
+  const mb = new Map((b.objs || []).map(o => [o.id, o]));
+  const nm = o => (o && (o.name || o.type)) || 'كائن';
+  for (const [id, o] of mb) if (!ma.has(id)) return { kind: 'add', what: nm(o) };
+  for (const [id, o] of ma) if (!mb.has(id)) return { kind: 'del', what: nm(o) };
+  for (const [id, o] of mb) {
+    const p = ma.get(id);
+    if (!p || JSON.stringify(p) === JSON.stringify(o)) continue;
+    if (JSON.stringify(p.p || null) !== JSON.stringify(o.p || null)) return { kind: 'param', what: nm(o) };
+    return { kind: 'edit', what: nm(o) };
+  }
+  const sa = [...(a.scripts || []), ...(a.sdefs || [])], sb = [...(b.scripts || []), ...(b.sdefs || [])];
+  if (sb.length > sa.length) return { kind: 'add', what: 'ملف ' + (sb.find(x => !sa.some(y => y.id === x.id)) || {}).name || 'برمجة' };
+  if (sb.length < sa.length) return { kind: 'del', what: 'ملف ' + ((sa.find(x => !sb.some(y => y.id === x.id)) || {}).name || 'برمجة') };
+  for (const x of sb) {
+    const y = sa.find(z => z.id === x.id);
+    if (!y || JSON.stringify(y) === JSON.stringify(x)) continue;
+    if (JSON.stringify(y.p || null) !== JSON.stringify(x.p || null)) return { kind: 'param', what: 'ملف ' + (x.name || 'برمجة') };
+    return { kind: 'edit', what: 'ملف ' + (x.name || 'برمجة') };
+  }
+  return { kind: 'edit', what: 'الإعدادات' };
+}
+function histMsg(info, dir) {
+  const w = info.what;
+  if (dir === 'undo') {
+    if (info.kind === 'add') return 'تم حذف ' + w;
+    if (info.kind === 'del') return 'تم استرجاع ' + w;
+    if (info.kind === 'param') return 'تم تعديل بارامتر ' + w;
+    return 'تم تعديل ' + w;
+  }
+  if (info.kind === 'add') return 'تم إعادة إضافة ' + w;
+  if (info.kind === 'del') return 'تم إعادة حذف ' + w;
+  if (info.kind === 'param') return 'تم إعادة تعديل بارامتر ' + w;
+  return 'تم إعادة تعديل ' + w;
+}
+function histCommit() {
+  HIST.timer = 0;
+  if (HIST.busy || S.mode !== 'build' || S.playEdit) return;
+  let cur; try { cur = histState(); } catch (_) { return; }
+  const key = JSON.stringify(cur);
+  if (!HIST.last) { HIST.last = { key, st: cur }; histUi(); return; }
+  if (HIST.last.key === key) return;
+  const info = histDescribe(HIST.last.st, cur);
+  HIST.undo.push({ info, st: HIST.last.st });
+  if (HIST.undo.length > HIST.max) HIST.undo.shift();
+  HIST.redo = [];
+  HIST.last = { key, st: cur };
+  histUi();
+}
+function histSchedule() {
+  if (HIST.busy) return;
+  clearTimeout(HIST.timer);
+  HIST.timer = setTimeout(histCommit, 350);
+}
+function histApply(st, info, dir) {
+  HIST.busy = true;
+  try {
+    const copy = JSON.parse(JSON.stringify(st));
+    // الميديا الحالية تفضل زي ما هي
+    copy.media = S.media; copy.mediaOrder = S.mediaOrder; copy.mediaFolders = S.mediaFolders;
+    loadData(copy, false);
+    HIST.last = { key: JSON.stringify(st), st };
+  } catch (e) { console.warn('hist apply', e); }
+  finally { HIST.busy = false; }
+  try { tip(histMsg(info, dir)); } catch (_) {}
+  histUi();
+}
+function histUndo() {
+  if (S.mode !== 'build' || S.playEdit) return;
+  histCommit();
+  const it = HIST.undo.pop();
+  if (!it) { try { tip('لا يوجد شيء للتراجع'); } catch (_) {} return; }
+  HIST.redo.push({ info: it.info, st: HIST.last.st });
+  histApply(it.st, it.info, 'undo');
+}
+function histRedo() {
+  if (S.mode !== 'build' || S.playEdit) return;
+  histCommit();
+  const it = HIST.redo.pop();
+  if (!it) { try { tip('لا يوجد شيء للتقديم'); } catch (_) {} return; }
+  HIST.undo.push({ info: it.info, st: HIST.last.st });
+  histApply(it.st, it.info, 'redo');
+}
+function histUi() {
+  const u = document.getElementById('bUndo'), r = document.getElementById('bRedo');
+  if (u) u.disabled = !HIST.undo.length;
+  if (r) r.disabled = !HIST.redo.length;
+}
+(function bindHist() {
+  const u = document.getElementById('bUndo'), r = document.getElementById('bRedo');
+  if (u) u.onclick = e => { e.preventDefault(); histUndo(); };
+  if (r) r.onclick = e => { e.preventDefault(); histRedo(); };
+  document.addEventListener('keydown', e => {
+    if (!(e.ctrlKey || e.metaKey) || S.mode !== 'build' || S.playEdit) return;
+    const t = e.target;
+    if (t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable)) return;
+    if (e.code === 'KeyZ' && !e.shiftKey) { e.preventDefault(); histUndo(); }
+    else if (e.code === 'KeyY' || (e.code === 'KeyZ' && e.shiftKey)) { e.preventDefault(); histRedo(); }
+  });
+  histUi();
+})();
+// تبديل الواجهة على الموبايل: بناء مؤقت ⇄ اختبار حي (نفس العالم والاختبار شغّال)
+(function bindMobViewSw() {
+  const w = document.getElementById('mobViewSw'); if (!w) return;
+  const bB = w.querySelector('[data-v="build"]'), bL = w.querySelector('[data-v="live"]');
+  window.__hawaMobLive = (live) => {
+    document.body.classList.toggle('mob-live', !!live);
+    if (bB) bB.classList.toggle('on', !live);
+    if (bL) bL.classList.toggle('on', !!live);
+    try { window.dispatchEvent(new Event('resize')); } catch (_) {}
+  };
+  if (bB) bB.onclick = () => window.__hawaMobLive(false);
+  if (bL) bL.onclick = () => window.__hawaMobLive(true);
+})();
 function scheduleSave(ms) {
   try { S.needSave = 1; } catch (_) {}
   clearTimeout(svT);
@@ -7537,6 +7672,7 @@ function scheduleSave(ms) {
 }
 function chg() {
   refNames = null;
+  try { histSchedule(); } catch (_) {}
   try { hier(); } catch (_) {}
   clearTimeout(rfT);
   rfT = setTimeout(() => { refNames = null; try { hier(); } catch (_) {} }, 400);
@@ -11271,6 +11407,22 @@ function hadd(b) {
 
 const NOPLAY = new WeakSet();
 let sbxDepth = 0, sbxMedia = [];
+// عزل المعاينة: أي سكربت بيشتغل عشان يبني الشكل في البناء مايقدرش يسجل listeners على الشاشة/المستند/الكانفس
+// (ده كان بيخلي كليك شمال يشغّل صوت وانت في البناء). في الاختبار (RT) السكربت بيشتغل عادي.
+(function patchPreviewListeners() {
+  try {
+    if (window.__hawaListenPatched) return; window.__hawaListenPatched = true;
+    const _add = EventTarget.prototype.addEventListener;
+    EventTarget.prototype.addEventListener = function (type, fn, opts) {
+      if (sbxDepth > 0) {
+        const isGlobal = (this === window || this === document || this === document.body || this === document.documentElement);
+        const isCanvas = !!(this && this.tagName && /^CANVAS$/i.test(this.tagName));
+        if (isGlobal || isCanvas) return;
+      }
+      return _add.call(this, type, fn, opts);
+    };
+  } catch (e) { console.warn('listen patch', e); }
+})();
 (function patchMediaOnce() {
   try {
     if (window.__hawaMediaPatched) return; window.__hawaMediaPatched = true;
@@ -11477,9 +11629,9 @@ function bigGame(rt, o, root) {
         el = document.createElement('div');
         el.id = 'hawaScriptHud';
         el.setAttribute('data-script-ui', '1');
-        el.style.cssText = 'position:fixed;left:12px;bottom:12px;z-index:50;pointer-events:none;max-width:min(420px,90vw);font:13px/1.4 system-ui,sans-serif;color:#e8f0ff;';
-        document.body.appendChild(el);
+        _hudPlace(el);
       }
+      _hudPlace(el);
       el.innerHTML = html == null ? '' : String(html);
       el.style.display = html ? 'block' : 'none';
     },
@@ -12081,6 +12233,7 @@ function groundFollow(rt, b, dt) {
   m.rotation.set(b.gp, yaw, b.gr, 'YXZ');
 }
 
+const R3 = v => Math.round((+v || 0) * 1000) / 1000;
 const NetMP = {
   on: false, role: 'off', code: null, slot: 1, isHost: false, hostSlot: 1, name: 'لاعب',
   peer: null, conns: new Map(), remotes: new Map(), objs: new Map(), 
@@ -12507,6 +12660,8 @@ const NetMP = {
     }
   },
   _ensureRemote(slot, name, peerId, app) {
+    // لاعب جديد/مختلف: ابعت مظهرك في الـ tick الجاي عشان يشوفك صح من أول لحظة
+    if (!this.remotes.has(slot)) this._appK = null;
     slot = +slot;
     if (slot === this.slot) return null;
     let r = this.remotes.get(slot);
@@ -12532,6 +12687,59 @@ const NetMP = {
     try { scene.remove(r.rig.root); } catch (e) {}
     this.remotes.delete(slot);
   },
+  // ===== تزامن ذكي: بافر لقطات بوقت الاستقبال + تأخير تكيّفي + تردد إرسال حسب الشبكة =====
+  _pushSample(r, p, ang) {
+    const now = performance.now();
+    if (!r.buf) r.buf = [];
+    if (r.lastRx != null) {
+      const gap = now - r.lastRx;
+      const avg = r.gapAvg != null ? r.gapAvg : gap;
+      const dev = Math.abs(gap - avg);
+      r.gapAvg = avg * 0.9 + gap * 0.1;
+      r.jit = (r.jit || 0) * 0.9 + dev * 0.1;
+      this._jitterAvg = (this._jitterAvg || 0) * 0.95 + dev * 0.05;
+    }
+    r.lastRx = now;
+    r.buf.push({ t: now, x: p[0], y: p[1], z: p[2], a: ang });
+    if (r.buf.length > 32) r.buf.splice(0, r.buf.length - 32);
+  },
+  _interpDelay(r) {
+    // تأخير العرض = نص لقطة + ضعف الجيتر: على LAN بيقل، على النت الضعيف بيزيد بذكاء
+    const gap = r.gapAvg != null ? r.gapAvg : 80;
+    const jit = r.jit || 0;
+    return Math.min(260, Math.max(45, gap * 1.5 + jit * 2));
+  },
+  _sampleRemote(r, now) {
+    const buf = r.buf;
+    if (!buf || !buf.length) return null;
+    const rt = now - this._interpDelay(r);
+    const last = buf.length - 1;
+    if (rt >= buf[last].t) {
+      // مفيش لقطة لسه في المستقبل: توقّع قصير من آخر لقطتين (حد أقصى 180ms)
+      const b = buf[last];
+      if (last < 1) return b;
+      const a = buf[last - 1];
+      const span = Math.max(1, b.t - a.t);
+      const f = Math.min(rt - b.t, 180) / span;
+      return { x: b.x + (b.x - a.x) * f, y: b.y + (b.y - a.y) * f, z: b.z + (b.z - a.z) * f, a: b.a };
+    }
+    let i = last - 1;
+    while (i > 0 && buf[i].t > rt) i--;
+    const a = buf[i], b = buf[i + 1] || buf[i];
+    const f = Math.max(0, Math.min(1, (rt - a.t) / Math.max(1, b.t - a.t)));
+    let da = b.a - a.a;
+    while (da > Math.PI) da -= Math.PI * 2;
+    while (da < -Math.PI) da += Math.PI * 2;
+    return { x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f, z: a.z + (b.z - a.z) * f, a: a.a + da * f };
+  },
+  _sendInterval() {
+    // تردد الإرسال بيتكيّف: شبكة نظيفة 20 مرة/ث، متوسطة 15، ضعيفة 10 (يوفّر عرض النطاق ويقلل التقطيع)
+    const p = this.pingMs == null ? 80 : this.pingMs;
+    const j = this._jitterAvg || 0;
+    if (p < 60 && j < 12) return 1 / 20;
+    if (p < 150 && j < 35) return 1 / 15;
+    return 1 / 10;
+  },
   _applyState(from, msg) {
     const r = this._ensureRemote(msg.slot, msg.name, from, msg.app);
     if (!r || !RT) return;
@@ -12552,6 +12760,7 @@ const NetMP = {
       r.tp.set(msg.p[0], msg.p[1], msg.p[2]);
       r.ta = msg.ang != null ? msg.ang : (msg.yaw || 0);
       r.hasT = true;
+      this._pushSample(r, msg.p, r.ta);
     }
     r.anim = {
       moving: !!msg.moving, run: !!msg.run, air: !!msg.air,
@@ -12621,9 +12830,11 @@ const NetMP = {
     const k = Math.min(1, dt * 14); 
     for (const r of this.remotes.values()) {
       if (r.hasT) {
-        r.rig.root.position.lerp(r.tp, k);
-        
-        let da = r.ta - r.rig.root.rotation.y;
+        const smp = this._sampleRemote(r, performance.now());
+        if (smp) r.rig.root.position.set(smp.x, smp.y, smp.z);
+        else r.rig.root.position.lerp(r.tp, k);
+        const wantYaw = smp ? smp.a : r.ta;
+        let da = wantYaw - r.rig.root.rotation.y;
         while (da > Math.PI) da -= Math.PI * 2;
         while (da < -Math.PI) da += Math.PI * 2;
         r.rig.root.rotation.y += da * k;
@@ -12829,7 +13040,7 @@ const NetMP = {
     }
     try { this._updPingHud(); } catch (_) {}
     this.acc += dt;
-    if (this.acc < this.sendRate) return;
+    if (this.acc < this._sendInterval()) return;
     this.acc = 0;
     const rt = RT;
     const hv = Math.hypot(rt.v.x, rt.v.z);
@@ -12839,20 +13050,20 @@ const NetMP = {
       seq: ++this.seq,
       slot: this.slot,
       name: this.name,
-      p: [rt.p.x, rt.p.y, rt.p.z],
-      yaw: rt.yaw,
-      ang: rt.ang,
+      p: [R3(rt.p.x), R3(rt.p.y), R3(rt.p.z)],
+      yaw: R3(rt.yaw),
+      ang: R3(rt.ang),
       moving: hv > .3 && !(rt.hold || rt.animLock),
       run: !!(K.ShiftLeft || K.ShiftRight) && hv > .3,
       air: !rt.gr,
       walk: rt.walk || 0,
       hv, sf: Math.min(1, hv / 5.5),
-      vy: rt.v.y,
+      vy: R3(rt.v.y),
       turn: rt.turnS || 0,
       fz: rt.fa || 0,
       fx: rt.la || 0,
       cape: this._capeState(),
-      app: this._appearance(),
+      app: this._appSend(),
       cl: this._rigCl(),
       veh: null, vp: null, vyaw: null, vrx: null, vrz: null, lean: null, vextra: null, face: this._faceSnap(),
       funny: (typeof window.__HawaFunnyNetPack === 'function') ? window.__HawaFunnyNetPack() : null
@@ -12867,11 +13078,36 @@ const NetMP = {
       this._objQueue.clear();
     }
     
+    world = this._worldDelta(world);
     if (world.length) {
       const seen = new Set();
       world = world.filter(o => { if (seen.has(o.id)) return false; seen.add(o.id); return true; });
       this.broadcast({ t: 'world', objs: world, slot: this.slot });
     }
+  },
+  // ===== توفير البنج: إرسال ذكي للبيانات (تغيير فقط + نبضة دورية) =====
+  _appSend() {
+    const now = performance.now();
+    const a = this._appearance(); const k = JSON.stringify(a);
+    if (k !== this._appK || now - (this._appT || 0) > 3000) { this._appK = k; this._appT = now; return a; }
+    return null;
+  },
+  _worldDelta(list) {
+    const now = performance.now();
+    if (!this._wSent) this._wSent = new Map();
+    const out = [];
+    for (const o of list) {
+      const cur = { x: R3(o.x), y: R3(o.y), z: R3(o.z), yaw: R3(o.yaw), rx: R3(o.rx), rz: R3(o.rz) };
+      const prev = this._wSent.get(o.id);
+      const moved = !prev || (Math.abs(prev.x - cur.x) + Math.abs(prev.y - cur.y) + Math.abs(prev.z - cur.z) +
+        Math.abs(prev.yaw - cur.yaw) + Math.abs(prev.rx - cur.rx) + Math.abs(prev.rz - cur.rz)) > 0.0005;
+      const stale = !prev || now - prev.t > 1000;
+      if (moved || stale || o.cl) {
+        this._wSent.set(o.id, { x: cur.x, y: cur.y, z: cur.z, yaw: cur.yaw, rx: cur.rx, rz: cur.rz, t: now });
+        out.push(Object.assign({}, o, cur));
+      }
+    }
+    return out;
   },
   _appearance() {
     
@@ -13378,9 +13614,9 @@ const OnlineMenu = {
       sessionStorage.removeItem('hawa_play');
     } catch (_) {}
     try {
-      if (window.parent && window.parent !== window) { window.parent.location.href = 'game'; return; }
+      if (window.parent && window.parent !== window) { window.parent.location.href = 'game.html'; return; }
     } catch (_) {}
-    try { location.href = 'game'; } catch (_) {}
+    try { location.href = 'game.html'; } catch (_) {}
   },
   leaveToHome() {
     try { NetMP.announceLeave(); } catch (_) {}
@@ -13511,6 +13747,7 @@ async function playStart(opts) {
   try {
   const withBuild = !!(opts && opts.withBuild) && !window.HAWA_PLAY_ONLY;
   S.playEdit = !!withBuild;
+  try { document.body.classList.remove('mob-live'); } catch (_) {}
   setSpawnVis(false);
   setTestUrl(withBuild ? 'half' : 'full');
   // إخفاء طبقة البناء فوراً عشان متظهرش ومضة قبل اللعب — إلا في وضع مع البناء
@@ -13791,9 +14028,9 @@ async function playStart(opts) {
         el = document.createElement('div');
         el.id = 'hawaScriptHud';
         el.setAttribute('data-script-ui', '1');
-        el.style.cssText = 'position:fixed;left:12px;bottom:12px;z-index:50;pointer-events:none;max-width:min(420px,90vw);font:13px/1.4 system-ui,sans-serif;color:#e8f0ff;';
-        document.body.appendChild(el);
+        _hudPlace(el);
       }
+      _hudPlace(el);
       el.innerHTML = html == null ? '' : String(html);
       el.style.display = html ? 'block' : 'none';
     },
@@ -14056,6 +14293,8 @@ return {
   }
 }
 function playStop() {
+  try { HIST.last = null; clearTimeout(HIST.timer); HIST.timer = 0; } catch (_) {}
+  try { document.body.classList.remove('mob-live'); } catch (_) {}
   setSpawnVis(true);
   setTestUrl(null);
   try { MOB.setPlay(false); } catch (_) {}
@@ -14212,7 +14451,6 @@ function playStartFX(opts) {
 }
 function showTestChoice() {
   if (S.mode === 'play') { playStop(); return; }
-  if (document.body && document.body.classList.contains('is-mobile')) { playStartFX({ withBuild: false }); return; }
   const el = document.getElementById('testChoice');
   if (!el) { playStartFX(); return; }
   el.hidden = false; el.removeAttribute('hidden'); el.style.display = 'flex';
@@ -14602,9 +14840,6 @@ function frame(now) {
     if (S.playEdit && playR && playCam) {
       try { _renderPlayView(playR, playCam); } catch (_) {}
     }
-    if (S.playEdit && playPop && playPop.renderer && playPop.cam && !(playPop.win && playPop.win.closed)) {
-      try { _renderPlayView(playPop.renderer, playPop.cam); } catch (_) {}
-    }
     fc++;
   }
   updCoord();
@@ -14790,6 +15025,30 @@ canvas{display:block;width:100%;height:100%;outline:none}
         if (fpsEl && el) fpsEl.textContent = el.textContent || '';
       } catch (_) {}
     }, 500);
+    // مرآة الواجهة: الرسايل والـ HUD بتاع السكربتات والـ FPS بتتنسخ للنافذة المستقلة زي الاختبار الكامل
+    try {
+      document.querySelectorAll('style, link[rel="stylesheet"]').forEach(n => { try { w.document.head.appendChild(n.cloneNode(true)); } catch (_) {} });
+      const mirror = w.document.createElement('div');
+      mirror.id = 'play';
+      mirror.style.cssText = 'position:fixed;inset:0;pointer-events:none;background:transparent;border:none;z-index:5;';
+      w.document.body.appendChild(mirror);
+      let lastSig = '';
+      const mirrorTimer = setInterval(() => {
+        try {
+          if (!playPop || !playPop.win || playPop.win.closed) { clearInterval(mirrorTimer); return; }
+          const pick = [];
+          for (const id of ['pHud', 'pPrompt', 'pFps', 'pHelp', 'hawaScriptHud']) {
+            const el = document.getElementById(id);
+            if (el && !el.hidden && el.style.display !== 'none') pick.push(el.outerHTML);
+          }
+          for (const el of document.querySelectorAll('body > [data-script-ui], body > [data-hawa-ctrl-ui], body > [data-hawa-combat-ui]')) {
+            if (el.id !== 'hawaScriptHud' && el.style.display !== 'none') pick.push(el.outerHTML);
+          }
+          const sig = pick.join('');
+          if (sig !== lastSig) { lastSig = sig; mirror.innerHTML = sig; }
+        } catch (_) {}
+      }, 100);
+    } catch (_) {}
     // إدخال الماوس في النافذة المستقلة + تتبع التركيز
     let looking = false;
     const markPopFocus = (on) => {
@@ -14862,6 +15121,15 @@ canvas{display:block;width:100%;height:100%;outline:none}
     };
     w.addEventListener('beforeunload', () => { playPop = null; });
     playPop = { win: w, canvas, renderer, cam, closed: false, fit };
+    // حلقة رسم مستقلة للنافذة: رسمة واحدة في الفريم بتاع النافذة نفسها (مش مع الفريم الرئيسي)
+    try {
+      const pTick = () => {
+        if (!playPop || playPop.win !== w || w.closed) return;
+        try { if (S.playEdit) _renderPlayView(renderer, cam); } catch (_) {}
+        try { w.requestAnimationFrame(pTick); } catch (_) {}
+      };
+      w.requestAnimationFrame(pTick);
+    } catch (_) {}
     // أظهر زر إخفاء/إظهار على النافذة الصغيرة
     try {
       const hb = document.getElementById('pHideEmbed');
@@ -15454,7 +15722,7 @@ function boot() {
       try {
         if (!(d && d.objs && d.objs.length)) {
           await uiAlert('اللعبة مفيهاش بيانات كافية للتشغيل.\nالسبب: ملف اللعبة ما وصلش لوضع اللعب (ارفعه من «فتح اللعبة» قبل إنشاء/انضمام الرووم، أو أعد رفعه).');
-          location.href = 'game';
+          location.href = 'game.html';
           return;
         }
         playStart();

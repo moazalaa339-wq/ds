@@ -2611,3 +2611,26 @@ body.is-mobile #rail .bcap{display:none}
   #mMore,#mTouch,.m-secs,#mSecs{max-height:calc(100dvh - 72px);overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
 }
 #mBar{overflow-x:auto;-webkit-overflow-scrolling:touch}
+
+
+
+/* v2.64 — أعلى يسار وضع اللعب: أيقونة الشعار (أوفلاين) + أيقونة المايك (أونلاين) بس، من غير أي إطار */
+#pOnlineBar{top:12px!important;left:12px!important;gap:12px!important;background:none!important;border:none!important;box-shadow:none!important;padding:0!important}
+#pOnlineBar #pMenuBtn{background:transparent!important;border:none!important;box-shadow:none!important;width:auto;height:auto;padding:0!important}
+#pOnlineBar #pMenuBtn:hover{transform:none;box-shadow:none!important;filter:drop-shadow(0 0 8px rgba(255,190,61,.7))}
+#pOnlineBar #pMic{position:static!important;bottom:auto!important;right:auto!important;padding:0!important;border:none!important;background:transparent!important;box-shadow:none!important;min-width:0}
+#pOnlineBar #pMic .mic-lbl,#pOnlineBar #pMic .mic-bar,#pOnlineBar #pMic kbd{display:none!important}
+#pOnlineBar #pMic .mic-ico{width:26px;height:26px}
+#pOnlineBar #pMic .mic-ico svg{width:24px;height:24px}
+
+/* v2.67 — أزرار الرجوع/التقديم في شريط البناء */
+.seg-hist{display:inline-flex}
+#bUndo:disabled,#bRedo:disabled{opacity:.4;cursor:not-allowed}
+/* تبديل الموبايل في الاختبار النصفي: بناء مؤقت ⇄ اختبار حي */
+#mobViewSw{display:none}
+body.play-edit.is-mobile #mobViewSw{position:fixed;top:calc(env(safe-area-inset-top,0px) + 56px);left:50%;transform:translateX(-50%);z-index:10060;display:flex;gap:4px;padding:4px;border-radius:999px;background:rgba(8,6,12,.9);border:1px solid rgba(255,190,61,.55);box-shadow:0 8px 24px rgba(0,0,0,.45)}
+#mobViewSw button{font:800 13px Cairo,Tahoma,sans-serif;min-height:38px;padding:8px 14px;border-radius:999px;border:0;background:transparent;color:#ffe2a6;white-space:nowrap}
+#mobViewSw button.on{background:#ffbe3d;color:#1a1204}
+body.play-edit.is-mobile.mob-live #play{position:fixed!important;inset:0!important;top:0!important;left:0!important;right:0!important;bottom:0!important;width:100%!important;height:100%!important;min-width:0!important;min-height:0!important;border:none!important;border-radius:0!important;z-index:10040!important}
+body.play-edit.is-mobile.mob-live #app{visibility:hidden!important;pointer-events:none!important}
+body.play-edit.is-mobile.mob-live #mobViewSw{top:calc(env(safe-area-inset-top,0px) + 10px)}

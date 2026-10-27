@@ -542,20 +542,6 @@ class QuietHandler(SimpleHTTPRequestHandler):
         if unquote(p).strip().lower() in ("/hawa engine", "/hawa-engine", "/hawa_engine", "/hawa%20engine"):
             self.path = "/index.html" + qs
             return SimpleHTTPRequestHandler.do_GET(self)
-        # أسماء الملفات القديمة -> الروابط الجديدة (الشريط بيتحدّث)
-        LEGACY = {"/index.html": "/", "/game.html": "/games", "/build.html": "/build", "/play.html": "/playing", "/game": "/games"}
-        if p in LEGACY:
-            self.send_response(302)
-            self.send_header("Location", LEGACY[p] + qs)
-            self.send_header("Content-Length", "0")
-            self.end_headers()
-            return
-        if p.endswith(".html") and p != "/":
-            self.send_response(302)
-            self.send_header("Location", p[:-5] + qs)
-            self.send_header("Content-Length", "0")
-            self.end_headers()
-            return
         # الروابط الداخلية -> الملف الحقيقي
         target = None
         if p == "/games" or p.startswith("/games/"):

@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Build</title>
-<script>(function(){if(/[?&]test(mode)?(&|=|$)/.test(location.search)){try{sessionStorage.removeItem("hawa_test_ok")}catch(e){}location.replace("build");}})();</script>
+<script>(function(){if(/[?&]test(mode)?(&|=|$)/.test(location.search)){try{sessionStorage.removeItem("hawa_test_ok")}catch(e){}location.replace("build.html");}})();</script>
 <link rel="icon" type="image/png" href="favicon.png">
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
 <link rel="apple-touch-icon" href="favicon-180.png">
@@ -30,6 +30,11 @@
 <link rel="apple-touch-icon" href="favicon-180.png">
 </head>
 <body>
+<!-- تبديل الواجهة على الموبايل في الاختبار النصفي: بناء مؤقت ⇄ اختبار حي -->
+<div id="mobViewSw">
+  <button type="button" data-v="build" class="on">وضع البناء المؤقت</button>
+  <button type="button" data-v="live">اختبار</button>
+</div>
 
 <!-- ================= طبقة البناء (Build) ================= -->
 <div id="app">
@@ -48,6 +53,10 @@
     <button id="bPlayNet" type="button" class="playnet-chip" title="حالة المشروع">❓<i>—</i></button>
     <button id="bMyFiles" type="button" title="ملفاتي">📁<i>ملفاتي</i></button>
 
+    <div class="seg seg-hist">
+      <button id="bUndo" type="button" title="رجوع (Ctrl+Z)"><i>↶ رجوع</i></button>
+      <button id="bRedo" type="button" title="تقديم (Ctrl+Y)"><i>↷ تقديم</i></button>
+    </div>
     <div class="seg seg-proj">
       <button id="bSave" title="حفظ فوري (الحفظ تلقائي دائماً)"><span data-ic="save"></span><i>حفظ</i></button>
       <button id="bProjDown" title="تحميل المشروع"><span data-ic="save"></span><i>تحميل</i></button>
