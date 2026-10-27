@@ -13834,6 +13834,17 @@ async function playStart(opts) {
     if (el) { el.style.display = 'none'; try { el.remove(); } catch (_) {} }
   } catch (_) {}
   try { MOB.closeSheets(); MOB.setPlay(true); } catch (_) {}
+  try {
+    if (typeof MOB !== 'undefined') {
+      MOB.detect();
+      // في الاختبار النصفي: أدوات البناء ظاهرة؛ في الكامل: مخفية
+      MOB.syncPads();
+      if (S.playEdit) {
+        const mt = document.getElementById('mTouch');
+        if (mt && MOB.on) mt.hidden = false;
+      }
+    }
+  } catch (_) {}
   // لازم تتشال المعاينات قبل تشغيل RT عشان السكربتات/الركوب تشتغل صح
   for (const id of [...PREV.keys()]) removePreview(id);
   try { S._buildCam = getBuilderCam(); } catch (_) { S._buildCam = null; }
@@ -15409,7 +15420,21 @@ const MOB = {
     const live = !!(document.body && document.body.classList.contains('mob-live'));
     const showBuildPads = !purePlay && !live;
     const mt = document.getElementById('mTouch');
-    if (mt) mt.hidden = !showBuildPads;
+    if (mt) {
+      mt.hidden = !showBuildPads;
+      if (showBuildPads) {
+        try { mt.removeAttribute('hidden'); } catch (_) {}
+        try { mt.style.display = 'block'; mt.style.visibility = 'visible'; mt.style.pointerEvents = 'none'; } catch (_) {}
+      }
+    }
+    try {
+      const joy = document.getElementById('mJoy');
+      const act = document.getElementById('mAct');
+      if (showBuildPads) {
+        if (joy) { joy.style.display = 'block'; joy.style.visibility = 'visible'; joy.style.pointerEvents = 'auto'; }
+        if (act) { act.style.display = 'flex'; act.style.visibility = 'visible'; act.style.pointerEvents = 'none'; }
+      }
+    } catch (_) {}
     const mb = document.getElementById('mBar');
     if (mb) mb.hidden = !!purePlay;
     const bh = document.getElementById('mBuildHint');
@@ -15532,8 +15557,7 @@ const MOB = {
     this.lookTouch = null;
     cv.addEventListener('touchstart', e => {
       if (!this.on || (S.mode !== 'build' && !S.playEdit)) return;
-      
-      
+      if (document.body && document.body.classList.contains('mob-live')) return;
       if (e.targetTouches.length >= 2) {
         const a = e.targetTouches[0], b = e.targetTouches[1];
         const dist = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);

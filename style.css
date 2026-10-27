@@ -2931,3 +2931,116 @@ body.play-on #mTestBadge {
   opacity: 0 !important;
   pointer-events: none !important;
 }
+
+
+/* ===== v2.71 موبايل: بناء + اختبار نصفي — لمس كامل + طلوع/نزول فوق الشريط ===== */
+
+/* نافذة الاختبار النصفي على الموبايل فوق الشاشة مش تحت (عشان متغطيش الأزرار والجويستيك) */
+body.is-mobile.play-edit:not(.mob-live) #play {
+  top: calc(var(--m-safe-t, 0px) + var(--m-top, 52px) + 8px) !important;
+  bottom: auto !important;
+  right: 8px !important;
+  left: auto !important;
+  inset: auto !important;
+  width: min(46vw, 200px) !important;
+  height: min(28vh, 160px) !important;
+  min-width: 140px !important;
+  min-height: 100px !important;
+  z-index: 40 !important; /* تحت أزرار الطلوع/الجويستيك */
+}
+
+/* طبقة اللمس: شفافة تمامًا للكانفاس */
+body.is-mobile:not(.pure-play) #mTouch,
+body.is-mobile.play-edit:not(.mob-live) #mTouch {
+  display: block !important;
+  visibility: visible !important;
+  pointer-events: none !important;
+  z-index: 28 !important;
+}
+
+/* جويستيك شمال فوق شريط الأدوات */
+body.is-mobile:not(.pure-play) #mJoy,
+body.is-mobile.play-edit:not(.mob-live) #mJoy,
+body.is-mobile:not(.play-on) #mJoy {
+  display: block !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+  position: fixed !important;
+  left: max(10px, env(safe-area-inset-left, 0px)) !important;
+  right: auto !important;
+  bottom: calc(var(--m-rail, 68px) + var(--m-safe-b, 0px) + 14px) !important;
+  top: auto !important;
+  width: 96px !important;
+  height: 96px !important;
+  z-index: 55 !important;
+}
+
+/* أزرار طلوع/نزول يمين فوق شريط الأدوات */
+body.is-mobile:not(.pure-play) #mAct,
+body.is-mobile.play-edit:not(.mob-live) #mAct,
+body.is-mobile:not(.play-on) #mAct {
+  display: flex !important;
+  visibility: visible !important;
+  pointer-events: none !important;
+  position: fixed !important;
+  right: max(10px, env(safe-area-inset-right, 0px)) !important;
+  left: auto !important;
+  bottom: calc(var(--m-rail, 68px) + var(--m-safe-b, 0px) + 14px) !important;
+  top: auto !important;
+  flex-direction: column-reverse !important;
+  gap: 10px !important;
+  z-index: 55 !important;
+}
+body.is-mobile:not(.pure-play) #mAct button,
+body.is-mobile.play-edit:not(.mob-live) #mAct button,
+body.is-mobile:not(.play-on) #mAct button {
+  pointer-events: auto !important;
+  width: 58px !important;
+  height: 58px !important;
+  border-radius: 50% !important;
+  font-weight: 900 !important;
+  font-size: 11px !important;
+  box-shadow: 0 8px 20px rgba(0,0,0,.45) !important;
+  background: rgba(15, 23, 42, .72) !important;
+  border: 2px solid rgba(255, 214, 150, .55) !important;
+  color: #f8fafc !important;
+}
+body.is-mobile:not(.pure-play) #mJump,
+body.is-mobile.play-edit:not(.mob-live) #mJump {
+  background: rgba(34, 197, 94, .45) !important;
+  border-color: rgba(74, 222, 128, .75) !important;
+}
+body.is-mobile:not(.pure-play) #mRun,
+body.is-mobile.play-edit:not(.mob-live) #mRun {
+  background: rgba(251, 191, 36, .35) !important;
+  border-color: rgba(251, 191, 36, .7) !important;
+}
+
+/* كانفاس البناء يستقبل اللمس دائمًا */
+body.is-mobile #vp,
+body.is-mobile #cv,
+body.is-mobile.play-edit:not(.mob-live) #vp,
+body.is-mobile.play-edit:not(.mob-live) #cv {
+  pointer-events: auto !important;
+  touch-action: none !important;
+  -webkit-user-select: none !important;
+  user-select: none !important;
+}
+
+/* شريط الأدوات السفلي ثابت */
+body.is-mobile #rail {
+  z-index: 50 !important;
+  position: relative;
+}
+
+/* لعب كامل فقط: اخفي أدوات البناء */
+body.is-mobile.play-on.pure-play #mTouch,
+body.is-mobile.play-on.pure-play #mJoy,
+body.is-mobile.play-on.pure-play #mAct,
+body.is-mobile.play-edit.mob-live #mTouch,
+body.is-mobile.play-edit.mob-live #mJoy,
+body.is-mobile.play-edit.mob-live #mAct {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
