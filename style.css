@@ -3420,3 +3420,91 @@ body.is-mobile #mBar #mTestBtn{
   display: inline-flex !important;
   pointer-events: auto !important;
 }
+
+
+/* ===== v2.75: إخفاء تكرار الرجوع/التقديم + توست الدراع ===== */
+
+/* موبايل: شيل رجوع/تقديم من الشريط السفلي (يبقوا فوق فقط) */
+body.is-mobile #railHist,
+body.is-mobile #rail .rail-hist {
+  display: none !important;
+  visibility: hidden !important;
+  width: 0 !important;
+  height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+}
+
+/* اختبار نصفي: اخفِ الرجوع/التقديم فوق وتحت */
+body.play-edit #railHist,
+body.play-edit #rail .rail-hist,
+body.play-edit #mBarHist,
+body.hide-hist #railHist,
+body.hide-hist #mBarHist,
+body.hide-hist #rail .rail-hist {
+  display: none !important;
+  visibility: hidden !important;
+}
+
+/* توست حالة الدراع — ظاهر في العالم */
+#padToast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--m-rail, 56px) + var(--m-safe-b, 0px) + 72px);
+  transform: translateX(-50%);
+  z-index: 10080;
+  max-width: min(92vw, 360px);
+  padding: 10px 16px;
+  border-radius: 12px;
+  background: rgba(8, 6, 14, .92);
+  border: 1px solid rgba(255, 190, 61, .55);
+  color: #ffe9b8;
+  font: 800 13px/1.35 Cairo, Tahoma, sans-serif;
+  text-align: center;
+  box-shadow: 0 12px 32px rgba(0,0,0,.45);
+  pointer-events: none;
+  direction: rtl;
+}
+#padToast.on {
+  border-color: rgba(45, 226, 196, .65);
+  color: #b8fff0;
+}
+#padToast[hidden] {
+  display: none !important;
+}
+body:not(.is-mobile) #padToast {
+  bottom: 28px;
+}
+
+/* حالة الدراع بجانب الزر أوضح على الديسكتوب */
+body:not(.is-mobile) #padStatLine {
+  display: block;
+  width: 72px;
+  margin: 8px auto 0;
+  font-size: 9px;
+  line-height: 1.3;
+  z-index: 5;
+}
+body:not(.is-mobile) #padStatLine[hidden] {
+  display: none !important;
+}
+
+/* زر الدراع أكبر شوية على الموبايل عشان يبقى باين */
+body.is-mobile #rail #bPadRail {
+  min-width: 36px !important;
+  max-width: 52px !important;
+  height: 36px !important;
+}
+body.is-mobile #rail #bPadRail.on {
+  background: rgba(45, 226, 196, .28) !important;
+  box-shadow: 0 0 0 2px rgba(45, 226, 196, .5) !important;
+  border-radius: 10px !important;
+}
+
+/* تلميح #tip ظاهر فوق الشريط */
+body.is-mobile #tip {
+  z-index: 10070 !important;
+  bottom: calc(var(--m-rail, 52px) + var(--m-safe-b, 0px) + 18px) !important;
+  pointer-events: none !important;
+}

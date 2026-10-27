@@ -3097,10 +3097,12 @@ addEventListener('keydown', e => {
 
 function tip(t) {
   const s = (t == null) ? '' : String(t);
-  if (s && s.indexOf('⚠') === -1 && s.indexOf('ERROR') === -1) { $('#tip').textContent = ''; return; }
-  $('#tip').textContent = s;
+  const el = $('#tip');
+  if (!el) return;
+  el.textContent = s;
+  try { el.hidden = !s; } catch (_) {}
   clearTimeout(tip.t);
-  tip.t = setTimeout(() => { $('#tip').textContent = ''; }, 2200);
+  if (s) tip.t = setTimeout(() => { try { el.textContent = ''; el.hidden = true; } catch (_) {} }, 2600);
 }
 function armedMobile() {   
   try { if (typeof MOB !== 'undefined' && MOB.on) { MOB.closeSheets(); S.dirty = 1;  } } catch (_) {}
@@ -7665,6 +7667,15 @@ function histUi() {
   const mu = document.getElementById('mUndo'), mr = document.getElementById('mRedo');
   if (mu) mu.disabled = !HIST.undo.length;
   if (mr) mr.disabled = !HIST.redo.length;
+  // في الاختبار النصفي: اخفِ أزرار الرجوع/التقديم
+  const hideHist = !!(S && S.playEdit);
+  try {
+    document.body.classList.toggle('hide-hist', hideHist);
+    const rh = document.getElementById('railHist');
+    const mh = document.getElementById('mBarHist');
+    if (rh) rh.hidden = hideHist || !!(typeof MOB !== 'undefined' && MOB.on); // موبايل: تحت متكررش
+    if (mh) mh.hidden = hideHist; // فوق: يختفي في النصفي فقط
+  } catch (_) {}
 }
 (function bindHist() {
   const u = document.getElementById('bUndo'), r = document.getElementById('bRedo');
@@ -13819,18 +13830,34 @@ try {
     try { PadGate._render(); } catch (_) {}
     let ok = false;
     try { ok = !!(typeof HawaPad !== 'undefined' && HawaPad.isActive && HawaPad.isActive()); } catch (_) {}
-    if (S.padGame) {
-      tip(ok ? '🎮 الدراع مفعّل · متصل ✅' : '🎮 الدراع مفعّل · وصّل يد التحكم واضغط أي زر');
-    } else {
-      tip('الدراع مُغلق');
-    }
+    const msg = S.padGame
+      ? (ok ? '🎮 الدراع مفعّل · متصل ✅' : '🎮 الدراع مفعّل · وصّل اليد واضغط أي زر')
+      : '🎮 الدراع مُغلق';
+    try { tip(msg); } catch (_) {}
+    try { tipNow(msg, 3200); } catch (_) {}
+    try { showPadToast(msg, S.padGame); } catch (_) {}
   };
+  function showPadToast(msg, on) {
+    let t = document.getElementById('padToast');
+    if (!t) {
+      t = document.createElement('div');
+      t.id = 'padToast';
+      t.setAttribute('role', 'status');
+      document.body.appendChild(t);
+    }
+    t.textContent = msg;
+    t.className = 'pad-toast' + (on ? ' on' : '');
+    t.hidden = false;
+    clearTimeout(showPadToast._tm);
+    showPadToast._tm = setTimeout(() => { try { t.hidden = true; } catch (_) {} }, 3200);
+  }
 } catch (_) {}
 async function playStart(opts) {
   if (PadGate.needGate()) { if (!(await PadGate.waitStart())) return; }
   try {
   const withBuild = !!(opts && opts.withBuild) && !window.HAWA_PLAY_ONLY;
   S.playEdit = !!withBuild;
+  try { histUi(); } catch (_) {}
   try { document.body.classList.remove('mob-live'); } catch (_) {}
   setSpawnVis(false);
   setTestUrl(withBuild ? 'half' : 'full');
@@ -14395,6 +14422,7 @@ function playStop() {
   setTestUrl(null);
   try { MOB.setPlay(false); } catch (_) {}
   try { syncTestBtnUI(); } catch (_) {}
+  try { histUi(); } catch (_) {}
   try { TouchUI.hide(); } catch (_) {}
   try { clearVirtualKeys(); } catch (_) {}
 
