@@ -281,12 +281,22 @@
 
 <!-- واجهة الموبايل -->
 <div id="mBar" hidden>
-  <button type="button" id="mDockBtn" aria-label="قائمة الكائنات والبرمجة"><span>☰</span><i>القائمة</i></button>
-  <button type="button" id="mSideBtn" aria-label="المشهد والخصائص"><span>📋</span><i>المشهد</i></button>
-  <button type="button" id="mStorageAct" hidden class="m-storage-act" aria-label="تفعيل التخزين"><span>📂</span><i>تفعيل التخزين</i></button>
+  <div class="m-bar-sec" id="mBarSecs">
+    <button type="button" id="mSecObjects" data-m-sec="objects" class="on" aria-label="الكائنات"><span>🧱</span><i>كائنات</i></button>
+    <button type="button" id="mSecProg" data-m-sec="prog" aria-label="البرمجة"><span>&lt;/&gt;</span><i>برمجة</i></button>
+    <button type="button" id="mSecSobj" data-m-sec="sobj" aria-label="الكائنات البرمجية"><span>⚙</span><i>برمجية</i></button>
+  </div>
+  <button type="button" id="mSideBtn" aria-label="المشهد والخصائص"><span>📋</span><i>مشهد</i></button>
+  <div class="m-bar-hist" id="mBarHist">
+    <button type="button" id="mUndo" aria-label="رجوع" title="رجوع"><span>↶</span><i>رجوع</i></button>
+    <button type="button" id="mRedo" aria-label="تقديم" title="تقديم"><span>↷</span><i>تقديم</i></button>
+  </div>
+  <button type="button" id="mStorageAct" hidden class="m-storage-act" aria-label="تفعيل التخزين"><span>📂</span><i>تخزين</i></button>
   <span class="m-grow"></span>
   <button type="button" id="mMoreBtn" aria-label="المزيد"><span>⋯</span><i>المزيد</i></button>
   <button type="button" id="mTestBtn" class="go" aria-label="اختبر"><span>▶</span><i>اختبر</i></button>
+  <!-- توافق قديم: القائمة تفتح قسم الكائنات -->
+  <button type="button" id="mDockBtn" hidden aria-hidden="true" tabindex="-1"></button>
 </div>
 <div id="mOverlay"></div>
 <div id="mMore">

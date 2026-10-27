@@ -3136,6 +3136,11 @@ function setTool(t) {
 function setSec(s) {
   S.section = s; $('#catP').hidden = s !== 'objects'; $('#progP').hidden = s !== 'prog'; $('#sobjP').hidden = s !== 'sobj';
   $$('#secs [data-sec],#mSecs [data-sec]').forEach(b => b.classList.toggle('on', b.dataset.sec === s));
+  try {
+    document.querySelectorAll('#mBarSecs [data-m-sec]').forEach(b => {
+      b.classList.toggle('on', b.getAttribute('data-m-sec') === s);
+    });
+  } catch (_) {}
   $('#dockTitle').textContent = {objects: 'الكائنات', prog: 'قسم البرمجة', sobj: 'الكائنات البرمجية'}[s];
 }
 /* ===== أقسام البناء: القائمة أقسام بس، وكل قسم نافذة لوحده ===== */
@@ -7647,6 +7652,9 @@ function histUi() {
   const u = document.getElementById('bUndo'), r = document.getElementById('bRedo');
   if (u) u.disabled = !HIST.undo.length;
   if (r) r.disabled = !HIST.redo.length;
+  const mu = document.getElementById('mUndo'), mr = document.getElementById('mRedo');
+  if (mu) mu.disabled = !HIST.undo.length;
+  if (mr) mr.disabled = !HIST.redo.length;
 }
 (function bindHist() {
   const u = document.getElementById('bUndo'), r = document.getElementById('bRedo');
@@ -15323,6 +15331,33 @@ const MOB = {
     if (dBtn) dBtn.onclick = () => this.toggleSheet('dock');
     if (sBtn) sBtn.onclick = () => this.toggleSheet('side');
     if (tBtn) tBtn.onclick = () => { try { if (S.mode === 'play') playStop(); else showTestChoice(); } catch (_) {} };
+    // أقسام الشريط العلوي: كائنات / برمجة / كائنات برمجية
+    const openSec = (sec) => {
+      try { setSec(sec); } catch (_) {}
+      try {
+        document.querySelectorAll('#mBarSecs [data-m-sec]').forEach(b => {
+          b.classList.toggle('on', b.getAttribute('data-m-sec') === sec);
+        });
+      } catch (_) {}
+      // افتح لوحة الأقسام (مش تبديل)
+      try {
+        document.body.classList.remove('sheet-side', 'sheet-more');
+        document.body.classList.add('sheet-dock');
+        setTimeout(() => { try { resize(); } catch (_) {} }, 40);
+      } catch (_) {}
+    };
+    document.querySelectorAll('#mBarSecs [data-m-sec]').forEach(b => {
+      b.onclick = (e) => {
+        e.preventDefault();
+        const sec = b.getAttribute('data-m-sec') || 'objects';
+        openSec(sec);
+      };
+    });
+    // رجوع / تقديم
+    const mU = document.getElementById('mUndo');
+    const mR = document.getElementById('mRedo');
+    if (mU) mU.onclick = (e) => { e.preventDefault(); try { histUndo(); } catch (_) {} };
+    if (mR) mR.onclick = (e) => { e.preventDefault(); try { histRedo(); } catch (_) {} };
     const mSt = document.getElementById('mStorageBtn');
     if (mSt) mSt.onclick = () => { try { showStorageInfo(); } catch (_) {} };
     const mAct = document.getElementById('mStorageAct');
