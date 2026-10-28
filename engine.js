@@ -17335,12 +17335,15 @@ const MOB = {
         if (t) {
           const dx = t.clientX - this.lookTouch.x, dy = t.clientY - this.lookTouch.y;
           this.lookTouch.moved += Math.abs(dx) + Math.abs(dy);
-          OB.yaw -= dx * 0.005;
-          OB.pitch = clamp(OB.pitch + dy * 0.005, -1.5, 1.5);
           this.lookTouch.x = t.clientX;
           this.lookTouch.y = t.clientY;
+          // لف من مكان الكاميرا الحالي (زي نظرة لاعب) مش دوران حول نقطة الصفر/الهدف
+          try { lookAround(dx * 1.35, dy * 1.35); } catch (_) {
+            OB.yaw -= dx * 0.005;
+            OB.pitch = clamp(OB.pitch + dy * 0.005, -1.5, 1.5);
+            camUpdate();
+          }
           if (S.tool === 'place' || S.tool === 'respawn' || S.tool === 'online_spawn') { S.tr = { x: t.clientX, y: t.clientY }; S.tapArm = null; }
-          camUpdate();
           e.preventDefault();
         }
       }
