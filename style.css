@@ -4139,11 +4139,7 @@ body.progress-on #secs button span[data-ic]{
   margin-inline-end:3px;
 }
 /* نص أقصر لتبويب التقدم */
-body.progress-on #secs [data-sec="progress"]{
-  max-width:6.8em;
-  overflow:hidden;
-  text-overflow:ellipsis;
-}
+/* progress tab: text visible via rules below */
 /* شاشات أضيق: أيقونات فقط في التبويبات */
 @media (max-width: 1180px){
   body.progress-on:not(.is-mobile) #secs button{
@@ -4164,4 +4160,73 @@ body:not(.progress-on) #secs [data-sec="progress"]{display:none !important}
 
 body.is-mobile #rail #bProgressRail{
   display:flex !important;
+}
+
+
+/* سيناريو ملف التقدم */
+.pr-scenario {
+  position: fixed; inset: 0; z-index: 12000;
+  background: rgba(0,0,0,.55);
+  display: none; align-items: center; justify-content: center;
+  padding: 16px; direction: rtl;
+}
+.pr-scenario:not([hidden]) { display: flex !important; }
+.pr-scenario-box {
+  background: #14161c; color: #eee;
+  border-radius: 14px; padding: 16px 18px;
+  max-width: min(520px, 92vw); max-height: 80vh;
+  overflow: auto; border: 1px solid rgba(96,165,250,.35);
+  box-shadow: 0 16px 40px rgba(0,0,0,.5);
+}
+.pr-scenario-box h3 { margin: 0 0 10px; font-size: 15px; color: #93c5fd; }
+.pr-scenario-box pre {
+  white-space: pre-wrap; word-break: break-word;
+  font: 13px/1.55 Cairo, Tahoma, sans-serif;
+  margin: 0 0 14px; color: #e8eefc;
+  background: rgba(255,255,255,.04); padding: 12px; border-radius: 10px;
+}
+.pr-scenario-box button {
+  padding: 8px 16px; border-radius: 9px; border: 1px solid rgba(255,255,255,.15);
+  background: rgba(37,99,235,.35); color: #fff; cursor: pointer; font-weight: 800;
+}
+#prList .pcard.dragging { opacity: .55; }
+#prList .pcard.drag-over { outline: 2px solid var(--tq, #2de2c4); }
+
+/* تبويب حفظ التقدم — نص كامل واضح */
+body.progress-on #secs [data-sec="progress"] {
+  max-width: none !important;
+  padding: 4px 6px !important;
+  font-size: 10.5px !important;
+  letter-spacing: 0;
+  flex: 0 0 auto;
+}
+body.progress-on #secs [data-sec="progress"] span[data-ic] {
+  margin-inline-end: 2px !important;
+}
+
+/* زر تقدم الشريط — مش مضغوط تحت الشاشة */
+#rail #bProgressRail {
+  flex: none !important;
+  width: 50px !important;
+  height: 50px !important;
+  min-height: 50px !important;
+  margin: 0 !important;
+}
+body.is-mobile #rail #bProgressRail {
+  width: 46px !important;
+  height: 46px !important;
+  min-width: 46px !important;
+  min-height: 46px !important;
+}
+/* مجموعة السكة: لفّ لو ضاقت عشان الزر ميتشالّش تحت */
+body:not(.is-mobile) #rail .rail-group {
+  flex-wrap: nowrap;
+  max-height: none;
+}
+body.is-mobile #rail {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+body.is-mobile #rail .rail-group {
+  flex-wrap: nowrap !important;
 }

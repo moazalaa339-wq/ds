@@ -6268,6 +6268,208 @@ async function toggleProgressEnabled() {
   chg();
 }
 
+function extractProgressScenario(code) {
+  const src = String(code || '');
+  // // @scenario ...
+  try {
+    const mTag = src.match(/\/\/\s*@scenario\s+(.+)/i);
+    if (mTag) return mTag[1].trim();
+  } catch (_) {}
+  // function scenario() { return "..."; }
+  try {
+    const fn = new Function(src + '\n; return (typeof scenario === "function") ? scenario() : null;');
+    const r = fn();
+    if (r != null && r !== '') return String(r);
+  } catch (_) {}
+  try {
+    const m = src.match(/function\s+scenario\s*\([^)]*\)\s*\{[\s\S]*?return\s+["'`]([\s\S]*?)["'`]/);
+    if (m) return m[1].replace(/\\n/g, '\n').trim();
+  } catch (_) {}
+  return 'لا يوجد سيناريو بعد.\nأضف في الملف:\n\nfunction scenario() {\n  return "اكتب هنا ماذا يفعل الملف…";\n}';
+}
+
+function showProgressScenario(s) {
+  if (!s) return;
+  const body = extractProgressScenario(s.code);
+  let m = document.getElementById('prScenarioModal');
+  if (!m) {
+    m = document.createElement('div');
+    m.id = 'prScenarioModal';
+    m.className = 'pr-scenario';
+    m.innerHTML = '<div class="pr-scenario-box"><h3 id="prScenarioTitle"></h3><pre id="prScenarioBody"></pre><button type="button" id="prScenarioClose">إغلاق</button></div>';
+    document.body.appendChild(m);
+    m.addEventListener('click', ev => { if (ev.target === m) m.hidden = true; });
+    const cl = m.querySelector('#prScenarioClose');
+    if (cl) cl.onclick = () => { m.hidden = true; };
+  }
+  const t = m.querySelector('#prScenarioTitle');
+  const b = m.querySelector('#prScenarioBody');
+  if (t) t.textContent = 'سيناريو: ' + (s.name || s.id);
+  if (b) b.textContent = body;
+  m.hidden = false;
+}
+
+async function openProgressItemMenu(id) {
+  const s = (S.progressScripts || []).find(x => +x.id === +id);
+  if (!s) return;
+  const on = s.enabled !== false;
+  const choice = await HawaUI.choose(
+    'ملف التقدم «' + (s.name || id) + '»\n' + (on ? '🟢 مفعّل' : '🔴 متوقف'),
+    [
+      { value: 'edit', label: '✏ تعديل الكود', cls: 'hd-ok' },
+      { value: 'scenario', label: '📜 عرض السيناريو', cls: 'hd-ok' },
+      { value: 'toggle', label: on ? '⏸ إيقاف التفعيل' : '▶ تفعيل', cls: 'hd-ok' },
+      { value: 'params', label: '⚙ البارامترات', cls: 'hd-cancel' },
+      { value: 'delete', label: '🗑 حذف', cls: 'hd-danger' },
+      { value: 'cancel', label: 'إغلاق', cls: 'hd-cancel' }
+    ]
+  );
+  if (!choice || choice === 'cancel') return;
+  if (choice === 'edit') { openEd(+id, 'progress'); return; }
+  if (choice === 'scenario') { showProgressScenario(s); return; }
+  if (choice === 'params') { try { openProgressParams(+id); } catch (_) {} return; }
+  if (choice === 'toggle') {
+    s.enabled = !on;
+    tip(s.enabled !== false ? '✔ مفعّل' : '⛔ متوقف');
+    prList(); chg();
+    return;
+  }
+  if (choice === 'delete') {
+    if (s.folder) {
+      const c2 = await HawaUI.choose(
+        'الملف «' + (s.name || id) + '» جوه مجلد.\nتحذف نهائي ولا تطلّعه من المجلد؟',
+        [
+          { value: 'del', label: 'حذف نهائي', cls: 'hd-danger' },
+          { value: 'out', label: 'إخراجه من المجلد', cls: 'hd-ok' },
+          { value: 'cancel', label: 'إلغاء', cls: 'hd-cancel' }
+        ]
+      );
+      if (!c2 || c2 === 'cancel') return;
+      if (c2 === 'out') { s.folder = null; tip('✔ الملف طلع للجذر'); prList(); chg(); return; }
+    } else {
+      if (!await uiConfirm('حذف ملف التقدم؟')) return;
+    }
+    S.progressScripts = (S.progressScripts || []).filter(x => +x.id !== +id);
+    prList(); chg();
+  }
+}
+
+async function progressDeleteFolder(fid) {
+  const F = S.progressFolders || {};
+  const f = F[fid]; if (!f) return;
+  const parent = f.parent || null;
+  const choice = await HawaUI.choose(
+    'تريد حذف المجلد «' + (f.name || '') + '» بالذي موجود بداخله، أم المجلد فقط؟\nلو المجلد فقط، الملفات هتطلع للجذر.',
+    [
+      { value: 'all', label: 'حذف المجلد وكل ما بداخله', cls: 'hd-danger' },
+      { value: 'keep', label: 'حذف المجلد فقط', cls: 'hd-ok' },
+      { value: 'cancel', label: 'إلغاء', cls: 'hd-cancel' }
+    ]
+  );
+  if (!choice || choice === 'cancel') return;
+  if (choice === 'all') {
+    const kill = new Set([fid]);
+    let grew = true;
+    while (grew) {
+      grew = false;
+      for (const [id, ff] of Object.entries(F)) {
+        if (kill.has(ff.parent) && !kill.has(id)) { kill.add(id); grew = true; }
+      }
+    }
+    for (const id of kill) delete F[id];
+    S.progressScripts = (S.progressScripts || []).filter(s => !kill.has(s.folder));
+  } else {
+    for (const [id, ff] of Object.entries(F)) {
+      if (ff.parent === fid) ff.parent = parent;
+    }
+    for (const s of (S.progressScripts || [])) {
+      if (s.folder === fid) s.folder = parent;
+    }
+    delete F[fid];
+  }
+  if (S.progressCwd === fid || (S.progressCwd && !F[S.progressCwd])) S.progressCwd = parent;
+  prList(); chg();
+  tip(choice === 'all' ? '✔ اتحذف المجلد ومحتواه' : '✔ اتحذف المجلد والملفات طلعت بره');
+}
+
+function progressBindDragDrop(listEl) {
+  if (!listEl) return;
+  listEl.querySelectorAll('[data-pr-id][draggable]').forEach(el => {
+    el.addEventListener('dragstart', ev => {
+      const id = el.getAttribute('data-pr-id');
+      ev.dataTransfer.setData('text/hawa-progress', JSON.stringify({ type: 'file', id: String(id) }));
+      ev.dataTransfer.effectAllowed = 'move';
+      try { el.classList.add('dragging'); } catch (_) {}
+    });
+    el.addEventListener('dragend', () => { try { el.classList.remove('dragging'); } catch (_) {} });
+  });
+  // reorder: drop on another file
+  listEl.querySelectorAll('[data-pr-id][draggable]').forEach(el => {
+    el.addEventListener('dragover', ev => {
+      ev.preventDefault();
+      ev.dataTransfer.dropEffect = 'move';
+      el.classList.add('drag-over');
+    });
+    el.addEventListener('dragleave', () => el.classList.remove('drag-over'));
+    el.addEventListener('drop', ev => {
+      ev.preventDefault();
+      el.classList.remove('drag-over');
+      let payload = null;
+      try { payload = JSON.parse(ev.dataTransfer.getData('text/hawa-progress') || 'null'); } catch (_) {}
+      if (!payload || payload.type !== 'file') return;
+      const fromId = +payload.id;
+      const toId = +el.getAttribute('data-pr-id');
+      if (fromId === toId) return;
+      const arr = S.progressScripts || [];
+      const fi = arr.findIndex(x => +x.id === fromId);
+      const ti = arr.findIndex(x => +x.id === toId);
+      if (fi < 0 || ti < 0) return;
+      const [item] = arr.splice(fi, 1);
+      const ti2 = arr.findIndex(x => +x.id === toId);
+      arr.splice(ti2 < 0 ? arr.length : ti2, 0, item);
+      prList(); chg();
+      tip('✔ تم تغيير الترتيب');
+    });
+  });
+  listEl.querySelectorAll('[data-pr-fopen]').forEach(folderEl => {
+    folderEl.addEventListener('dragover', ev => {
+      ev.preventDefault();
+      ev.dataTransfer.dropEffect = 'move';
+      folderEl.classList.add('drag-over');
+    });
+    folderEl.addEventListener('dragleave', () => folderEl.classList.remove('drag-over'));
+    folderEl.addEventListener('drop', ev => {
+      ev.preventDefault();
+      folderEl.classList.remove('drag-over');
+      let payload = null;
+      try { payload = JSON.parse(ev.dataTransfer.getData('text/hawa-progress') || 'null'); } catch (_) {}
+      if (!payload || payload.type !== 'file') return;
+      const s = (S.progressScripts || []).find(x => +x.id === +payload.id);
+      if (!s) return;
+      s.folder = folderEl.getAttribute('data-pr-fopen');
+      prList(); chg();
+      tip('✔ اتنقل للمجلد');
+    });
+  });
+  listEl.querySelectorAll('[data-pr-up]').forEach(upEl => {
+    upEl.addEventListener('dragover', ev => { ev.preventDefault(); upEl.classList.add('drag-over'); });
+    upEl.addEventListener('dragleave', () => upEl.classList.remove('drag-over'));
+    upEl.addEventListener('drop', ev => {
+      ev.preventDefault();
+      upEl.classList.remove('drag-over');
+      let payload = null;
+      try { payload = JSON.parse(ev.dataTransfer.getData('text/hawa-progress') || 'null'); } catch (_) {}
+      if (!payload || payload.type !== 'file') return;
+      const s = (S.progressScripts || []).find(x => +x.id === +payload.id);
+      if (!s) return;
+      s.folder = upEl.getAttribute('data-pr-up') || null;
+      if (s.folder === '') s.folder = null;
+      prList(); chg();
+      tip('✔ اتنقل لبره');
+    });
+  });
+}
+
 function prList() {
   if (!S.progressScripts) S.progressScripts = [];
   if (!S.progressFolders || typeof S.progressFolders !== 'object') S.progressFolders = {};
@@ -6277,6 +6479,11 @@ function prList() {
   if (!el) return;
   const cwd = S.progressCwd || null;
   const folders = S.progressFolders;
+  // إخفاء زر مجلد جديد داخل مجلد (مجلدات من الجذر فقط)
+  try {
+    const nf = document.getElementById('prNewFolder');
+    if (nf) nf.hidden = !!cwd;
+  } catch (_) {}
   try {
     const crumb = document.getElementById('prCrumb');
     if (crumb) {
@@ -6289,13 +6496,12 @@ function prList() {
         cur = f.parent || null;
       }
       const parts = ['<button type="button" data-pr-crumb="">الجذر</button>'];
-      for (const s of stack) parts.push('<span>/</span><button type="button" data-pr-crumb="' + esc(s.id) + '">' + esc(s.name) + '</button>');
+      for (const s of stack) parts.push('<span class="mf-sep">›</span><button type="button" data-pr-crumb="' + esc(s.id) + '">' + esc(s.name) + '</button>');
       crumb.innerHTML = parts.join(' ');
       crumb.onclick = e => {
         const b = e.target.closest('[data-pr-crumb]');
         if (!b) return;
-        const id = b.getAttribute('data-pr-crumb');
-        S.progressCwd = id || null;
+        S.progressCwd = b.getAttribute('data-pr-crumb') || null;
         prList();
       };
     }
@@ -6309,8 +6515,10 @@ function prList() {
       <div class="pc-meta"><em>للمجلد اللي فوق</em></div>
     </div>`;
   }
-  for (const [fid, f] of Object.entries(folders)) {
-    if ((f.parent || null) !== cwd) continue;
+  // المجلدات في المستوى الحالي فقط (بدون تداخل إنشاء من جوّه)
+  const folderIds = Object.keys(folders).filter(fid => (folders[fid].parent || null) === cwd);
+  for (const fid of folderIds) {
+    const f = folders[fid];
     const n = S.progressScripts.filter(s => (s.folder || null) === fid).length;
     const nm = f.name || 'مجلد';
     html += `<div class="pcard sf-folder" data-pr-fopen="${esc(fid)}">
@@ -6327,23 +6535,17 @@ function prList() {
     if ((s.folder || null) !== cwd) continue;
     const nm = s.name || ('progress_' + s.id);
     const on = s.enabled !== false;
-    html += `<div class="pcard ${on ? 'is-on' : 'is-off'}" data-pr-id="${s.id}" title="اضغط لفتح">
+    html += `<div class="pcard ${on ? 'is-on' : 'is-off'}" data-pr-id="${s.id}" draggable="true" title="اضغط لفتح · اسحب للمجلد أو لإعادة الترتيب">
       <div class="pc-top"><span class="dot"></span><span class="pc-ico">💾</span></div>
       <div class="pc-name" style="${typeof fitNameStyle === 'function' ? fitNameStyle(nm) : ''}" title="${esc(nm)}">${esc(nm)}</div>
       <div class="pc-meta"><em>${on ? 'مفعّل' : 'متوقف'}</em></div>
-      <div class="pc-btns">
-        <button type="button" data-pr-params="${s.id}" title="بارامترات">⚙</button>
-        <button type="button" data-pr-scen="${s.id}" title="عرض السيناريو">📜</button>
-        <button type="button" data-pr-tog="${s.id}" title="تفعيل/إيقاف">${on ? '⏸' : '▶'}</button>
-        <button type="button" data-pr-del="${s.id}" class="red" title="حذف">🗑</button>
-      </div>
     </div>`;
   }
   if (!html) html = '<p class="mut small" style="grid-column:1/-1">— مفيش ملفات بعد</p>';
   el.innerHTML = html;
+  progressBindDragDrop(el);
   el.onclick = async e => {
     const btn = e.target.closest('button');
-    const card = e.target.closest('[data-pr-id],[data-pr-up],[data-pr-fopen]');
     if (btn) {
       if (btn.hasAttribute('data-pr-fren')) {
         const fid = btn.getAttribute('data-pr-fren');
@@ -6354,49 +6556,15 @@ function prList() {
         prList(); chg(); return;
       }
       if (btn.hasAttribute('data-pr-fdel')) {
-        const fid = btn.getAttribute('data-pr-fdel');
-        if (!await uiConfirm('حذف المجلد وملفاته؟')) return;
-        const kill = new Set([fid]);
-        let grew = true;
-        while (grew) {
-          grew = false;
-          for (const [id, f] of Object.entries(S.progressFolders)) {
-            if (kill.has(f.parent) && !kill.has(id)) { kill.add(id); grew = true; }
-          }
-        }
-        for (const id of kill) delete S.progressFolders[id];
-        S.progressScripts = S.progressScripts.filter(s => !kill.has(s.folder));
-        if (kill.has(S.progressCwd)) S.progressCwd = null;
-        prList(); chg(); return;
-      }
-      if (btn.hasAttribute('data-pr-params')) {
-        openProgressParams(+btn.getAttribute('data-pr-params')); return;
-      }
-      if (btn.hasAttribute('data-pr-scen')) {
-        const s = S.progressScripts.find(x => +x.id === +btn.getAttribute('data-pr-scen'));
-        if (s) showProgressScenario(s);
+        await progressDeleteFolder(btn.getAttribute('data-pr-fdel'));
         return;
-      }
-      if (btn.hasAttribute('data-pr-tog')) {
-        const id = +btn.getAttribute('data-pr-tog');
-        const s = S.progressScripts.find(x => +x.id === id);
-        if (!s) return;
-        s.enabled = !(s.enabled !== false);
-        tip(s.enabled !== false ? '✔ مفعّل' : '⛔ متوقف');
-        prList(); chg(); return;
-      }
-      if (btn.hasAttribute('data-pr-del')) {
-        const id = +btn.getAttribute('data-pr-del');
-        if (!await uiConfirm('حذف ملف التقدم؟')) return;
-        S.progressScripts = S.progressScripts.filter(x => +x.id !== id);
-        prList(); chg(); return;
       }
       return;
     }
+    const card = e.target.closest('[data-pr-id],[data-pr-up],[data-pr-fopen]');
     if (!card) return;
     if (card.hasAttribute('data-pr-up')) {
-      const v = card.getAttribute('data-pr-up');
-      S.progressCwd = v || null;
+      S.progressCwd = card.getAttribute('data-pr-up') || null;
       prList(); return;
     }
     if (card.hasAttribute('data-pr-fopen')) {
@@ -6404,7 +6572,7 @@ function prList() {
       prList(); return;
     }
     if (card.hasAttribute('data-pr-id')) {
-      openEd(+card.getAttribute('data-pr-id'), 'progress');
+      await openProgressItemMenu(+card.getAttribute('data-pr-id'));
     }
   };
 }
@@ -6500,11 +6668,17 @@ function openProgressParams(id) {
     if (fl) { fl.dataset.m = 'progress-js'; fl.click(); }
   };
   const nf = document.getElementById('prNewFolder');
-  if (nf) nf.onclick = () => {
-    const name = prompt('اسم المجلد', 'مجلد');
-    if (name == null) return;
+  if (nf) nf.onclick = async () => {
+    if (S.progressCwd) { tip('المجلدات من الجذر فقط — ارجع للجذر أولاً'); return; }
+    let name = 'مجلد';
+    try {
+      if (typeof uiPrompt === 'function') name = await uiPrompt('اسم المجلد؟', 'مجلد') || '';
+      else name = prompt('اسم المجلد', 'مجلد');
+    } catch (_) { name = prompt('اسم المجلد', 'مجلد'); }
+    if (name == null || !String(name).trim()) return;
     const id = 'prf_' + Date.now().toString(36);
-    S.progressFolders[id] = { name: String(name).trim().slice(0, 60) || 'مجلد', parent: S.progressCwd || null };
+    if (!S.progressFolders) S.progressFolders = {};
+    S.progressFolders[id] = { name: String(name).trim().slice(0, 60), parent: null };
     prList(); chg();
   };
   const auto = document.getElementById('prAuto');
