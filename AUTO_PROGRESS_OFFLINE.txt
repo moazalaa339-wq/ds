@@ -1,40 +1,102 @@
-HAWA_AUTO · قسم حفظ التقدم · أوفلاين
-========================================
-هذا ملف سياق التلقائي لقسم «حفظ التقدم».
-التصدير الكامل من زر تلقائي يحقن أيضاً: API المحرك، كل الكائنات، كل ملفات البرمجة،
-كل الكائنات البرمجية، ملفات التقدم، فهرس الوسائط (id/اسم/نوع)، اللاعب، الشبكة، الموبايل.
+HAWA_AUTO · قسم حفظ التقدم · أوفلاين · رؤية عالية + بارامترات كاملة
+================================================
+أنت تكتب ملفات قسم «حفظ التقدم» فقط (مش قسم البرمجة ولا الكائنات البرمجية).
 
-=== ماذا يكتب ملف التقدم؟ ===
-- كود onStart / onUpdate + بارامترات Game.defineParams
-- قيم نصية في Game.progress (مستوى، عملات، موضع…)
-- مراجع وسائط عبر البارامترات (تُختار من ملفاتي) — بدون كتابة id يدوياً
+=== PARAMS_FIRST (إلزامي مطلق — زي الكائنات البرمجية) ===
+أي قيمة ممكن المستخدم يغيّرها = Game.defineParams في أول الملف. ممنوع const/let لأرقام أو نصوص أو ألوان أو مدد أو ملفات.
+الصيغة:
+Game.defineParams([
+  {key:"welcome", label:"رسالة العودة", type:"text", value:"اهلا وسهلا بعد عوده"},
+  {key:"speedHint", label:"سرعة العرض (ث)", type:"number", value:4.5, min:0.5, max:20, step:0.5},
+  {key:"accent", label:"لون الشارة", type:"color", value:"#22c55e"},
+  {key:"showBadge", label:"إظهار شارة المستوى", type:"boolean", value:true},
+  {key:"spawnOffset", label:"إزاحة الولادة", type:"vec3", value:{x:0,y:0,z:0}},
+  {key:"badgeImg", label:"صورة الشارة", type:"image", value:""},
+  {key:"levelTheme", label:"موسيقى المستوى", type:"audio", value:""},
+  {key:"introClip", label:"فيديو المقدمة", type:"video", value:""},
+  {key:"anyFile", label:"ملف عام", type:"file", value:""}
+]);
+types المسموحة: number | text | boolean | color | vec3 | image | audio | video | file | pdf
+استخدم دائماً: const P = Game.params; ثم P.key
+الملفات/الصور/الصوت: Game.media.get(P.badgeImg) أو Game.progress.setMedia("badge", P.badgeImg)
 
-=== API ===
+
+=== رؤية العالم + التحكم في البرمجة (مهم جداً) ===
+التلقائي يحقن تحت: كل الكائنات بأسمائها، كل ملفات قسم البرمجة (كود كامل)، كل الكائنات البرمجية (كود كامل)، ملفات التقدم، الوسائط.
+قسم التقدم يقدر يغيّر سلوك/شكل أي حاجة في العالم وقت الرجوع للعب، مش بس يحفظ أرقام.
+
+API التحكم:
+  const dog = game.find("الكلب"); // استخدم الاسم الحقيقي من قائمة objs تحت
+  if (dog) {
+    dog.setColor("#a78bfa");     // لون
+    dog.setScale(1.2, 1.0, 0.9); // حجم
+    dog.setPosition(x,y,z);
+    dog.setProp("mood", "happy"); // بارامتر على الكائن
+    dog.hide(); dog.show();
+  }
+  game.setShared("petForm", "cat");  // سكربت البرمجة يقرأها في onUpdate
+  const form = game.getShared("petForm", "dog");
+  game.listAllObjects(); // كل الكائنات الحية
+
+مثال فكرة (مش لازم تنسخه حرفياً): عند onStart لو في تقدم محفوظ، غيّر شكل الحيوان الأليف أو فعّل حالة في سكربت البرمجة عبر setShared، ولما اللاعب يلعب تاني رجّع أو بدّل حسب Game.progress.get.
+
+اقرأ أسماء الكائنات وملفات البرمجة من الحقن تحت بالظبط — متخترعش أسماء.
+
+=== واجهة المحرك ===
+1) زر «تقدم» في الشريط الشمال (جنب الدراع) يفعّل القسم.
+2) تبويب «تقدم» فوق.
+3) ملف جديد · رفع · تلقائي · مجلد (الجذر فقط).
+4) اضغط كارت الملف → تعديل / عرض السيناريو / تفعيل / بارامترات / حذف.
+5) زر «بارامترات» يفتح لوحة كاملة (نفس أسلوب الكائنات البرمجية): أرقام، نص، لون، منطقي، vec3، وسائط من ملفاتي، إعادة افتراضي.
+6) في الاختبار/اللعب: أيقونة شعار المحرك → رجوع + تحميل/رفع تقدم (أوفلاين).
+7) الموضع yaw/pos يُحفظ تلقائياً كل ثانية عند تفعيل القسم.
+
+=== العالم الحالي ===
+الملف التلقائي يحقن تحته: كل الكائنات (أسماء + إحداثيات)، سكربتات البرمجة، الكائنات البرمجية، ملفات التقدم الحالية + params، فهرس الوسائط (id فقط)، اللاعب، الشبكة، الموبايل، API.
+
+=== صيغة الملف ===
+Game.defineParams([...]); // أول سطر — إلزامي لو في قيم قابلة للتعديل
+function scenario(){ return "شرح عربي قصير لما يفعله الملف"; }
+function onStart(self, game){ const P = Game.params || {}; ... }
+function onUpdate(self, game, dt){ const P = Game.params || {}; ... }
+
+=== API حفظ التقدم ===
 Game.progress.get(key, default)
 Game.progress.set(key, value)
 Game.progress.save() / load() / clear()
-Game.progress.setMedia(key, Game.params.hudImage)  // مرجع صغير تلقائي
+Game.progress.setMedia(key, mediaRefFromParams)
 Game.progress.getMediaUrl(key)
-Game.params   // بعد الاختيار من ملفاتي
-Game.media.get(ref) / Game.media.ref(v)
-Game.subtitle("نص")
-game.player.position / game.coords / game.player.yaw
+Game.progress.playerName / slotKey
+Game.params · Game.media.get(ref) · Game.subtitle("نص", ms) · Game.say
+game.player.position · game.player.yaw · game.coords
 
-=== مثال: آخر مكان ===
-function onStart(self, game) {
+=== مثال نظيف (بارامترات مفتوحة) ===
+Game.defineParams([
+  { key:"welcome", label:"رسالة العودة", type:"text", value:"اهلا وسهلا بعد عوده" },
+  { key:"firstHello", label:"رسالة أول مرة", type:"text", value:"مرحباً — بداية جديدة" },
+  { key:"msgMs", label:"مدة الرسالة (مث)", type:"number", value:4500, min:500, max:15000, step:100 },
+  { key:"badgeImg", label:"صورة شارة المستوى", type:"image", value:"" },
+  { key:"showBadge", label:"إظهار الشارة", type:"boolean", value:true }
+]);
+function scenario(){ return "يرجع لآخر مكان محفوظ مع رسالة وشارة اختيارية"; }
+function onStart(self, game){
+  const P = Game.params || {};
   const pos = Game.progress.get("pos", null);
-  if (pos) {
-    game.player.position.x = pos.x;
-    game.player.position.y = pos.y;
-    game.player.position.z = pos.z;
-    Game.subtitle("اهلا وسهلا بعد عوده");
+  if (pos && typeof pos.x === "number") {
+    try {
+      game.player.position.x = +pos.x;
+      game.player.position.y = +pos.y;
+      game.player.position.z = +pos.z;
+      const yaw = Game.progress.get("yaw", null);
+      if (yaw != null) game.player.yaw = +yaw;
+    } catch(e) {}
+    if (Game.subtitle) Game.subtitle(P.welcome || "اهلا وسهلا بعد عوده", P.msgMs || 4500);
+    if (P.showBadge && P.badgeImg) {
+      try { Game.progress.setMedia("levelBadge", P.badgeImg); } catch(e) {}
+    }
+  } else {
+    if (Game.subtitle) Game.subtitle(P.firstHello || "مرحباً", P.msgMs || 3500);
   }
 }
-// المحرك يحفظ pos/yaw كل ثانية أثناء اللعب
 
-=== قواعد أوفلاين ===
-لاعب واحد — التخزين المحلي حسب المشروع.
-يشتغل في الاختبار النصفي والكامل.
-
-=== سيناريو ===
-function scenario() { return "شرح عربي لما يفعله الملف"; }
+اكتب كود جاهز للنسخ مباشرة. كل رقم/نص/ملف قابل للتعديل لازم في defineParams.

@@ -339,6 +339,24 @@ button.on{border-color:rgba(45,226,196,.6);background:linear-gradient(180deg,rgb
         <div class="pad-stat" id="padStatL" style="display:none"></div>
         <div class="slots" id="slots"></div>
         <div id="codesAnswersHost" style="display:none;flex-direction:column;gap:8px;margin:8px 0;padding:10px;border:1px solid #2a3a5a;border-radius:10px;background:#0b1424"></div>
+        <div id="lobbyProgressBox" class="lobby-progress" hidden style="margin:8px 0;padding:12px;border:1px solid #3d3454;border-radius:12px;background:#0e0b14">
+          <div style="font-weight:900;margin-bottom:6px;color:#93c5fd" id="lobbyProgressTitle">💾 ملف التقدم (مطلوب قبل الاستعداد)</div>
+          <div class="msg" id="lobbyProgressHint" style="font-size:12px;opacity:.9;margin-bottom:8px">ارفع ملف تقدمك عشان نقدر نبدأ. بعد اللعب حمّل ملفك عشان ما يضيعش تقدمك.</div>
+          <input type="file" id="lobbyProgressFile" accept=".json,application/json" style="display:none">
+          <div class="row" style="flex-wrap:wrap;gap:8px;align-items:center">
+            <button type="button" id="btnLobbyProgressUp" class="pri">⬆ رفع ملف التقدم</button>
+            <button type="button" id="btnLobbyProgressReplace" hidden>استبدال</button>
+            <button type="button" id="btnLobbyProgressClear" class="red" hidden>حذف</button>
+            <span id="lobbyProgressName" class="mut small"></span>
+          </div>
+          <div id="lobbyProgressHostActs" hidden style="margin-top:10px;padding-top:10px;border-top:1px dashed #3d3454">
+            <button type="button" id="btnLobbyProgressWaive" style="background:linear-gradient(180deg,#fbbf24,#d97706);border:1px solid #fcd34d;color:#1a1200;font-weight:900;padding:9px 14px;border-radius:10px;cursor:pointer">إلغاء رفع ملف التقدم (أول مرة)</button>
+            <div id="lobbyProgressWaiveNote" class="msg" style="margin-top:8px;font-size:12px;line-height:1.55;color:#fde68a;background:rgba(251,191,36,.1);padding:8px 10px;border-radius:8px;border:1px solid rgba(251,191,36,.35)">
+              ⚠ يجب بعد أن تلعب أن تحمّل ملف التقدم حتى لا يضيع تقدمك في اللعب — وفي المرات القادمة ارفعه عشان تحافظ على تقدمك ومتبدأش من الصفر.
+            </div>
+          </div>
+          <div id="lobbyProgressWaivedBanner" hidden class="msg ok" style="margin-top:8px;font-size:12px">✔ القائد ألغى إلزام رفع التقدم لهذه الجولة — تقدرو تبدأوا من غير ملف. بعد اللعب حمّلوا ملف التقدم للمرات الجاية.</div>
+        </div>
         <div class="row" style="flex-wrap:wrap;gap:8px">
           <button type="button" class="ready-btn ghost" id="btnReady">✋ أنا مستعد</button>
           <button type="button" class="pri" id="btnStart" style="display:none">▶ بدء اللعب</button>
@@ -583,19 +601,48 @@ $('#mOn').onclick = () => {
 
 async function loadGameFile(file) {
   if (!file) return null;
-  // بنعرف نوع الملف من محتواه مش من اسمه (الموبايل بيسمّي الملفات بأسماء وأنواع مختلفة)
   const head = new Uint8Array(await file.slice(0, 4).arrayBuffer());
   const isZip = head[0] === 0x50 && head[1] === 0x4B;
   if (isZip) {
     if (!window.JSZip) throw new Error('JSZip غير محمّل — حدّث الصفحة (Ctrl+F5)');
     const z = await JSZip.loadAsync(file);
-    const f = z.file('game.json') || z.file(/game\.json$/i)[0];
-    if (!f) throw new Error('مفيش game.json جوه الملف');
+    const names = Object.keys(z.files).filter(n => !z.files[n].dir);
+    const base = n => (n.split('/').pop() || '').toLowerCase();
+    const hasProject = names.some(n => base(n) === 'project.json' || base(n) === 'hawa-project.json');
+    const hasGame = names.some(n => base(n) === 'game.json');
+    const hasGameData = names.some(n => /(^|\/)game-data\.js$/i.test(n));
+    if (hasProject && !hasGame) {
+      throw new Error('فشل الرفع: الملف ده «مشروع» مش «لعبة».\nارفعه من البناء بزر «رفع المشروع».\nهنا في قائمة الألعاب لازم ملف لعبة مصدّر (فيه game.json).');
+    }
+    let f = z.file('game.json') || (z.file(/game\.json$/i) && z.file(/game\.json$/i)[0]);
+    if (!f) {
+      // ابحث يدوي
+      const p = names.find(n => base(n) === 'game.json');
+      if (p) f = z.file(p);
+    }
+    if (!f && hasGameData) {
+      const gd = names.find(n => /(^|\/)game-data\.js$/i.test(n));
+      const raw = await z.file(gd).async('string');
+      const i = raw.indexOf('=');
+      return JSON.parse(raw.slice(i + 1).trim().replace(/;\s*$/, ''));
+    }
+    if (!f) {
+      if (hasProject) throw new Error('فشل الرفع: هذا ملف مشروع — مش لعبة. استخدم «رفع المشروع» في البناء.');
+      throw new Error('مفيش game.json جوه الملف — ده مش ملف لعبة صالح');
+    }
     return JSON.parse(await f.async('string'));
   }
-  const t = await file.text();
-  try { return JSON.parse(t); }
-  catch (_) { throw new Error('الملف ده مش zip ولا JSON صالح'); }
+  const txt = await file.text();
+  try {
+    const data = JSON.parse(txt);
+    if (data && (data.format === 'hawa-project-v3' || data.format === 'hawa-project')) {
+      throw new Error('فشل الرفع: الملف ده مشروع بناء مش لعبة.');
+    }
+    return data;
+  } catch (err) {
+    if (err && /مشروع|فشل الرفع/.test(String(err.message || err))) throw err;
+    throw new Error('الملف ده مش zip ولا JSON صالح');
+  }
 }
 
 function detectGamePlayNet(data) {
@@ -916,11 +963,61 @@ function roomFull() {
 function roomReadyToStart() {
   return roomPlayers.filter(Boolean).length >= minSlots();
 }
+function progressFeatureOn() {
+  try {
+    if (!gameData) return false;
+    if (gameData.progressEnabled === false) return false;
+    if (gameData.progressRequireUpload === false) return false;
+    return !!(gameData.progressEnabled || (gameData.progressScripts && gameData.progressScripts.length));
+  } catch (_) { return false; }
+}
+let progressWaived = false; // القائد ألغى الإلزام لهذه الجولة
+function progressRequired() {
+  if (progressWaived) return false;
+  return progressFeatureOn();
+}
+let myProgressOk = false;
+let myProgressName = '';
+function syncLobbyProgressUI() {
+  const box = document.getElementById('lobbyProgressBox');
+  if (!box) return;
+  const feat = progressFeatureOn();
+  box.hidden = !feat;
+  if (!feat) return;
+  const need = progressRequired();
+  const nm = document.getElementById('lobbyProgressName');
+  const rep = document.getElementById('btnLobbyProgressReplace');
+  const clr = document.getElementById('btnLobbyProgressClear');
+  const up = document.getElementById('btnLobbyProgressUp');
+  const hostActs = document.getElementById('lobbyProgressHostActs');
+  const banner = document.getElementById('lobbyProgressWaivedBanner');
+  const title = document.getElementById('lobbyProgressTitle');
+  const hint = document.getElementById('lobbyProgressHint');
+  if (title) title.textContent = progressWaived
+    ? '💾 ملف التقدم (اختياري لهذه الجولة)'
+    : '💾 ملف التقدم (مطلوب قبل الاستعداد)';
+  if (hint) {
+    hint.textContent = progressWaived
+      ? 'القائد ألغى الإلزام — تقدر تلعب من غير رفع. بعد اللعب حمّل ملف التقدم عشان المرات الجاية.'
+      : 'ارفع ملف تقدمك عشان نقدر نبدأ. بعد اللعب حمّل ملفك عشان ما يضيعش تقدمك.';
+  }
+  if (nm) nm.textContent = myProgressOk ? ('الملف: ' + (myProgressName || 'تم الرفع')) : (progressWaived ? '—' : 'لم يُرفع بعد');
+  if (rep) rep.hidden = !myProgressOk;
+  if (clr) clr.hidden = !myProgressOk;
+  if (up) up.style.display = '';
+  if (hostActs) hostActs.hidden = !(isHost && !progressWaived);
+  if (banner) banner.hidden = !progressWaived;
+}
+function allProgressOk() {
+  if (!progressRequired()) return true;
+  if (!roomPlayers.length) return false;
+  return roomPlayers.every(p => p && (p.progressOk || (p.host && myProgressOk && isHost)));
+}
 function allReady() {
   if (!roomPlayers.length) return false;
-  // القائد مش محتاج يستعد — الضيوف فقط
+  if (progressRequired() && !allProgressOk()) return false;
   const guests = roomPlayers.filter(p => p && !p.host);
-  if (!guests.length) return roomPlayers.length >= 1; // لوحده؟ يسمح
+  if (!guests.length) return roomPlayers.length >= 1;
   return guests.every(p => p && p.ready && (!PadUI.reqd() || p.pad === true));
 }
 function renderSlots() {
@@ -946,8 +1043,9 @@ function renderSlots() {
     const rdyBadge = p
       ? (p.ready ? '<div class="rdy">✔ مستعد</div>' : '<div class="rdy off">… غير مستعد</div>')
       : '';
+    const progBadge = (p && progressRequired()) ? (p.progressOk ? '<div class="rdy" style="color:#86efac">💾 تقدم ✔</div>' : '<div class="rdy off">💾 بدون تقدم</div>') : '';
     d.innerHTML = p
-      ? '<div class="av">🧍</div><div class="nm">'+esc(p.name)+'</div><div class="mut">سلوت '+i+(p.host?' · مضيف':'')+'</div>'+rdyBadge+padTag+kick
+      ? '<div class="av">🧍</div><div class="nm">'+esc(p.name)+'</div><div class="mut">سلوت '+i+(p.host?' · مضيف':'')+'</div>'+rdyBadge+progBadge+padTag+kick
       : '<div class="av">⬜</div><div class="nm mut">فاضي</div><div class="mut">سلوت '+i+'</div>';
     if (p && p._justJoined) {
       d.classList.add('join-flash');
@@ -1017,7 +1115,7 @@ function setPlayerReady(id, ready) {
 }
 function broadcastLobby() {
   if (!net || !isHost) return;
-  net.broadcast({ t: 'lobby', players: roomPlayers });
+  net.broadcast({ t: 'lobby', players: roomPlayers, progressWaived: !!progressWaived });
 }
 function broadcastReady() {
   if (!net) return;
@@ -1038,6 +1136,7 @@ function broadcastReady() {
 
 
 $('#btnReady').onclick = () => {
+  if (progressRequired() && !myProgressOk) { $('#lobbyMsg').className='msg err'; $('#lobbyMsg').textContent='💾 ارفع ملف التقدم الأول قبل الاستعداد'; return; }
   if (!isHost && PadUI.reqd() && !PadUI.ok()) { $('#lobbyMsg').className='msg err'; $('#lobbyMsg').textContent='🎮 وصّل الدراع عشان تبقى مستعد'; return; }
   myReady = !myReady;
   const me = roomPlayers.find(p => (isHost && p.host) || p.slot === mySlot || p.id === (net && (net.peerId||net.id)));
@@ -1068,7 +1167,10 @@ $('#btnDoCreate').onclick = async () => {
   roomVoice = !!(document.getElementById('roomMic') && document.getElementById('roomMic').checked);
   isHost = true;
   myReady = false;
-  roomPlayers = [{ id: 'host', name: hn, slot: 1, host: true, ready: true }];
+  progressWaived = false;
+  myProgressOk = false;
+  myProgressName = '';
+  roomPlayers = [{ id: 'host', name: hn, slot: 1, host: true, ready: true, progressOk: false }];
   $('#createMsg').className='msg'; $('#createMsg').textContent = netType === 'lan' ? 'جاري إنشاء رووم LAN…' : (netType === 'codes' ? 'جاري تجهيز كود العرض…' : 'جاري إنشاء رووم PeerJS…');
   try {
     const onPeerJoin = (peer) => {
@@ -1094,6 +1196,14 @@ $('#btnDoCreate').onclick = async () => {
       if (msg && msg.t === 'ready') {
         const p = roomPlayers.find(x => x.id === from || x.slot === msg.slot);
         if (p) { p.ready = !!msg.ready; renderSlots(); broadcastLobby(); }
+      } else if (msg && msg.t === 'progress') {
+        const pp = roomPlayers.find(x => x.id === from || x.slot === msg.slot);
+        if (pp) { pp.progressOk = !!msg.ok; pp.progressName = msg.name || ''; renderSlots(); broadcastLobby(); }
+      } else if (msg && msg.t === 'progressWaive') {
+        progressWaived = !!msg.waived;
+        if (progressWaived) { try { roomPlayers.forEach(p => { if (p) p.progressOk = true; }); } catch(_){} }
+        try { syncLobbyProgressUI(); renderSlots(); } catch(_){}
+
       }
       if (msg && msg.t === 'state' && window.HawaPlay) HawaPlay.applyRemote(from, msg);
     };
@@ -1145,7 +1255,7 @@ $('#btnDoCreate').onclick = async () => {
       showEl('btnStart', 'block');
       $('#lobbyTitle').textContent = 'لوبي «' + rn + '» · ' + (gameData.name||'');
       renderSlots();
-      try { updReadyBtn(); updStartBtn(); } catch (_) {}
+      try { syncLobbyProgressUI(); updReadyBtn(); updStartBtn(); } catch (_) {}
       $('#createMsg').className='msg ok';
       $('#createMsg').textContent = '✔ الرووم جاهز';
     }
@@ -1289,8 +1399,18 @@ $('#btnDoJoin').onclick = async () => {
           const p = roomPlayers.find(x => x.id === from || x.slot === msg.slot);
           if (p) { p.ready = !!msg.ready; renderSlots(); }
         }
+        if (msg.t === 'progressWaive') {
+          progressWaived = !!msg.waived;
+          if (progressWaived) { try { roomPlayers.forEach(p => { if (p) p.progressOk = true; }); } catch(_){} }
+          try { syncLobbyProgressUI(); renderSlots(); } catch(_){}
+        }
         if (msg.t === 'lobby' && msg.players) {
-          roomPlayers = msg.players.map(p => Object.assign({ ready: !!p.ready }, p));
+          roomPlayers = msg.players.map(p => Object.assign({ ready: !!p.ready, progressOk: !!p.progressOk }, p));
+          if (msg.progressWaived != null) {
+            progressWaived = !!msg.progressWaived;
+            if (progressWaived) { try { roomPlayers.forEach(p => { if (p) p.progressOk = true; }); } catch(_){} }
+          }
+          try { syncLobbyProgressUI(); } catch(_){}
           renderSlots();
         }
       },
@@ -1448,8 +1568,18 @@ if ($('#codesMakeAnswer')) $('#codesMakeAnswer').onclick = async () => {
           const p = roomPlayers.find(x => x.id === from || x.slot === msg.slot);
           if (p) { p.ready = !!msg.ready; renderSlots(); }
         }
+        if (msg.t === 'progressWaive') {
+          progressWaived = !!msg.waived;
+          if (progressWaived) { try { roomPlayers.forEach(p => { if (p) p.progressOk = true; }); } catch(_){} }
+          try { syncLobbyProgressUI(); renderSlots(); } catch(_){}
+        }
         if (msg.t === 'lobby' && msg.players) {
-          roomPlayers = msg.players.map(p => Object.assign({ ready: !!p.ready }, p));
+          roomPlayers = msg.players.map(p => Object.assign({ ready: !!p.ready, progressOk: !!p.progressOk }, p));
+          if (msg.progressWaived != null) {
+            progressWaived = !!msg.progressWaived;
+            if (progressWaived) { try { roomPlayers.forEach(p => { if (p) p.progressOk = true; }); } catch(_){} }
+          }
+          try { syncLobbyProgressUI(); } catch(_){}
           renderSlots();
         }
       },
@@ -1648,6 +1778,81 @@ function goPlay(opts) {
   if (n === 'online' && onB) onB.click();
   else if (n === 'offline' && offB) offB.click();
 })();
+
+/* —— لوبي: رفع ملف التقدم —— */
+(function bindLobbyProgress() {
+  const up = document.getElementById('btnLobbyProgressUp');
+  const rep = document.getElementById('btnLobbyProgressReplace');
+  const clr = document.getElementById('btnLobbyProgressClear');
+  const fl = document.getElementById('lobbyProgressFile');
+  const waive = document.getElementById('btnLobbyProgressWaive');
+  if (!fl) return;
+  const pick = () => { fl.value = ''; fl.click(); };
+  if (up) up.onclick = pick;
+  if (rep) rep.onclick = pick;
+  if (waive && !waive._bound) {
+    waive._bound = 1;
+    waive.onclick = () => {
+      if (!isHost) return;
+      progressWaived = true;
+      // اعتبر الكل جاهز من ناحية التقدم لهذه الجولة
+      try { roomPlayers.forEach(p => { if (p) p.progressOk = true; }); } catch (_) {}
+      syncLobbyProgressUI();
+      renderSlots();
+      try { broadcastLobby(); } catch (_) {}
+      try { net && net.broadcast({ t: 'progressWaive', waived: true }); } catch (_) {}
+      const m = document.getElementById('lobbyMsg');
+      if (m) {
+        m.className = 'msg ok';
+        m.textContent = '✔ تم إلغاء إلزام رفع التقدم لهذه الجولة. بعد اللعب حمّلوا ملف التقدم للمرات الجاية.';
+      }
+    };
+  }
+  if (clr) clr.onclick = () => {
+    myProgressOk = false; myProgressName = '';
+    try {
+      const me = roomPlayers.find(p => (isHost && p.host) || p.slot === mySlot || (net && p.id === (net.peerId || net.id)));
+      if (me) { me.progressOk = false; me.progressName = ''; }
+    } catch (_) {}
+    syncLobbyProgressUI(); renderSlots();
+    try {
+      if (isHost) broadcastLobby();
+      else if (net) net.sendToHost({ t: 'progress', ok: false, slot: mySlot, name: '' });
+    } catch (_) {}
+  };
+  fl.onchange = async () => {
+    const f = fl.files && fl.files[0]; fl.value = '';
+    if (!f) return;
+    try {
+      const text = await f.text();
+      const data = JSON.parse(text);
+      if (!data || !(data.kind === 'hawa-progress' || data.progress || data.kind === 'progress')) {
+        // نقبل أي JSON تقدم فيه progress object
+        if (!(data && typeof data === 'object')) throw new Error('ملف غير صالح');
+      }
+      myProgressOk = true;
+      myProgressName = f.name || 'progress.json';
+      try {
+        // خزن للاستخدام وقت التشغيل
+        window.__HAWA_PROGRESS_FILE = data;
+        localStorage.setItem('hawa_lobby_progress', JSON.stringify(data));
+      } catch (_) {}
+      const me = roomPlayers.find(p => (isHost && p.host) || p.slot === mySlot || (net && p.id === (net.peerId || net.id)));
+      if (me) { me.progressOk = true; me.progressName = myProgressName; }
+      syncLobbyProgressUI(); renderSlots();
+      try {
+        if (isHost) broadcastLobby();
+        else if (net) net.sendToHost({ t: 'progress', ok: true, slot: mySlot, name: myProgressName });
+      } catch (_) {}
+      const m = document.getElementById('lobbyMsg');
+      if (m) { m.className = 'msg ok'; m.textContent = '✔ تم رفع ملف التقدم'; }
+    } catch (err) {
+      const m = document.getElementById('lobbyMsg');
+      if (m) { m.className = 'msg err'; m.textContent = '⚠ ' + (err.message || err); }
+    }
+  };
+})();
+
 </script>
 </body>
 </html>

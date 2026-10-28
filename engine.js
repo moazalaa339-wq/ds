@@ -2548,10 +2548,95 @@ function ugizmo() {
 const RC = new T.Raycaster(), ndc = new T.Vector2();
 function ray(e) { const r = cv.getBoundingClientRect(); ndc.set((e.clientX - r.left) / r.width * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1); RC.setFromCamera(ndc, cam); return RC; }
 function rayCenter() { ndc.set(0, 0); RC.setFromCamera(ndc, cam); return RC; }
+
+/** تأكيد الوضع على الموبايل: لمسة = موضع معلق + ✓ فوقه */
+const MPLACE = { pending: null, el: null };
+function mPlaceBtn() {
+  let el = document.getElementById('mPlaceConfirm');
+  if (!el) {
+    el = document.createElement('button');
+    el.id = 'mPlaceConfirm'; el.type = 'button'; el.textContent = '✓';
+    el.title = 'تأكيد الوضع';
+    document.body.appendChild(el);
+  }
+  if (!el._bound) {
+    el._bound = 1;
+    el.addEventListener('pointerdown', e => {
+      e.preventDefault(); e.stopPropagation();
+      confirmMobilePlace();
+    });
+  }
+  return el;
+}
+function hideMobilePlaceConfirm() {
+  MPLACE.pending = null;
+  try {
+    const el = mPlaceBtn();
+    el.classList.remove('show');
+    el.style.display = 'none';
+  } catch (_) {}
+}
+function projectWorldToScreen(pos) {
+  const v = new T.Vector3(pos[0], pos[1], pos[2]);
+  v.project(cam);
+  const r = cv.getBoundingClientRect();
+  return {
+    x: r.left + (v.x * 0.5 + 0.5) * r.width,
+    y: r.top + (-v.y * 0.5 + 0.5) * r.height,
+    ok: v.z < 1
+  };
+}
+function showMobilePlaceConfirm(info, sp) {
+  MPLACE.pending = { info, sp };
+  const el = mPlaceBtn();
+  const scr = projectWorldToScreen(sp.p);
+  if (!scr.ok) { hideMobilePlaceConfirm(); return; }
+  el.style.left = scr.x + 'px';
+  el.style.top = scr.y + 'px';
+  el.style.display = 'flex';
+  el.classList.add('show');
+}
+function confirmMobilePlace() {
+  const p = MPLACE.pending;
+  if (!p) return;
+  const { info, sp } = p;
+  hideMobilePlaceConfirm();
+  if (!sp || !sp.ok) return tip('⚠ المكان مشغول');
+  const o = placeNow(info, sp.p); if (!o) return;
+  try { if (S.playEdit) injectLiveObject(o); } catch (_) {}
+  sel((o.type === 'respawn' || o.type === 'online_spawn') ? null : o.id); hier(); chg();
+  tip('✔ تم الوضع');
+}
+function tryMobilePlaceOrSelect(e) {
+  const mobile = !!(typeof MOB !== 'undefined' && MOB.on);
+  if (!mobile) return false;
+  if (S.mode !== 'build' && !S.playEdit) return false;
+  if (S.tool !== 'place' && S.tool !== 'respawn' && S.tool !== 'online_spawn') {
+    hideMobilePlaceConfirm();
+    return false;
+  }
+  const rc = ray(e), r = rc.ray;
+  const info = phInfo(), h = castRay(r);
+  if (!h) { tip('⚠ المس سطح (أرض أو كائن)'); return true; }
+  const sp = spotFor(info, h);
+  if (!sp.ok) { tip('⚠ المكان مشغول'); return true; }
+  showMobilePlaceConfirm(info, sp);
+  tip('اضغط ✓ للتأكيد');
+  return true;
+}
 function clickCenter() {
   const fake = {clientX: 0, clientY: 0};
   const rc = rayCenter(), r = rc.ray;
   if (S.tool === 'place' || S.tool === 'respawn' || S.tool === 'online_spawn') {
+    if (typeof MOB !== 'undefined' && MOB.on) {
+      const info = phInfo(), h = castRay(r);
+      if (!h) return tip('⚠ وجّه على سطح');
+      const sp = spotFor(info, h);
+      if (!sp.ok) return tip('⚠ المكان مشغول');
+      showMobilePlaceConfirm(info, sp);
+      tip('اضغط ✓ للتأكيد');
+      return;
+    }
     const info = phInfo(), h = castRay(r);
     if (!h) return tip('⚠ وجّه المركز على سطح (أرض أو كائن)');
     const sp = spotFor(info, h);
@@ -2690,12 +2775,30 @@ function selHelper() {
   if (SELH) { scene.remove(SELH); SELH = null; }
   for (const h of SELH_MULTI) { try { scene.remove(h); } catch (_) {} }
   SELH_MULTI = [];
-  try { if (S.mode === 'build' || S.playEdit) for (const id of selIds()) { if (id === S.sel) continue; const mm = MESH.get(id); if (!mm) continue; const bh = thickRedBox(mm); scene.add(bh); SELH_MULTI.push(bh); } } catch (_) {}
-  const m = S.sel != null && MESH.get(S.sel);
-  
-  if (m && (S.mode === 'build' || S.playEdit) && !(typeof MOB !== 'undefined' && MOB.on)) {
-    SELH = new T.BoxHelper(m, 0x39ff7a); SELH.material.depthTest = false; SELH.renderOrder = 998;
-    scene.add(SELH);
+  const ids = (typeof selIds === 'function') ? selIds() : (S.selSet || []);
+  const multi = ids.length > 1;
+  const inBuild = (S.mode === 'build' || S.playEdit);
+  if (inBuild) {
+    try {
+      if (multi) {
+        // تحديد متعدد / محيطي: الكل أحمر (بما فيهم الأول)
+        for (const id of ids) {
+          const mm = MESH.get(id); if (!mm) continue;
+          const bh = thickRedBox(mm);
+          scene.add(bh);
+          SELH_MULTI.push(bh);
+        }
+      } else if (S.sel != null) {
+        const m = MESH.get(S.sel);
+        if (m && !(typeof MOB !== 'undefined' && MOB.on)) {
+          // كائن واحد فقط: أخضر
+          SELH = new T.BoxHelper(m, 0x39ff7a);
+          SELH.material.depthTest = false;
+          SELH.renderOrder = 998;
+          scene.add(SELH);
+        }
+      }
+    } catch (_) {}
   }
   S.dirty = 1;
 }
@@ -2752,6 +2855,11 @@ function click(e) {
     if (!h) return tip('⚠ اضغط على سطح (أرض أو كائن)');
     const sp = spotFor(info, h);
     if (!sp.ok) return tip('⚠ المكان مشغول — اختار مكان فاضي');
+    if (typeof MOB !== 'undefined' && MOB.on) {
+      showMobilePlaceConfirm(info, sp);
+      tip('اضغط ✓ للتأكيد');
+      return;
+    }
     const o = placeNow(info, sp.p); if (!o) return;
     try { if (S.playEdit) injectLiveObject(o); } catch (_) {}
     sel((o.type === 'respawn' || o.type === 'online_spawn') ? null : o.id); hier(); chg(); return;
@@ -3019,13 +3127,23 @@ cv.addEventListener('wheel', e => {
   OB.dist = clamp(OB.dist * (1 + Math.sign(e.deltaY) * .1), 1.5, 400); camUpdate();
 }, {passive: false});
 cv.addEventListener('contextmenu', e => e.preventDefault());
-addEventListener('mousedown', e => { if (e.button === 0) K.Mouse0 = 1; if (e.button === 2) K.Mouse2 = 1; });
+addEventListener('mousedown', e => {
+  if (e.button === 0) K.Mouse0 = 1;
+  if (e.button === 2) K.Mouse2 = 1;
+  // Ctrl + ماوس = تحديد متعدد، مش قفل مؤشر
+  if (e.ctrlKey || e.metaKey || K.ControlLeft || K.ControlRight) {
+    try { markCtrlUsed(); } catch (_) { ctrlPend = false; }
+  }
+});
 addEventListener('mouseup', e => { if (e.button === 0) K.Mouse0 = 0; if (e.button === 2) K.Mouse2 = 0; });
 
 let ctrlPend = false;
+let ctrlDownAt = 0;
+let ctrlDirty = false; // true = اتحجز للتحديد المتعدد / ماوس — متعملش قفل مؤشر
+function markCtrlUsed() { ctrlDirty = true; ctrlPend = false; }
 // —— منع لزق المفاتيح عند الخروج من النافذة/التطبيق ——
 (function bindKeyUnstick() {
-  const wipe = () => { try { clearAllKeys('focus-lost'); } catch (_) {} ctrlPend = false; };
+  const wipe = () => { try { clearAllKeys('focus-lost'); } catch (_) {} ctrlPend = false; ctrlDirty = false; };
   // window blur: Alt+Tab / تطبيق تاني
   window.addEventListener('blur', wipe);
   // الصفحة مخفية (تبويب تاني / تصغير)
@@ -3050,15 +3168,25 @@ let ctrlPend = false;
 addEventListener('keyup', e => {
   K[e.code] = 0;
   try { delete K[e.code]; } catch (_) {}
-  if (e.key === 'Control' && ctrlPend && S.mode === 'build') toggleLock();
-  if (e.key === 'Control') ctrlPend = false;
+  if (e.key === 'Control') {
+    // قفل المؤشر فقط على «نقرة سريعة» لـ Ctrl من غير تحديد/ضغط ماوس
+    const held = performance.now() - (ctrlDownAt || 0);
+    if (ctrlPend && !ctrlDirty && S.mode === 'build' && held < 280) {
+      try { toggleLock(); } catch (_) {}
+    }
+    ctrlPend = false;
+    ctrlDirty = false;
+  }
 });
 addEventListener('keydown', e => {
   // لو الصفحة مش ظاهرة: متسجّلش ضغطات
   if (document.hidden || document.visibilityState === 'hidden') return;
   if (e.target && e.target.matches && e.target.matches('input,textarea,select,[contenteditable="true"]')) return;
   K[e.code] = 1;
-  if (e.key !== 'Control') ctrlPend = false;
+  if (e.key !== 'Control' && e.code !== 'ControlLeft' && e.code !== 'ControlRight') {
+    if (ctrlPend) ctrlDirty = true;
+    ctrlPend = false;
+  }
   if (S.mode === 'play' && !S.playEdit) {
     if (e.code === 'Space') e.preventDefault();
     
@@ -3091,7 +3219,13 @@ addEventListener('keydown', e => {
       return;
     }
   }
-  if (e.key === 'Control') { ctrlPend = true; return; }
+  if (e.key === 'Control' || e.code === 'ControlLeft' || e.code === 'ControlRight') {
+    if (e.repeat) return; // الهولد المتكرر من المتصفح متخلّيش يعتبر نقرة
+    ctrlPend = true;
+    ctrlDirty = false;
+    ctrlDownAt = performance.now();
+    return;
+  }
   const c = e.ctrlKey || e.metaKey;
   const locked = document.pointerLockElement === cv;
   if (e.code === 'Space' && !c) e.preventDefault();
@@ -3123,6 +3257,7 @@ function armedMobile() {
 }
 function setTool(t) {
   S.tool = t;
+  try { hideMobilePlaceConfirm(); } catch (_) {}
   
   if (S._spReopen && t !== 'respawn' && t !== 'online_spawn') {
     S._spReopen = false;
@@ -3151,7 +3286,27 @@ function setTool(t) {
   }
   cats(); sList();
 }
-function setSec(s) {
+function setSec(s, force) {
+  const B = document.body;
+  const dockOpen = !B.classList.contains('hide-dock') && S._secPanelOpen !== false;
+  // نفس القسم واللوحة ظاهرة → إخفاء اللوحة شمال + شيل تحديد الزر
+  if (!force && S.section === s && dockOpen) {
+    B.classList.add('hide-dock');
+    S._secPanelOpen = false;
+    try {
+      $$('#secs [data-sec],#mSecs [data-sec]').forEach(b => b.classList.remove('on'));
+      document.querySelectorAll('#mBarSecs [data-m-sec]').forEach(b => b.classList.remove('on'));
+    } catch (_) {}
+    try {
+      const bd = document.getElementById('tglDock');
+      if (bd) { bd.classList.add('off'); }
+    } catch (_) {}
+    try { setTimeout(resize, 40); } catch (_) {}
+    return;
+  }
+  // فتح / تبديل قسم
+  B.classList.remove('hide-dock');
+  S._secPanelOpen = true;
   S.section = s;
   $('#catP').hidden = s !== 'objects';
   $('#progP').hidden = s !== 'prog';
@@ -3163,8 +3318,13 @@ function setSec(s) {
       b.classList.toggle('on', b.getAttribute('data-m-sec') === s);
     });
   } catch (_) {}
+  try {
+    const bd = document.getElementById('tglDock');
+    if (bd) bd.classList.remove('off');
+  } catch (_) {}
   $('#dockTitle').textContent = {objects: 'الكائنات', prog: 'قسم البرمجة', sobj: 'الكائنات البرمجية', progress: 'حفظ التقدم'}[s] || s;
   if (s === 'progress') { try { prList(); } catch (_) {} }
+  try { setTimeout(resize, 40); } catch (_) {}
 }
 /* ===== أقسام البناء: القائمة أقسام بس، وكل قسم نافذة لوحده ===== */
 function secParts(title) { const i = title.indexOf(' '); return i > 0 ? [title.slice(0, i), title.slice(i + 1)] : ['📦', title]; }
@@ -3251,7 +3411,23 @@ try { const _bfly = document.getElementById('bFly'); if (_bfly) _bfly.onclick = 
     // الـ ResizeObserver بيعمل resize مع كل فريم من الأنميشن؛ ده resize أخير للتأكيد
     setTimeout(() => { try { resize(); } catch (_) {} }, 460);
   };
-  bd.onclick = () => { B.classList.toggle('hide-dock'); sync(bd); };
+  bd.onclick = () => {
+    B.classList.toggle('hide-dock');
+    const closed = B.classList.contains('hide-dock');
+    S._secPanelOpen = !closed;
+    try {
+      if (closed) {
+        $$('#secs [data-sec],#mSecs [data-sec]').forEach(b => b.classList.remove('on'));
+        document.querySelectorAll('#mBarSecs [data-m-sec]').forEach(b => b.classList.remove('on'));
+      } else if (S.section) {
+        $$('#secs [data-sec],#mSecs [data-sec]').forEach(b => b.classList.toggle('on', b.dataset.sec === S.section));
+        document.querySelectorAll('#mBarSecs [data-m-sec]').forEach(b => {
+          b.classList.toggle('on', b.getAttribute('data-m-sec') === S.section);
+        });
+      }
+    } catch (_) {}
+    sync(bd);
+  };
   bs.onclick = () => {
     if (B.classList.contains('noside')) { B.classList.remove('noside'); B.classList.remove('hide-side'); const pb = document.getElementById('bPar'); if (pb) pb.classList.add('on'); }
     else B.classList.toggle('hide-side');
@@ -3260,16 +3436,13 @@ try { const _bfly = document.getElementById('bFly'); if (_bfly) _bfly.onclick = 
   try {
     const st = JSON.parse(localStorage.getItem(KEY) || 'null');
     if (st) {
-      // من غير أنميشن عند فتح الصفحة
       const app = document.getElementById('app'); if (app) app.style.transition = 'none';
       B.classList.toggle('hide-dock', !!st.dock); B.classList.toggle('hide-side', !!st.side);
+      S._secPanelOpen = !B.classList.contains('hide-dock');
       requestAnimationFrame(() => requestAnimationFrame(() => { if (app) app.style.transition = ''; }));
     }
   } catch (_) {}
-  const secs = document.getElementById('secs');
-  if (secs) secs.addEventListener('click', e => {
-    if (e.target.closest('[data-sec]') && B.classList.contains('hide-dock')) { B.classList.remove('hide-dock'); sync(); }
-  });
+  // مفيش listener يتعارض مع setSec (كان بيرجع يفتح اللوحة بعد قفلها)
   sync();
 })();
 $('#bPar').onclick = () => { document.body.classList.toggle('noside'); $('#bPar').classList.toggle('on', !document.body.classList.contains('noside')); setTimeout(resize, 30); };
@@ -3732,7 +3905,7 @@ async function convertToGameImpl() {
       .concat(au.warnings.map(w => '⚠ ' + w));
     ui.report(rep, au.warnings.length ? 'warn' : 'ok');
     ui.finish('اللعبة جاهزة واتحمّلت', true, [
-      {t: 'تحميل تاني', fn: dl}, {t: 'إغلاق', pri: true, fn: () => ui.close()}]);
+      {t: 'إغلاق', pri: true, fn: () => ui.close()}]);
     tip('✔ لعبة كاملة: «' + data.name + '» · ' + (blob.size / 1024 / 1024).toFixed(2) + ' MB');
   } catch (e) {
     console.error(e);
@@ -4003,7 +4176,7 @@ async function addGroupPrompt() {
 }
 function selectObjRow(id, multi) {
   if (!multi) return sel(id);
-  ctrlPend = false;
+  try { markCtrlUsed(); } catch (_) { ctrlPend = false; }
   const set = new Set(selIds());
   if (set.has(id)) set.delete(id); else set.add(id);
   S.selGroup = null;
@@ -4012,7 +4185,7 @@ function selectObjRow(id, multi) {
   selSync();
 }
 function selectGroup(gid, multi) {
-  ctrlPend = false;
+  try { markCtrlUsed(); } catch (_) { ctrlPend = false; }
   const mem = grpMembersDeep(gid);
   if (multi) {
     const set = new Set(selIds()); mem.forEach(id => set.add(id));
@@ -4093,7 +4266,14 @@ function hier() {
   ensureOrd();
   const q = $('#hq').value.trim();
   const selS = new Set(selIds());
-  const rowOf = (o, depth) => `<div draggable="true" data-id="${o.id}" data-k="o" style="padding-inline-start:${10 + depth * 16}px" class="${selS.has(o.id) ? ('on' + (selS.size > 1 ? ' multi' : '')) : ''}${o.hidden ? ' dim' : ''}">${dotOf(o)}${DEF[o.type].i} <span class="fs">${esc(o.name)}</span>${isProg(o) ? ' <span class="pbadge">⚙ مبرمج (' + affFiles(o).length + ' ملفات)</span>' : ''}${o.hidden ? ' <span class="mut">· مخفي</span>' : ''}</div>`;
+  const rowOf = (o, depth) => {
+    let badge = '';
+    if (isProg(o)) {
+      const sm = affFilesSummary(o);
+      badge = ` <span class="pbadge">⚙ مبرمج (${sm.total})</span>`;
+    }
+    return `<div draggable="true" data-id="${o.id}" data-k="o" style="padding-inline-start:${10 + depth * 16}px" class="${selS.has(o.id) ? ('on' + (selS.size > 1 ? ' multi' : '')) : ''}${o.hidden ? ' dim' : ''}">${dotOf(o)}${DEF[o.type].i} <span class="fs">${esc(o.name)}</span>${badge}${o.hidden ? ' <span class="mut">· مخفي</span>' : ''}</div>`;
+  };
   let html = '';
   if (q) {
     let n = 0;
@@ -4108,7 +4288,15 @@ function hier() {
       for (const it of sibsOf(pid)) {
         if (it.k === 'g') {
           const g = it.ref, cnt = grpMembersDeep(g.id).length;
-          html += `<div draggable="true" data-gid="${esc(g.id)}" data-k="g" class="h-grp${S.selGroup === g.id ? ' on' : ''}" style="padding-inline-start:${6 + depth * 16}px;border-inline-start-color:${esc(g.color || '')}">${dotOf(g)}<span class="h-arrow" data-arrow="${esc(g.id)}">${g.open === false ? '▸' : '▾'}</span>📁 ${esc(g.name)} <span class="h-cnt">${cnt}</span></div>`;
+          let progN = 0;
+          try {
+            for (const mid of grpMembersDeep(g.id)) {
+              const mo = OBJ.get(mid);
+              if (mo && isProg(mo)) progN++;
+            }
+          } catch (_) {}
+          const progLbl = progN ? ` <span class="pbadge">*${progN} كائنات مبرمجة*</span>` : '';
+          html += `<div draggable="true" data-gid="${esc(g.id)}" data-k="g" class="h-grp${S.selGroup === g.id ? ' on' : ''}" style="padding-inline-start:${6 + depth * 16}px;border-inline-start-color:${esc(g.color || '')}">${dotOf(g)}<span class="h-arrow" data-arrow="${esc(g.id)}">${g.open === false ? '▸' : '▾'}</span>📁 ${esc(g.name)} <span class="h-cnt">${cnt}</span>${progLbl}</div>`;
           if (g.open !== false) walk(g.id, depth + 1);
         } else html += rowOf(it.ref, depth);
       }
@@ -4177,7 +4365,7 @@ _HIER.addEventListener('mousedown', e => {
   if (!(e.ctrlKey || e.metaKey) || e.button !== 0) return;
   const d = _hRowAt(e); if (!d || d.dataset.root) return;
   e.preventDefault(); e.stopPropagation();
-  ctrlPend = false;
+  try { markCtrlUsed(); } catch (_) { ctrlPend = false; }
   if (d.dataset.gid) selectGroup(d.dataset.gid, true);
   else selectObjRow(+d.dataset.id, true);
   hier();
@@ -5383,12 +5571,56 @@ function globalRefs() {
 }
 function affFiles(o) {
   const L = [];
-  if (o.type === 'sobj') { const d = defOf(o.def); if (d) L.push({k: 'sobj', id: d.id, name: d.name, role: 'كود الكائن (بيتحكم فيه بالكامل)'}); }
-  for (const id of o.scripts) { const sc = S.scripts.find(x => x.id === id); if (sc) L.push({k: 'script', id: sc.id, name: sc.name, on: sc.enabled, role: 'سكربت مربوط بالكائن'}); }
-  const g = globalRefs().get(o.id); if (g) for (const sc of g) if (!o.scripts.includes(sc.id)) L.push({k: 'script', id: sc.id, name: sc.name, on: true, role: 'ملف عام مفعّل بيذكر اسم الكائن'});
+  if (!o) return L;
+  if (o.type === 'sobj') {
+    const d = defOf(o.def);
+    if (d) L.push({ k: 'sobj', id: d.id, name: d.name, on: true, role: 'كائنات برمجية · كود الكائن' });
+  }
+  for (const id of (o.scripts || [])) {
+    const sc = S.scripts.find(x => x.id === id);
+    if (sc) L.push({ k: 'script', id: sc.id, name: sc.name, on: sc.enabled !== false, role: 'قسم البرمجة · مربوط بالكائن' });
+  }
+  const g = globalRefs().get(o.id);
+  if (g) for (const sc of g) {
+    if ((o.scripts || []).includes(sc.id)) continue;
+    L.push({ k: 'script', id: sc.id, name: sc.name, on: true, role: 'قسم البرمجة · ملف عام يذكر الاسم' });
+  }
+  // قسم حفظ التقدم: أي ملف مفعّل يذكر اسم الكائن
+  try {
+    const nm = String(o.name || '');
+    if (nm.length > 1) {
+      for (const ps of (S.progressScripts || [])) {
+        if (ps.enabled === false) continue;
+        const code = String(ps.code || '');
+        // يظهر التأثير لو الكود يذكر اسم الكائن (نص مباشر أو بين علامات اقتباس)
+        if (code.includes(nm) || code.includes("'" + nm + "'") || code.includes('"' + nm + '"') || code.includes('`' + nm + '`')) {
+          L.push({ k: 'progress', id: ps.id, name: ps.name, on: true, role: 'قسم حفظ التقدم · يذكر اسم الكائن' });
+        }
+      }
+    }
+  } catch (_) {}
   return L;
 }
-const isProg = o => o.type === 'sobj' || o.scripts.length > 0 || globalRefs().has(o.id);
+function affFilesSummary(o) {
+  const af = affFiles(o);
+  const nSobj = af.filter(x => x.k === 'sobj').length;
+  const nScript = af.filter(x => x.k === 'script').length;
+  const nProgress = af.filter(x => x.k === 'progress').length;
+  return { files: af, nSobj, nScript, nProgress, total: af.length };
+}
+const isProg = o => {
+  if (!o) return false;
+  if (o.type === 'sobj' || (o.scripts && o.scripts.length > 0) || globalRefs().has(o.id)) return true;
+  try {
+    const nm = String(o.name || '');
+    if (nm.length > 1) for (const ps of (S.progressScripts || [])) {
+      if (ps.enabled === false) continue;
+      const code = String(ps.code || '');
+      if (code.includes(nm) || code.includes("'" + nm + "'") || code.includes('"' + nm + '"')) return true;
+    }
+  } catch (_) {}
+  return false;
+};
 function pmLabel() {
   if (pmTex) return pmTex;
   const c = document.createElement('canvas'); c.width = 256; c.height = 64; const g = c.getContext('2d');
@@ -5530,12 +5762,24 @@ function inspect() {
   if (o && o.type === 'sobj') { const d = defOf(o.def); if (d && !isBig(d.code)) { const df = parseParams(d.code); for (const k in df) if (!(k in o.p)) o.p[k] = df[k]; } }
   if (!o) { el.innerHTML = '<div class="empty"><span>◈</span><p>لا يوجد تحديد</p></div>'; updVis(); return; }
   const big = o.type === 'sobj' && !!defOf(o.def) && isBig(defOf(o.def).code);
-  const v3 = (k, l, st) => `<div class="r"><b>${l}</b>` + [0, 1, 2].map(i => `<label>${'XYZ'[i]}<input type="number" step="${st}" data-k="${k}" data-i="${i}" value="${+o[k][i].toFixed(3)}"></label>`).join('') + '</div>';
+  const v3 = (k, l, st) => {
+    const axes = [0, 1, 2].map(i => {
+      const ax = 'XYZ'[i];
+      const val = +o[k][i];
+      const shown = Number.isFinite(val) ? (Math.abs(val) >= 1000 ? val.toFixed(1) : val.toFixed(3)) : '0';
+      return `<label class="tf-axis"><span class="tf-ax">${ax}</span><input type="number" step="${st}" data-k="${k}" data-i="${i}" value="${shown}"></label>`;
+    }).join('');
+    return `<div class="tf-row"><div class="tf-title">${l}</div><div class="tf-axes">${axes}</div></div>`;
+  };
   let h = `<div class="ih"><span>${DEF[o.type].i}</span><input data-k="name" value="${esc(o.name)}"></div>`;
   if (isProg(o)) {
-    const af = affFiles(o), op = S.ffOpen === o.id;
-    h += `<div class="prog-b"><span>⚙ كائن مبرمج</span><button data-ff="1">${op ? 'إخفاء' : 'عرض'} الملفات المتأثرة (${af.length})</button></div>`;
-    if (op) h += '<div class="ff-list">' + (af.map(f => `<div class="ff" data-fk="${f.k}" data-fid="${f.id}"><span>${f.k === 'sobj' ? '🎮' : f.on === false ? '🔴' : '🟢'} ${esc(f.name)}</span><em>${f.role}</em></div>`).join('') || '<p class="mut small">مفيش ملفات مرتبطة</p>') + '</div>';
+    const sm = affFilesSummary(o), op = S.ffOpen === o.id;
+    h += `<div class="prog-b"><span>⚙ كائن مبرمج</span><button data-ff="1">${op ? 'إخفاء' : 'عرض'} المصادر</button></div>`;
+    h += `<div class="ff-sum mut small" style="margin:4px 0 6px;line-height:1.5">🎮 كائنات برمجية: <b>${sm.nSobj}</b> · 📜 برمجة: <b>${sm.nScript}</b> · 💾 حفظ تقدم: <b>${sm.nProgress}</b></div>`;
+    if (op) {
+      const ico = f => f.k === 'sobj' ? '🎮' : f.k === 'progress' ? '💾' : (f.on === false ? '🔴' : '🟢');
+      h += '<div class="ff-list">' + (sm.files.map(f => `<div class="ff" data-fk="${f.k}" data-fid="${f.id}"><span>${ico(f)} ${esc(f.name)}</span><em>${f.role}</em></div>`).join('') || '<p class="mut small">مفيش ملفات مرتبطة</p>') + '</div>';
+    }
   }
   h += `<div class="cp"><h4>Transform</h4>${v3('pos', 'الموضع', .1)}${v3('rot', 'الدوران', 5)}${big ? '' : v3('scl', 'الحجم', .1)}</div>`;
   h += `<div class="cp"><h4>Renderer</h4><div class="r"><b>اللون</b><input type="color" data-k="color" value="${o.color}"></div></div>`;
@@ -5557,11 +5801,6 @@ function inspect() {
         + (o.type === 'sobj' ? `<div style="margin-top:8px"><button type="button" class="unit-viewer-btn" data-unit-view title="عارض الوحدة الافتراضية">عارض الوحده الافتراضيه</button></div>` : '')
         + '</div>';
     }
-  }
-  if (o.type !== 'respawn' && o.type !== 'light') {
-    const sc = o.scripts.map(id => { const s = S.scripts.find(x => x.id === id); return s ? `<div class="sr"><span>${s.enabled ? '🟢' : '🔴'} ${esc(s.name)}</span><button data-rm="${id}">✕</button></div>` : ''; }).join('');
-    const op = S.scripts.filter(s => !o.scripts.includes(s.id)).map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('');
-    h += `<div class="cp"><h4>السكربتات المرتبطة</h4>${sc}<select id="addsc" style="width:100%"><option value="">＋ ربط سكربت...</option>${op}</select></div>`;
   }
   h += `<div class="acts"><button data-a="up">${ic('up')}<i>طلوع</i></button><button data-a="down">${ic('down')}<i>نزول</i></button>`
     + `<button data-a="vis">${ic(o.hidden ? 'eyeoff' : 'eye')}<i>${o.hidden ? 'إظهار' : 'إخفاء'}</i></button><button data-a="dup">${ic('copy')}<i>نسخ</i></button><button data-a="del" class="red">${ic('trash')}<i>حذف</i></button></div>`;
@@ -5596,7 +5835,7 @@ $('#ins').addEventListener('change', e => {
   if (t.id === 'addsc' && t.value) { o.scripts.push(+t.value); inspect(); chg(); }
 });
 $('#ins').addEventListener('click', e => {
-  const ff = e.target.closest('.ff'); if (ff) { openEd(+ff.dataset.fid, ff.dataset.fk === 'sobj' ? 'sobj' : 'script'); return; }
+  const ff = e.target.closest('.ff'); if (ff) { const k = ff.dataset.fk === 'sobj' ? 'sobj' : (ff.dataset.fk === 'progress' ? 'progress' : 'script'); openEd(+ff.dataset.fid, k); return; }
   const o = OBJ.get(S.sel), b = e.target.closest('button'); if (!o || !b) return;
   if (b.dataset.ff) { S.ffOpen = S.ffOpen === o.id ? null : o.id; inspect(); return; }
   if (b.dataset.pFromFiles || b.getAttribute('data-p-from-files')) {
@@ -6544,6 +6783,8 @@ function prList() {
   if (!html) html = '<p class="mut small" style="grid-column:1/-1">— مفيش ملفات بعد</p>';
   el.innerHTML = html;
   progressBindDragDrop(el);
+  try { hier(); } catch (_) {}
+  try { if (S.sel != null) inspect(); } catch (_) {}
   el.onclick = async e => {
     const btn = e.target.closest('button');
     if (btn) {
@@ -6579,12 +6820,18 @@ function prList() {
 
 function openProgressParams(id) {
   const s = (S.progressScripts || []).find(x => +x.id === +id); if (!s) return;
-  const sch = schemaOf(s.code);
   if (!s.p) s.p = {};
+  // نفس مسار الكائنات البرمجية: expandSchema + parseParams عشان كل الأنواع تظهر
+  try { expandSchema(schemaOf(s.code), s); } catch (_) {}
+  const sch = schemaOf(s.code);
   for (const e of sch) if (s.p[e.key] === undefined) s.p[e.key] = e.value;
   try {
     const parsed = parseParams(s.code);
     for (const k of Object.keys(parsed)) if (s.p[k] === undefined) s.p[k] = parsed[k];
+  } catch (_) {}
+  try {
+    // املأ من fileDefaultParams لو فاضية
+    if (!Object.keys(s.p).length) Object.assign(s.p, fileDefaultParams(s.code, null));
   } catch (_) {}
   let m = document.getElementById('scrParamModal');
   if (!m) {
@@ -6651,7 +6898,7 @@ function openProgressParams(id) {
     const s = {
       id: (S.progressPid = (S.progressPid || 1) + 1),
       name: 'progress_' + S.progressPid + '.js',
-      code: 'Game.defineParams([\n  { key: "welcome", label: "رسالة العودة", type: "text", value: "اهلا وسهلا بعد عوده" },\n  { key: "firstHello", label: "رسالة أول مرة", type: "text", value: "مرحباً — بداية جديدة" }\n]);\n\nfunction scenario() {\n  return "يرجع اللاعب لآخر مكان محفوظ ويعرض رسالة ترحيب.";\n}\n\nfunction onStart(self, game) {\n  const P = Game.params || {};\n  const pos = Game.progress.get("pos", null);\n  if (pos && typeof pos.x === "number") {\n    try {\n      if (game.player && game.player.position) {\n        game.player.position.x = +pos.x;\n        game.player.position.y = +pos.y;\n        game.player.position.z = +pos.z;\n      }\n      if (game.player && game.player.velocity && game.player.velocity.set) game.player.velocity.set(0, 0, 0);\n    } catch (e) {}\n    const yaw = Game.progress.get("yaw", null);\n    if (yaw != null && game.player) try { game.player.yaw = +yaw; } catch (e) {}\n    const msg = P.welcome || "اهلا وسهلا بعد عوده";\n    if (Game.subtitle) Game.subtitle(msg, 4500);\n    else if (Game.say) Game.say(msg, 4500);\n  } else {\n    const msg = P.firstHello || "مرحباً — بداية جديدة";\n    if (Game.subtitle) Game.subtitle(msg, 3500);\n    else if (Game.say) Game.say(msg, 3500);\n  }\n}\n',
+      code: 'Game.defineParams([\n  { key: "welcome", label: "رسالة العودة", type: "text", value: "اهلا وسهلا بعد عوده" },\n  { key: "firstHello", label: "رسالة أول مرة", type: "text", value: "مرحباً — بداية جديدة" },\n  { key: "msgMs", label: "مدة الرسالة (مث)", type: "number", value: 4500, min: 500, max: 15000, step: 100 },\n  { key: "showBadge", label: "إظهار شارة", type: "boolean", value: false },\n  { key: "badgeImg", label: "صورة الشارة", type: "image", value: "" }\n]);\n\nfunction scenario() {\n  return "يرجع اللاعب لآخر مكان محفوظ ويعرض رسالة ترحيب.";\n}\n\nfunction onStart(self, game) {\n  const P = Game.params || {};\n  const pos = Game.progress.get("pos", null);\n  if (pos && typeof pos.x === "number") {\n    try {\n      if (game.player && game.player.position) {\n        game.player.position.x = +pos.x;\n        game.player.position.y = +pos.y;\n        game.player.position.z = +pos.z;\n      }\n      if (game.player && game.player.velocity && game.player.velocity.set) game.player.velocity.set(0, 0, 0);\n    } catch (e) {}\n    const yaw = Game.progress.get("yaw", null);\n    if (yaw != null && game.player) try { game.player.yaw = +yaw; } catch (e) {}\n    const msg = P.welcome || "اهلا وسهلا بعد عوده";\n    if (Game.subtitle) Game.subtitle(msg, 4500);\n    else if (Game.say) Game.say(msg, 4500);\n  } else {\n    const msg = P.firstHello || "مرحباً — بداية جديدة";\n    if (Game.subtitle) Game.subtitle(msg, 3500);\n    else if (Game.say) Game.say(msg, 3500);\n  }\n}\n',
       p: {},
       
       enabled: true,
@@ -6917,8 +7164,13 @@ function syncPlayProgressMenu() {
   const inPlay = S.mode === 'play';
   wrap.hidden = !inPlay;
   const progOn = !!S.progressEnabled;
-  if (dl) dl.hidden = !progOn;
-  if (up) up.hidden = !progOn;
+  // أونلاين أثناء اللعب: مفيش تحميل/رفع من أيقونة المحرك
+  let onlinePlay = false;
+  try {
+    onlinePlay = (S.playNet === 'online') || !!(window.HAWA_PLAY_ONLY && (S.playNet === 'online' || (typeof RT !== 'undefined' && RT && RT.net)));
+  } catch (_) {}
+  if (dl) dl.hidden = !(progOn && !onlinePlay);
+  if (up) up.hidden = !(progOn && !onlinePlay);
   if (fileRow) {
     const hasFile = !!(progOn && HawaProgress && HawaProgress._fileLoadedThisSession && HawaProgress._loadedFileName);
     fileRow.hidden = !hasFile;
@@ -6969,14 +7221,34 @@ function bindPlayProgressUI() {
       if (!menu) return;
       try { syncPlayProgressMenu(); } catch (_) {}
       menu.hidden = !menu.hidden;
+      if (!menu.hidden) {
+        try {
+          menu.style.position = 'fixed';
+          menu.style.inset = '0';
+          menu.style.left = '0';
+          menu.style.top = '0';
+          menu.style.right = '0';
+          menu.style.bottom = '0';
+          menu.style.zIndex = '10050';
+        } catch (_) {}
+      }
     };
     document.addEventListener('pointerdown', e => {
       if (!menu || menu.hidden) return;
+      // إغلاق عند الضغط على الخلفية فقط (مش على محتوى النافذة)
+      const box = menu.querySelector('.p-prog-modal') || menu;
+      if (box.contains(e.target) && e.target !== menu) return;
+      if (e.target === menu) { menu.hidden = true; return; }
       if (wrap.contains(e.target)) return;
-      menu.hidden = true;
+      if (!menu.contains(e.target)) menu.hidden = true;
     }, true);
   }
 
+  const closeBtn = document.getElementById('pProgressMenuClose');
+  if (closeBtn && !closeBtn._prBound) {
+    closeBtn._prBound = 1;
+    closeBtn.onclick = e => { e.stopPropagation(); if (menu) menu.hidden = true; };
+  }
   if (back && !back._prBound) {
     back._prBound = 1;
     back.onclick = e => {
@@ -9080,55 +9352,155 @@ function packProjectSnapshot(name) {
 }
 async function downloadProjectZip() {
   if (typeof JSZip === 'undefined') { await uiAlert('JSZip غير محمّل'); return; }
-  const name = await uiPrompt('اسم المشروع؟', 'مشروعي');
+  if (ConvUI.el) return;
+  const name = await uiPrompt('اسم المشروع؟', (S && S._projName) || 'مشروعي');
   if (!name || !name.trim()) return;
-  const data = packProjectSnapshot(name.trim());
-  const zip = new JSZip();
-  zip.file('project.json', JSON.stringify(data, null, 2));
-  zip.file('README.txt', 'Hawa Engine Project\n' + data.name + '\nارفع هذا الـ ZIP من زر «رفع المشروع» لمتابعة البناء.\n');
-  
-  const media = data.media || {};
-  for (const id of Object.keys(media)) {
-    const m = media[id];
-    if (!m || !m.data) continue;
-    try {
-      const dataUrl = String(m.data);
-      const comma = dataUrl.indexOf(',');
-      const b64 = comma > 0 ? dataUrl.slice(comma + 1) : dataUrl;
-      const bin = atob(b64);
-      const arr = new Uint8Array(bin.length);
-      for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-      const safe = String(m.name || id).replace(/[^\w\u0600-\u06FF.\-]+/g, '_');
-      zip.file('media/' + id + '_' + safe, arr);
-    } catch (_) {}
+  const ui = ConvUI.open('جاري تحميل مشروع «' + name.trim() + '»…');
+  const cvTick = () => new Promise(r => setTimeout(r, 16));
+  try {
+    ui.step('pack', 'تجميع بيانات المشروع', 'run'); ui.pct(8); await cvTick();
+    const data = packProjectSnapshot(name.trim());
+    ui.step('pack', 'تم التجميع — كائنات ' + (data.objs || []).length + ' · سكربتات ' + (data.scripts || []).length, 'ok');
+    ui.pct(22);
+
+    ui.step('json', 'كتابة project.json', 'run'); await cvTick();
+    const zip = new JSZip();
+    zip.file('project.json', JSON.stringify(data, null, 2));
+    zip.file('README.txt', 'Hawa Engine Project\n' + data.name + '\nارفع هذا الـ ZIP من زر «رفع المشروع» لمتابعة البناء.\n');
+    ui.step('json', 'تم كتابة project.json', 'ok');
+    ui.pct(35);
+
+    ui.step('media', 'إرفاق الوسائط', 'run'); await cvTick();
+    const media = data.media || {};
+    let nMed = 0;
+    for (const id of Object.keys(media)) {
+      const m = media[id];
+      if (!m || !m.data) continue;
+      try {
+        const dataUrl = String(m.data);
+        const comma = dataUrl.indexOf(',');
+        const b64 = comma > 0 ? dataUrl.slice(comma + 1) : dataUrl;
+        const bin = atob(b64);
+        const arr = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+        const safe = String(m.name || id).replace(/[^\w\u0600-\u06FF.\-]+/g, '_');
+        zip.file('media/' + id + '_' + safe, arr);
+        nMed++;
+      } catch (_) {}
+    }
+    ui.step('media', 'وسائط: ' + nMed + ' ملف', 'ok');
+    ui.pct(55);
+
+    ui.step('zip', 'ضغط الحزمة', 'run'); await cvTick();
+    const blob = await zip.generateAsync(
+      { type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } },
+      meta => { ui.pct(55 + 30 * (meta.percent || 0) / 100); ui.step('zip', 'ضغط — ' + Math.round(meta.percent || 0) + '%', 'run'); }
+    );
+    ui.step('zip', 'تم الضغط — ' + (blob.size / 1024 / 1024).toFixed(2) + ' MB', 'ok');
+    ui.pct(92);
+
+    ui.step('dl', 'التحميل', 'run'); await cvTick();
+    ui.fname = (name.trim().replace(/[^\w\u0600-\u06FF\-]+/g, '_') || 'hawa-project') + '.zip';
+    ui.url = URL.createObjectURL(blob);
+    const dl = () => {
+      const a = document.createElement('a');
+      a.href = ui.url; a.download = ui.fname;
+      document.body.appendChild(a); a.click(); a.remove();
+    };
+    dl();
+    ui.step('dl', 'اتحمّل: ' + ui.fname, 'ok');
+    ui.pct(100);
+    ui.report([
+      '«' + data.name + '» · ' + (blob.size / 1024 / 1024).toFixed(2) + ' MB',
+      'كائنات ' + (data.objs || []).length + ' · برمجة ' + (data.scripts || []).length + ' · كائنات برمجية ' + (data.sdefs || []).length,
+      'تقدم ' + ((data.progressScripts || []).length) + ' · وسائط ' + nMed
+    ], 'ok');
+    ui.finish('المشروع جاهز واتحمّل', true, [
+      { t: 'إغلاق', pri: true, fn: () => ui.close() }
+    ]);
+    tip('✔ تم تحميل المشروع: «' + data.name + '»');
+  } catch (e) {
+    console.error(e);
+    ui.report(['فشل التحميل: ' + (e && e.message || e)], 'err');
+    ui.finish('فشل تحميل المشروع', false, [{ t: 'إغلاق', pri: true, fn: () => ui.close() }]);
   }
-  const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = (name.trim().replace(/[^\w\u0600-\u06FF\-]+/g, '_') || 'hawa-project') + '.zip';
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-  try { tip('✔ تم تحميل المشروع'); } catch (_) {}
 }
+
+
+/** تمييز حزمة مشروع البناء عن حزمة اللعبة المصدّرة */
+async function classifyHawaZip(file) {
+  if (!file || typeof JSZip === 'undefined') return { kind: 'unknown', data: null, names: [] };
+  const zip = await JSZip.loadAsync(file);
+  const names = Object.keys(zip.files).filter(n => !zip.files[n].dir);
+  const has = (re) => names.some(n => re.test(n));
+  const base = (n) => (n.split('/').pop() || '').toLowerCase();
+  const hasProjectJson = names.some(n => base(n) === 'project.json' || base(n) === 'hawa-project.json');
+  const hasGameJson = names.some(n => base(n) === 'game.json');
+  const hasGameDataJs = names.some(n => /(^|\/)game-data\.js$/i.test(n));
+  const hasIndexPlay = names.some(n => /(^|\/)(play\.html|game\.html)$/i.test(n));
+  let sample = null;
+  const tryParse = async (path) => {
+    try {
+      const raw = await zip.file(path).async('string');
+      if (/\.js$/i.test(path)) {
+        const i = raw.indexOf('=');
+        return JSON.parse(raw.slice(i + 1).trim().replace(/;\s*$/, ''));
+      }
+      return JSON.parse(raw);
+    } catch (_) { return null; }
+  };
+  for (const n of names) {
+    const b = base(n);
+    if (b === 'project.json' || b === 'hawa-project.json' || b === 'game.json') {
+      sample = await tryParse(n);
+      if (sample) break;
+    }
+  }
+  if (!sample && hasGameDataJs) {
+    const gd = names.find(n => /(^|\/)game-data\.js$/i.test(n));
+    if (gd) sample = await tryParse(gd);
+  }
+  const fmt = sample && (sample.format || sample.kind || '');
+  const isProjectFmt = /hawa-project/i.test(String(fmt)) || hasProjectJson;
+  const isGameFmt = hasGameJson || hasGameDataJs || /hawa-game/i.test(String(fmt)) || !!(sample && sample.meta && sample.onlineSpawns);
+  // لعبة مصدّرة غالباً فيها game.json + play/game html، ومش project.json
+  if (hasGameJson && !hasProjectJson) return { kind: 'game', data: sample, names, zip };
+  if (hasProjectJson && !hasGameJson) return { kind: 'project', data: sample, names, zip };
+  if (isProjectFmt && !hasGameJson) return { kind: 'project', data: sample, names, zip };
+  if (hasGameDataJs && !hasProjectJson) return { kind: 'game', data: sample, names, zip };
+  if (sample && (sample.objs || sample.scripts || sample.sdefs)) {
+    // بيانات عامة: لو فيها objectCodes/globalScripts من التصدير اعتبرها لعبة
+    if (sample.objectCodes || sample.globalScripts || sample.programmedDefs) {
+      return { kind: hasProjectJson ? 'project' : 'game', data: sample, names, zip };
+    }
+    return { kind: hasProjectJson ? 'project' : (hasGameJson ? 'game' : 'project'), data: sample, names, zip };
+  }
+  return { kind: 'unknown', data: null, names, zip };
+}
+
 async function uploadProjectZip(file) {
   if (!file) return;
   if (typeof JSZip === 'undefined') { await uiAlert('JSZip غير محمّل'); return; }
   try {
-    const zip = await JSZip.loadAsync(file);
-    // ترتيب البحث: project.json (تصدير الموبايل/المشروع) ← game.json (حزمة اللعبة من الكمبيوتر)
-    // ← أي json فيه بيانات المشروع (objs/scripts/sdefs) — بنتجاهل ملفات الحزمة الجانبية زي manifest/player_config
+    const cls = await classifyHawaZip(file);
+    if (cls.kind === 'game') {
+      await uiAlert('فشل الرفع: الملف ده «لعبة» مش «مشروع».\n\nارفع ملف مشروع (من «تحميل المشروع») هنا في البناء.\nملف اللعبة المصدّر يُرفع من قائمة الألعاب / فتح اللعبة.');
+      return;
+    }
+    const zip = cls.zip || await JSZip.loadAsync(file);
     const jsonNames = Object.keys(zip.files).filter(n => /\.json$/i.test(n) && !zip.files[n].dir);
-    const rank = n => { const b = (n.split('/').pop() || '').toLowerCase(); return b === 'project.json' ? 0 : b === 'game.json' ? 1 : 2; };
+    const rank = n => { const b = (n.split('/').pop() || '').toLowerCase(); return b === 'project.json' || b === 'hawa-project.json' ? 0 : b === 'game.json' ? 1 : 2; };
     const skip = n => /(^|\/)(manifest|player_config|package)\.json$/i.test(n);
     const cands = jsonNames.filter(n => !skip(n)).sort((a, b) => rank(a) - rank(b));
-    let data = null;
-    for (const n of cands) {
-      try {
-        const d = JSON.parse(await zip.file(n).async('string'));
-        if (d && (d.objs || d.scripts || d.sdefs)) { data = d; break; }
-      } catch (_) {}
+    let data = cls.data || null;
+    if (!data) {
+      for (const n of cands) {
+        try {
+          const d = JSON.parse(await zip.file(n).async('string'));
+          if (d && (d.objs || d.scripts || d.sdefs)) { data = d; break; }
+        } catch (_) {}
+      }
     }
-    // حزمة اللعبة من الكمبيوتر ممكن يكون فيها game.json ناقص أو في game-data.js بس
     if (!data) {
       const gdName = Object.keys(zip.files).find(n => /(^|\/)game-data\.js$/i.test(n) && !zip.files[n].dir);
       if (gdName) {
@@ -9140,13 +9512,9 @@ async function uploadProjectZip(file) {
         } catch (_) {}
       }
     }
-    if (!data) {
-      const names = Object.keys(zip.files).filter(n => !zip.files[n].dir).slice(0, 12).join('، ');
-      await uiAlert('الملف ده مش فيه مشروع أو لعبة قابلة للقراءة.\nالملفات اللي جوه: ' + (names || 'مفيش') + '\n\nلو ده زيب تحويل لعبة من الكمبيوتر لازم يكون فيه game.json أو game-data.js.');
-      return;
-    }
     if (!data || (!data.objs && !data.scripts && !data.sdefs)) {
-      await uiAlert('ملف مشروع غير صالح');
+      const names = (cls.names || []).slice(0, 12).join('، ');
+      await uiAlert('فشل الرفع: الملف مش مشروع صالح.\nالملفات اللي جوه: ' + (names || 'مفيش') + '\n\nلازم يكون فيه project.json أو بيانات بناء (كائنات/برمجة).');
       return;
     }
     
@@ -9893,9 +10261,15 @@ game.key يقرأ الكيبورد الحقيقي. على الموبايل نف�
   }
   // ملاحظة قسم التقدم
   if (sec === 'progress') {
-    t += `\n=== PROGRESS_SECTION_FOCUS ===\n`;
-    t += `اكتب ملفات onStart/onUpdate لحفظ التقدم. الوسائط من بارامترات الملف (ملفاتي) بدون كتابة id يدوياً.\n`;
-    t += `Game.progress / Game.params / Game.media.get / Game.media.ref / Game.progress.setMedia\n`;
+    t += `\n=== PROGRESS_SECTION_FOCUS (رؤية كاملة للعالم + تحكم في البرمجة) ===\n`;
+    t += `PARAMS_FIRST: Game.defineParams أول الملف لكل قيمة قابلة للتعديل.\n`;
+    t += `الملف ده يشوف تحت: objs + scripts (كود كامل) + sdefs (كود كامل) + progressScripts + mediaCatalog.\n`;
+    t += `تقدر تتحكم في أي كائن بالاسم وفي ملفات البرمجة عبر الحالة المشتركة:\n`;
+    t += `- game.find("اسم الكائن") → { mesh, object, props, setColor, setScale, setPosition, setProp, getProp, hide, show, dist }\n`;
+    t += `- game.listAllObjects() · game.setShared(key,val) · game.getShared(key,default)\n`;
+    t += `مثال: حفظ شكل حيوان أليف ثم عند الرجوع تحويل كلب→قطة عبر setColor/setScale أو setShared تقرأه سكربت البرمجة في onUpdate.\n`;
+    t += `Game.progress.get/set/save · Game.params · Game.subtitle · game.player.position\n`;
+    t += `function scenario/onStart/onUpdate — الموضع pos/yaw يُحفظ تلقائياً كل ثانية.\n`;
   }
   return { sec, t: t + coordBlock() };
 }
@@ -15271,6 +15645,7 @@ async function playStart(opts) {
     forcePlayerInput(slot, inp) { applyInputMap(inp); },
     touch: TouchUI.api(),
     random: Math.random, find: n => rt.byName.get(n) || null,
+    listAllObjects: () => (rt.byName ? Array.from(rt.byName.values()) : []),
     
     get coords() { return { x: +rt.p.x.toFixed(3), y: +rt.p.y.toFixed(3), z: +rt.p.z.toFixed(3) }; },
     getCoord(axis) { const c = {x: rt.p.x, y: rt.p.y, z: rt.p.z}; return axis ? c[axis] : c; },
@@ -15507,8 +15882,60 @@ async function playStart(opts) {
   rt.game = game;
   for (const o of S.objs) {
     const m = MESH.get(o.id); if (o.type === 'respawn' || o.hidden) continue;
-    rt.byName.set(o.name, {name: o.name, props: resolvedParams(o.p), mesh: m, object: o, position: m.position, rotation: m.rotation, scale: m.scale,
-      hide() { m.visible = false; }, show() { m.visible = true; }, hideBody() { if (m.userData.body) m.userData.body.visible = false; }, dist() { return m.position.distanceTo(rt.p); }});
+    rt.byName.set(o.name, {
+      name: o.name,
+      type: o.type,
+      props: resolvedParams(o.p),
+      mesh: m,
+      object: o,
+      position: m && m.position,
+      rotation: m && m.rotation,
+      scale: m && m.scale,
+      hide() { if (m) m.visible = false; },
+      show() { if (m) m.visible = true; },
+      hideBody() { if (m && m.userData.body) m.userData.body.visible = false; },
+      dist() { return m ? m.position.distanceTo(rt.p) : 9999; },
+      // تحكم من قسم التقدم / البرمجة
+      setColor(hex) {
+        try {
+          if (hex != null) o.color = String(hex);
+          if (typeof recolor === 'function') recolor(o);
+          if (m) m.traverse(x => {
+            if (x.isMesh && x.material && x.material.color) {
+              try { x.material.color.set(hex); } catch (_) {}
+            }
+          });
+        } catch (_) {}
+      },
+      setScale(x, y, z) {
+        try {
+          if (y == null && z == null && typeof x === 'number') { y = z = x; }
+          o.scl = [+x || 1, +y || 1, +z || 1];
+          if (m && m.scale) m.scale.set(o.scl[0], o.scl[1], o.scl[2]);
+          if (typeof tf === 'function') tf(o);
+        } catch (_) {}
+      },
+      setPosition(x, y, z) {
+        try {
+          o.pos = [+x || 0, +y || 0, +z || 0];
+          if (m && m.position) m.position.set(o.pos[0], o.pos[1], o.pos[2]);
+          if (typeof tf === 'function') tf(o);
+        } catch (_) {}
+      },
+      setProp(k, v) {
+        try {
+          if (!o.p) o.p = {};
+          o.p[k] = v;
+          this.props = resolvedParams(o.p);
+        } catch (_) {}
+      },
+      getProp(k, d) {
+        try {
+          const p = this.props || o.p || {};
+          return p[k] !== undefined ? p[k] : d;
+        } catch (_) { return d; }
+      }
+    });
   }
   const comp = (s, self) => {
     try {
@@ -16936,16 +17363,13 @@ const MOB = {
             if (bt.moved < 12 && performance.now() - bt.t < 320) {
               const placing = !S.pick && (S.tool === 'place' || S.tool === 'respawn' || S.tool === 'online_spawn');
               if (placing) {
-                
-                const pt = { x: t.clientX, y: t.clientY }, a = S.tapArm, now = performance.now();
-                if (a && Math.hypot(a.x - pt.x, a.y - pt.y) < 40 && now - a.t < 9000) {
-                  S.tapArm = null; S.tr = pt;
-                  try { click({ clientX: t.clientX, clientY: t.clientY, button: 0 }); } catch (_) {}
-                  tipNow('');
-                } else {
-                  S.tapArm = { x: pt.x, y: pt.y, t: now }; S.tr = pt; S.dirty = 1;
-                  tipNow('', 1);
-                }
+                const pt = { x: t.clientX, y: t.clientY };
+                S.tr = pt; S.dirty = 1;
+                try {
+                  const fake = { clientX: t.clientX, clientY: t.clientY, button: 0 };
+                  // click → مسار الموبايل يعرض ✓ فوق الموضع
+                  click(fake);
+                } catch (_) {}
               } else {
                 try { click({ clientX: t.clientX, clientY: t.clientY, button: 0 }); } catch (_) {}
               }

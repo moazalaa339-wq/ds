@@ -1310,10 +1310,10 @@ body:not(.is-mobile) #bar .menu-pop{z-index:90;max-height:none}
 @keyframes popIn{from{opacity:0;transform:translateY(-6px) scale(.98)}to{opacity:1;transform:none}}
 
 #bTest{
-  height:52px;padding:0 26px;border-radius:var(--leaf);font-size:15px;font-weight:900;letter-spacing:.6px;color:#04221b;
-  background:linear-gradient(135deg,#5bf5da,#1fc9a5 55%,#12a389);border:1px solid #8bffe8;
-  box-shadow:0 10px 30px -6px rgba(45,226,196,.65),inset 0 1px 0 rgba(255,255,255,.5)}
-#bTest:hover{background:linear-gradient(135deg,#7bffe6,#2de2c4 55%,#16b79a);transform:translateY(-1px)}
+  height:52px;padding:0 26px;border-radius:var(--leaf);font-size:15px;font-weight:900;letter-spacing:.6px;color:#fff;
+  background:linear-gradient(180deg,#2fd27a,#0d9459) !important;border:1px solid #5ff0a4 !important;
+  box-shadow:0 8px 22px rgba(47,210,122,.35) !important}
+#bTest:hover{background:linear-gradient(180deg,#3ce48a,#0fa865) !important;transform:translateY(-1px)}
 #bTest svg{width:15px;height:15px;fill:currentColor}
 #bFullscreen{height:52px;min-width:52px;border-radius:var(--leaf);background:linear-gradient(180deg,#141019,#0b0910);border:1px solid var(--line)}
 
@@ -2772,7 +2772,16 @@ body:not(.is-mobile) #bar #bTest{
   height:36px;padding:0 14px;font-size:13px;
 }
 body:not(.is-mobile) #bar #bFullscreen{
-  width:36px;height:36px;padding:0;
+  width:auto !important;
+  min-width:56px !important;
+  height:36px !important;
+  padding:0 10px !important;
+  overflow:visible !important;
+}
+body:not(.is-mobile) #bar #bFullscreen i{
+  display:inline !important;
+  max-width:none !important;
+  font-size:12px !important;
 }
 body:not(.is-mobile) #bar .menu summary{
   height:36px;min-width:36px;padding:0 10px;
@@ -2880,7 +2889,7 @@ body.is-mobile.play-edit:not(.mob-live) #mAct {
   display: flex !important;
   visibility: visible !important;
   pointer-events: none !important;
-  flex-direction: column-reverse !important;
+  flex-direction: column !important; /* طلوع فوق نزول */
   gap: 10px !important;
   right: max(10px, env(safe-area-inset-right, 0px)) !important;
   bottom: calc(var(--m-rail, 68px) + var(--m-safe-b, 0px) + 12px) !important;
@@ -2979,7 +2988,7 @@ body.is-mobile:not(.play-on) #mAct {
   left: auto !important;
   bottom: calc(var(--m-rail, 68px) + var(--m-safe-b, 0px) + 14px) !important;
   top: auto !important;
-  flex-direction: column-reverse !important;
+  flex-direction: column !important; /* طلوع فوق نزول */
   gap: 10px !important;
   z-index: 55 !important;
 }
@@ -3645,7 +3654,7 @@ body.is-mobile:not(.play-on) #mAct {
   left: auto !important;
   bottom: calc(var(--m-rail, 52px) + var(--m-safe-b, 0px) + 14px) !important;
   top: auto !important;
-  flex-direction: column-reverse !important;
+  flex-direction: column !important; /* طلوع فوق نزول */
   gap: 10px !important;
   width: auto !important;
   height: auto !important;
@@ -4119,49 +4128,136 @@ body.is-mobile #rail button{padding:4px 6px;min-width:0}
 #rail #bProgressRail.on{color:#03211a}
 #rail #bProgressRail.on .bcap{color:#03211a}
 
-/* ——— شريط الأقسام فوق يتكيّف عند تفعيل التقدم ——— */
-body.progress-on #secs{
-  flex:0 1 auto;
-  min-width:0;
-  max-width:min(52vw, 420px);
-  overflow-x:auto;
-  overflow-y:hidden;
-  scrollbar-width:none;
-  gap:3px !important;
+/* ——— شريط الأقسام + ملء الشاشة + السكة: ظهور كامل ——— */
+body.progress-on #secs {
+  flex: 0 1 auto !important;
+  min-width: 0;
+  max-width: none !important;
+  overflow: visible !important;
+  gap: 3px !important;
+  flex-wrap: nowrap;
 }
-body.progress-on #secs::-webkit-scrollbar{display:none}
-body.progress-on #secs button{
-  padding:4px 7px !important;
-  font-size:11px !important;
-  flex:0 0 auto;
+body.progress-on #secs button {
+  padding: 5px 8px !important;
+  font-size: 11px !important;
+  flex: 0 0 auto !important;
+  white-space: nowrap !important;
+  overflow: visible !important;
+  max-width: none !important;
+  text-overflow: clip !important;
 }
-body.progress-on #secs button span[data-ic]{
-  margin-inline-end:3px;
+body.progress-on #secs [data-sec="progress"],
+#secs [data-sec="progress"] {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 4px;
+  max-width: none !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  white-space: nowrap !important;
+  font-size: 11px !important;
+  padding: 5px 9px !important;
+  letter-spacing: 0 !important;
 }
-/* نص أقصر لتبويب التقدم */
-/* progress tab: text visible via rules below */
-/* شاشات أضيق: أيقونات فقط في التبويبات */
-@media (max-width: 1180px){
-  body.progress-on:not(.is-mobile) #secs button{
-    padding:5px 6px !important;
-    font-size:0 !important;
-    line-height:0;
-  }
-  body.progress-on:not(.is-mobile) #secs button span[data-ic]{
-    font-size:14px !important;
-    line-height:1;
-    margin:0 !important;
-  }
-  body.progress-on:not(.is-mobile) #secs button span[data-ic]::before{
-    /* الأيقونة SVG جوّه */
-  }
+body.progress-on #secs [data-sec="progress"] span[data-ic] {
+  margin-inline-end: 3px !important;
+  flex: none;
 }
-body:not(.progress-on) #secs [data-sec="progress"]{display:none !important}
+body:not(.progress-on) #secs [data-sec="progress"] { display: none !important; }
 
-body.is-mobile #rail #bProgressRail{
-  display:flex !important;
+/* ملء الشاشة: دايماً ظاهر كامل في آخر الشريط */
+#bFullscreen {
+  flex: 0 0 auto !important;
+  min-width: 56px !important;
+  height: 48px !important;
+  padding: 0 10px !important;
+  border-radius: var(--leaf);
+  background: linear-gradient(180deg, #141019, #0b0910);
+  border: 1px solid var(--line);
+  overflow: visible !important;
+  white-space: nowrap !important;
+}
+#bFullscreen i {
+  display: inline !important;
+  max-width: none !important;
+  overflow: visible !important;
+  font-style: normal;
+  font-size: 12px;
+}
+#bFullscreen span { font-size: 16px; }
+body:not(.is-mobile) #bar {
+  overflow-x: auto !important;
+  overflow-y: visible !important;
+  scrollbar-width: thin;
+}
+body:not(.is-mobile) #bar > #bFullscreen,
+body:not(.is-mobile) #bar > #bTest {
+  position: sticky;
+  inset-inline-end: 0;
+  z-index: 5;
+  background: linear-gradient(180deg, #17121f, #0b0910);
 }
 
+/* الشريط الشمال: يسكرول لو الأزرار كتير — مفيش قص تحت الشاشة */
+body:not(.is-mobile) #rail {
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  max-height: 100%;
+  height: 100%;
+  min-height: 0;
+  padding: 8px 0 12px !important;
+  gap: 8px !important;
+  scrollbar-width: thin;
+  align-content: flex-start;
+}
+body:not(.is-mobile) #rail .rail-group {
+  flex: 0 0 auto !important;
+  gap: 4px !important;
+  padding: 0 !important;
+}
+body:not(.is-mobile) #rail .rail-group.bottom {
+  margin-top: auto;
+  position: sticky;
+  bottom: 4px;
+  background: var(--pan, #0e0b14);
+  padding-top: 6px !important;
+  z-index: 2;
+}
+body:not(.is-mobile) #rail button {
+  width: 44px !important;
+  height: 44px !important;
+  min-height: 44px !important;
+  flex: none !important;
+}
+#rail #bProgressRail {
+  flex: none !important;
+  width: 44px !important;
+  height: 44px !important;
+  min-height: 44px !important;
+  margin: 0 !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+@media (max-height: 720px) {
+  body:not(.is-mobile) #rail button {
+    width: 38px !important;
+    height: 38px !important;
+    min-height: 38px !important;
+  }
+  body:not(.is-mobile) #rail { gap: 4px !important; padding: 4px 0 8px !important; }
+  #rail #bProgressRail {
+    width: 38px !important;
+    height: 38px !important;
+    min-height: 38px !important;
+  }
+}
+body.is-mobile #rail #bProgressRail {
+  width: 46px !important;
+  height: 46px !important;
+  min-width: 46px !important;
+  min-height: 46px !important;
+  display: flex !important;
+}
 
 /* سيناريو ملف التقدم */
 .pr-scenario {
@@ -4192,41 +4288,511 @@ body.is-mobile #rail #bProgressRail{
 #prList .pcard.dragging { opacity: .55; }
 #prList .pcard.drag-over { outline: 2px solid var(--tq, #2de2c4); }
 
-/* تبويب حفظ التقدم — نص كامل واضح */
-body.progress-on #secs [data-sec="progress"] {
-  max-width: none !important;
-  padding: 4px 6px !important;
-  font-size: 10.5px !important;
-  letter-spacing: 0;
-  flex: 0 0 auto;
-}
-body.progress-on #secs [data-sec="progress"] span[data-ic] {
-  margin-inline-end: 2px !important;
-}
-
-/* زر تقدم الشريط — مش مضغوط تحت الشاشة */
-#rail #bProgressRail {
-  flex: none !important;
-  width: 50px !important;
-  height: 50px !important;
-  min-height: 50px !important;
-  margin: 0 !important;
-}
-body.is-mobile #rail #bProgressRail {
-  width: 46px !important;
-  height: 46px !important;
-  min-width: 46px !important;
-  min-height: 46px !important;
-}
-/* مجموعة السكة: لفّ لو ضاقت عشان الزر ميتشالّش تحت */
-body:not(.is-mobile) #rail .rail-group {
-  flex-wrap: nowrap;
-  max-height: none;
-}
 body.is-mobile #rail {
   overflow-x: auto;
   overflow-y: hidden;
 }
 body.is-mobile #rail .rail-group {
   flex-wrap: nowrap !important;
+}
+
+/* زر تأكيد الوضع على الموبايل فوق الكائن/الموضع */
+#mPlaceConfirm{
+  position:fixed;z-index:60;display:none;
+  width:40px;height:40px;border-radius:50%;
+  border:2px solid rgba(74,222,128,.85);
+  background:rgba(22,163,74,.88);
+  color:#fff;font-size:20px;font-weight:900;line-height:1;
+  box-shadow:0 6px 16px rgba(0,0,0,.4);
+  align-items:center;justify-content:center;
+  pointer-events:auto;touch-action:manipulation;
+  transform:translate(-50%,-120%);
+}
+#mPlaceConfirm.show{display:flex !important;}
+#mPlaceConfirm:active{transform:translate(-50%,-120%) scale(.92);}
+
+
+/* موبايل: أقسام الشريط العلوي فقط — إخفاء تكرار الأقسام جوه اللوحة */
+body.is-mobile #dock .m-secs,
+body.is-mobile #mSecs {
+  display: none !important;
+}
+
+/* تبويب حفظ التقدم — النص كامل */
+#secs [data-sec="progress"],
+body.progress-on #secs [data-sec="progress"] {
+  max-width: none !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  font-size: 11px !important;
+  padding: 4px 8px !important;
+  white-space: nowrap;
+}
+
+/* تحديد متعدد في القائمة: الكل أحمر */
+#hier div.on.multi {
+  background: rgba(255, 31, 31, .16) !important;
+  outline: 2px solid #ff1f1f !important;
+  color: #fff;
+}
+#hier div.on:not(.multi) {
+  /* كائن واحد أخضر */
+}
+
+
+/* ===== موبايل: توزيع شريط فوق / تحت بدون تكرار ===== */
+body.is-mobile #mBar {
+  display: flex !important;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 4px;
+  overflow-x: auto;
+}
+/* فوق: أقسام + مشهد + المزيد + اختبار — بدون ترجيع/إلغاء (موجودين تحت) */
+body.is-mobile #mBar #mBarHist,
+body.is-mobile #mBar #mUndo,
+body.is-mobile #mBar #mRedo,
+body.is-mobile #mBar #mDeselect {
+  display: none !important;
+}
+/* تحت: أدوات + نقاط + دراع + تقدم + ترجيع/تقديم */
+body.is-mobile #rail {
+  display: flex !important;
+}
+body.is-mobile #rail #railHist {
+  display: flex !important;
+}
+body.is-mobile #rail #bDeselect {
+  display: flex !important;
+}
+/* لوحة الأقسام: مفيش تكرار لأزرار الأقسام (موجودة فوق في mBar) */
+body.is-mobile #dock .m-secs,
+body.is-mobile #mSecs {
+  display: none !important;
+}
+
+
+/* === v2.82 layout hard fix === */
+body:not(.is-mobile) #bar #bFullscreen,
+#bFullscreen {
+  width: auto !important;
+  min-width: 58px !important;
+  max-width: none !important;
+  padding: 0 12px !important;
+  overflow: visible !important;
+  flex: 0 0 auto !important;
+}
+body:not(.is-mobile) #bar #bFullscreen i,
+#bFullscreen i {
+  display: inline !important;
+  visibility: visible !important;
+  max-width: none !important;
+  opacity: 1 !important;
+  font-size: 12px !important;
+}
+#secs [data-sec="progress"] {
+  max-width: none !important;
+  overflow: visible !important;
+  white-space: nowrap !important;
+  text-overflow: clip !important;
+}
+body:not(.is-mobile) #rail {
+  overflow-y: auto !important;
+  min-height: 0 !important;
+  max-height: 100% !important;
+}
+#rail #bProgressRail,
+#rail #bPadRail,
+#rail #bSpawns {
+  flex: none !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+
+/* === أيقونة المحرك فوق شمال في الاختبار (بدل ☰) === */
+#play #pTop {
+  position: absolute !important;
+  top: 10px !important;
+  inset-inline-start: 10px !important;
+  inset-inline-end: auto !important;
+  left: 10px !important;
+  right: auto !important;
+  display: flex !important;
+  gap: 0 !important;
+  z-index: 40 !important;
+  pointer-events: none;
+}
+#play #pProgressWrap {
+  position: relative !important;
+  display: inline-flex !important;
+  margin: 0 !important;
+  pointer-events: auto !important;
+  z-index: 41 !important;
+}
+#play #pProgressIcon.p-progress-icon {
+  width: 44px !important;
+  height: 44px !important;
+  min-width: 44px !important;
+  min-height: 44px !important;
+  padding: 0 !important;
+  border-radius: 50% !important;
+  border: 2px solid rgba(255, 190, 61, .55) !important;
+  background: radial-gradient(circle at 35% 30%, #2a2038, #0c0a12) !important;
+  box-shadow: 0 0 18px rgba(255, 190, 61, .35), 0 6px 16px rgba(0,0,0,.45) !important;
+  overflow: hidden !important;
+  font-size: 0 !important;
+  color: transparent !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer !important;
+}
+#play #pProgressIcon .p-progress-logo {
+  width: 78% !important;
+  height: 78% !important;
+  object-fit: contain !important;
+  border-radius: 50% !important;
+  pointer-events: none !important;
+  filter: drop-shadow(0 0 6px rgba(255,190,61,.4));
+}
+#play #pProgressMenu.p-progress-menu {
+  position: absolute !important;
+  top: calc(100% + 8px) !important;
+  inset-inline-start: 0 !important;
+  left: 0 !important;
+  min-width: 220px !important;
+  max-width: min(280px, 86vw) !important;
+  padding: 10px !important;
+  border-radius: 14px !important;
+  background: rgba(10, 8, 18, .97) !important;
+  border: 1px solid rgba(255, 190, 61, .35) !important;
+  box-shadow: 0 16px 36px rgba(0,0,0,.55) !important;
+  z-index: 50 !important;
+  pointer-events: auto !important;
+}
+#play #pProgressMenu .p-prog-menu-hd {
+  font: 800 12px/1.3 Cairo, Tahoma, sans-serif;
+  color: #fbbf24;
+  margin-bottom: 6px;
+  padding: 2px 4px 8px;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+}
+body.is-mobile #play #pProgressIcon.p-progress-icon {
+  width: 40px !important;
+  height: 40px !important;
+}
+body.play-edit #play #pProgressWrap {
+  pointer-events: auto !important;
+}
+/* أخفِ زر الخروج النصي القديم في الاختبار — الرجوع من قائمة الأيقونة */
+#play #pExit {
+  display: none !important;
+}
+
+
+/* === اختبار أخضر + قائمة الأيقونة ظاهرة === */
+body:not(.play-on):not(.in-test) #bTest,
+#bTest:not(.in-test) {
+  background: linear-gradient(180deg, #2fd27a, #0d9459) !important;
+  border-color: #5ff0a4 !important;
+  color: #fff !important;
+  box-shadow: 0 8px 22px rgba(47, 210, 122, .35) !important;
+}
+body:not(.play-on):not(.in-test) #bTest:hover,
+#bTest:not(.in-test):hover {
+  background: linear-gradient(180deg, #3ce48a, #0fa865) !important;
+}
+body.is-mobile #mTestBtn.go:not(.in-test) {
+  background: linear-gradient(180deg, #16a34a, #15803d) !important;
+  border-color: #22c55e !important;
+  color: #eafff0 !important;
+}
+
+/* قائمة الاختبار: ثابتة تحت الأيقونة ومش متقصوصة */
+#play {
+  overflow: visible !important;
+}
+#play #pvp {
+  overflow: hidden;
+  border-radius: inherit;
+}
+#play #pProgressMenu.p-progress-menu {
+  position: fixed !important;
+  z-index: 10050 !important;
+  min-width: 230px !important;
+  max-width: min(300px, 92vw) !important;
+  max-height: min(70vh, 420px) !important;
+  overflow-y: auto !important;
+  direction: rtl !important;
+  text-align: right !important;
+  background: rgba(10, 8, 18, .98) !important;
+  border: 1px solid rgba(255, 190, 61, .45) !important;
+  box-shadow: 0 18px 40px rgba(0,0,0,.6) !important;
+}
+#play #pProgressMenu.p-progress-menu button {
+  width: 100%;
+  text-align: right !important;
+  color: #e8eefc !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+#secs [data-sec="progress"] {
+  font-size: 11px !important;
+  padding: 5px 8px !important;
+  max-width: none !important;
+  overflow: visible !important;
+  white-space: nowrap !important;
+}
+
+
+/* شريط شمال: ممنوع سكرول أفقي */
+body:not(.is-mobile) #rail,
+#rail {
+  overflow-x: hidden !important;
+  max-width: 100%;
+}
+body:not(.is-mobile) #rail .rail-group {
+  max-width: 100%;
+  overflow-x: hidden !important;
+  flex-wrap: nowrap;
+}
+body:not(.is-mobile) #rail button {
+  max-width: 100%;
+}
+/* كومبيوتر: شيل ترجيع/تقديم من الشريط الشمال (موجودين فوق) */
+body:not(.is-mobile) #rail #railHist {
+  display: none !important;
+}
+/* تشيك بوينت: نص أضيق */
+#rail #bSpawns .bcap {
+  font-size: 7.5px !important;
+  max-width: 3.6em;
+  line-height: 1.05;
+  white-space: normal;
+  text-align: center;
+}
+
+/* زر إغلاق التحويل/تحميل المشروع — أخضر فاتح واضح */
+#convOv .cv-btns button.pri {
+  background: linear-gradient(180deg, #86efac, #22c55e) !important;
+  border: 1px solid #bbf7d0 !important;
+  color: #052e16 !important;
+  font-weight: 900 !important;
+  font-size: 15px !important;
+  padding: 11px 28px !important;
+  box-shadow: 0 8px 22px rgba(34, 197, 94, .35) !important;
+}
+#convOv .cv-btns button.pri:hover {
+  filter: brightness(1.06);
+  background: linear-gradient(180deg, #a7f3d0, #4ade80) !important;
+}
+
+
+/* === شريط شمال: سكرول رأسي واحد فقط === */
+body:not(.is-mobile) #rail {
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+body:not(.is-mobile) #rail .rail-group,
+body:not(.is-mobile) #rail .rail-hist,
+body:not(.is-mobile) #rail button {
+  overflow: visible !important;
+  max-width: 100% !important;
+}
+body:not(.is-mobile) #rail::-webkit-scrollbar { width: 6px; }
+body:not(.is-mobile) #rail::-webkit-scrollbar-thumb { background: #3d3454; border-radius: 6px; }
+/* منع أي سكرول أفقي جوّه السكة */
+body:not(.is-mobile) #rail * {
+  max-width: 100%;
+}
+
+/* === قائمة الاختبار: نافذة في النص بظل === */
+#play #pProgressMenu.p-progress-menu {
+  position: fixed !important;
+  inset: 0 !important;
+  left: 0 !important;
+  top: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: auto !important;
+  height: auto !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  max-height: none !important;
+  margin: 0 !important;
+  padding: 16px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: rgba(4, 6, 14, .62) !important;
+  backdrop-filter: blur(5px) !important;
+  -webkit-backdrop-filter: blur(5px) !important;
+  z-index: 10050 !important;
+  border: none !important;
+  box-shadow: none !important;
+  direction: rtl !important;
+  pointer-events: auto !important;
+}
+#play #pProgressMenu.p-progress-menu[hidden] {
+  display: none !important;
+}
+#play #pProgressMenu .p-prog-modal {
+  width: min(360px, 92vw);
+  max-height: min(80vh, 520px);
+  overflow: auto;
+  padding: 18px 18px 14px;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #1a1526, #0e0b14);
+  border: 1px solid rgba(255, 190, 61, .4);
+  box-shadow:
+    0 0 0 1px rgba(255, 190, 61, .12),
+    0 24px 60px rgba(0, 0, 0, .65),
+    0 0 40px rgba(255, 190, 61, .12);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: auto;
+}
+#play #pProgressMenu .p-prog-menu-hd {
+  font: 900 15px/1.3 Cairo, Tahoma, sans-serif;
+  color: #fbbf24;
+  text-align: center;
+  margin: 0 0 6px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255,255,255,.1);
+}
+#play #pProgressMenu .p-prog-modal > button {
+  width: 100%;
+  text-align: center !important;
+  padding: 12px 14px !important;
+  border-radius: 12px !important;
+  font: 800 13px/1.2 Cairo, Tahoma, sans-serif !important;
+  cursor: pointer;
+  border: 1px solid rgba(255,255,255,.14) !important;
+  background: rgba(37, 99, 235, .28) !important;
+  color: #e8eefc !important;
+}
+#play #pProgressMenu .p-prog-back {
+  background: linear-gradient(180deg, #2563eb, #1e40af) !important;
+  border-color: #60a5fa !important;
+}
+#play #pProgressMenu .p-prog-close {
+  margin-top: 4px;
+  background: rgba(255,255,255,.06) !important;
+  border-color: rgba(255,255,255,.15) !important;
+  color: #c4b5d4 !important;
+}
+#play #pProgressMenu .p-prog-file {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 12px;
+  background: rgba(0,0,0,.25);
+  border: 1px solid rgba(255,255,255,.08);
+}
+#play #pProgressMenu .p-prog-file-acts {
+  display: flex;
+  gap: 8px;
+}
+#play #pProgressMenu .p-prog-file-acts button {
+  flex: 1;
+  padding: 8px;
+  border-radius: 9px;
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.06);
+  color: #eee;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+
+/* زر القسم المتحدد: خلفية مخضّرة واضحة */
+#secs.tabs button.on,
+.tabs button.on[data-sec] {
+  color: #ecfdf5 !important;
+  background: linear-gradient(180deg, rgba(34, 197, 94, .28), rgba(22, 163, 74, .12)) !important;
+  border-color: rgba(74, 222, 128, .55) !important;
+  box-shadow: inset 0 -2px 0 #22c55e, 0 8px 20px -8px rgba(34, 197, 94, .45) !important;
+}
+#secs.tabs button.on span[data-ic],
+.tabs button.on[data-sec] span {
+  filter: none !important;
+  color: #86efac !important;
+}
+#secs.tabs button:not(.on),
+.tabs button[data-sec]:not(.on) {
+  /* حالة عادية */
+}
+body.is-mobile #mBarSecs button.on,
+body.is-mobile .m-secs button.on {
+  color: #ecfdf5 !important;
+  background: rgba(34, 197, 94, .22) !important;
+  border-color: rgba(74, 222, 128, .5) !important;
+}
+
+
+/* Transform في الخصائص: 3 صفوف واضحة + أرقام مش متقطعة */
+#ins .cp .tf-row {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 8px 0;
+  padding: 8px 8px 9px;
+  border-radius: 10px;
+  background: rgba(0,0,0,.22);
+  border: 1px solid rgba(255,255,255,.06);
+}
+#ins .cp .tf-title {
+  font-weight: 800;
+  font-size: 12px;
+  color: #a7f3d0;
+  letter-spacing: .2px;
+}
+#ins .cp .tf-axes {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  direction: ltr;
+}
+#ins .cp .tf-axis {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  margin: 0;
+}
+#ins .cp .tf-ax {
+  font: 800 10px/1 Consolas, monospace;
+  color: #94a3b8;
+  text-align: center;
+}
+#ins .cp .tf-axis input[type=number] {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 7px 4px !important;
+  font: 700 13px/1.2 Consolas, "Segoe UI", monospace !important;
+  color: #f8fafc !important;
+  background: #0a0810 !important;
+  border: 1px solid #3d3454 !important;
+  border-radius: 8px !important;
+  text-align: center !important;
+  direction: ltr !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  -moz-appearance: textfield;
+}
+#ins .cp .tf-axis input[type=number]::-webkit-outer-spin-button,
+#ins .cp .tf-axis input[type=number]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+#ins .cp .tf-axis input[type=number]:focus {
+  border-color: #2de2c4 !important;
+  outline: none;
+  box-shadow: 0 0 0 1px rgba(45,226,196,.35);
 }

@@ -46,7 +46,7 @@
       <button data-sec="objects" class="on"><span data-ic="objects"></span>الكائنات</button>
       <button data-sec="prog"><span data-ic="prog"></span>البرمجة</button>
       <button data-sec="sobj"><span data-ic="sobj"></span>الكائنات البرمجية</button>
-      <button data-sec="progress" id="secProgress" hidden><span data-ic="save"></span>حفظ التقدم</button>
+      <button data-sec="progress" id="secProgress" hidden><span data-ic="save"></span>تقدم</button>
     </nav>
 
     <div class="grow"></div>
@@ -87,7 +87,7 @@
       <button type="button" id="bDeselect" title="إلغاء التحديد" aria-label="إلغاء التحديد"><span data-ic="reset"></span><i class="bcap">إلغاء</i></button>
     </div>
     <div class="rail-group">
-      <button id="bSpawns" title="نقط البداية"><span data-ic="flag"></span><span class="snap-l" id="spawnN">0</span><i class="bcap">نقاط</i></button>
+      <button id="bSpawns" title="تشيك بوينت"><span data-ic="flag"></span><span class="snap-l" id="spawnN">0</span><i class="bcap">تشيك بوينت</i></button>
       <button id="bCoordRail" title="الإحداثيات"><span data-ic="grid"></span><i class="bcap">إحداثيات</i></button>
       <button id="bPadRail" type="button" class="pad-rail-btn" title="تفعيل الدراع (كونترولر بلايستيشن)"><span class="pad-ico"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 6h10a4 4 0 0 1 3.9 4.9l-1 4.2A2.5 2.5 0 0 1 17.5 17.5l-1.4-1.6H7.9l-1.4 1.6A2.5 2.5 0 0 1 2.1 15.1l-1-4.2A4 4 0 0 1 7 6z"/><path d="M6.5 9.5v3M5 11h3"/><circle cx="15.5" cy="10" r=".7" fill="currentColor"/><circle cx="17.7" cy="12.2" r=".7" fill="currentColor"/></svg></span><i class="bcap">دراع</i></button>
       <button id="bProgressRail" type="button" class="progress-rail-btn" title="تفعيل قسم حفظ التقدم" aria-pressed="false"><span data-ic="save"></span><i class="bcap">تقدم</i></button>
@@ -109,7 +109,7 @@
       <button type="button" data-sec="objects" class="on"><span data-ic="objects"></span>الكائنات</button>
       <button type="button" data-sec="prog"><span data-ic="prog"></span>البرمجة</button>
       <button type="button" data-sec="sobj"><span data-ic="sobj"></span>الكائنات البرمجية</button>
-      <button type="button" data-sec="progress" id="mSecProgress" hidden><span data-ic="save"></span>حفظ التقدم</button>
+      <button type="button" data-sec="progress" id="dockSecProgress" hidden><span data-ic="save"></span>تقدم</button>
     </div>
 
     <div id="catP">
@@ -253,19 +253,26 @@
 <div id="play" hidden>
   <div id="pvp"></div>
   <div id="pTop">
-    <button id="pExit" class="stop"><span data-ic="stop"></span>خروج للبناء<kbd>P</kbd></button>
+    <!-- زر خروج نصي مخفي — الرجوع من قائمة أيقونة المحرك -->
+    <button id="pExit" class="stop" hidden aria-hidden="true"><span data-ic="stop"></span>خروج للبناء<kbd>P</kbd></button>
     <div id="pProgressWrap" class="p-progress-wrap" hidden>
-      <button type="button" id="pProgressIcon" class="p-progress-icon" title="قائمة اللعب" aria-label="قائمة اللعب">☰</button>
+      <button type="button" id="pProgressIcon" class="p-progress-icon" title="قائمة اللعب" aria-label="قائمة اللعب">
+        <img src="logo.png" alt="Hawa" class="p-progress-logo" draggable="false">
+      </button>
       <div id="pProgressMenu" class="p-progress-menu" hidden>
-        <button type="button" id="pProgressBack" class="p-prog-back">↩ رجوع لوضع البناء</button>
-        <button type="button" id="pProgressDl" class="p-prog-dl" hidden>⬇ تحميل حفظ التقدم</button>
-        <button type="button" id="pProgressUp" class="p-prog-up" hidden>⬆ رفع حفظ التقدم</button>
-        <div id="pProgressFileRow" class="p-prog-file" hidden>
-          <span class="p-prog-fname" id="pProgressFileName">—</span>
-          <div class="p-prog-file-acts">
-            <button type="button" id="pProgressReplace" title="استبدال الملف">استبدال</button>
-            <button type="button" id="pProgressClear" class="p-prog-danger" title="حذف والرجوع للصفر">حذف</button>
+        <div class="p-prog-modal" role="dialog" aria-modal="true">
+          <div class="p-prog-menu-hd">قائمة اللعب</div>
+          <button type="button" id="pProgressBack" class="p-prog-back">↩ رجوع لوضع البناء</button>
+          <button type="button" id="pProgressDl" class="p-prog-dl" hidden>⬇ تحميل حفظ التقدم</button>
+          <button type="button" id="pProgressUp" class="p-prog-up" hidden>⬆ رفع حفظ التقدم</button>
+          <div id="pProgressFileRow" class="p-prog-file" hidden>
+            <span class="p-prog-fname" id="pProgressFileName">—</span>
+            <div class="p-prog-file-acts">
+              <button type="button" id="pProgressReplace" title="استبدال الملف">استبدال</button>
+              <button type="button" id="pProgressClear" class="p-prog-danger" title="حذف والرجوع للصفر">حذف</button>
+            </div>
           </div>
+          <button type="button" id="pProgressMenuClose" class="p-prog-close">إغلاق</button>
         </div>
       </div>
     </div>
@@ -353,6 +360,7 @@
     <button type="button" data-proxy="bWipe" class="mm-danger"><span>🗑</span>حذف المشروع والبدا من جديد</button>
   </div>
 </div>
+<button type="button" id="mPlaceConfirm" title="تأكيد الوضع" aria-label="تأكيد">✓</button>
 <div id="mTouch" hidden>
   <div id="mJoy"><i id="mJoyKnob"></i></div>
   <div id="mAct">

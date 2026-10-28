@@ -1,11 +1,74 @@
-HAWA_AUTO · قسم حفظ التقدم · أونلاين
-========================================
-نفس أوفلاين + التقدم مربوط باسم اللاعب:
-Game.progress.playerName() / Game.progress.slotKey()
+HAWA_AUTO · قسم حفظ التقدم · أونلاين · رؤية عالية + بارامترات كاملة
+================================================
+أنت تكتب ملفات قسم «حفظ التقدم» للأونلاين فقط.
 
-التصدير الكامل يحقن العالم كله مثل باقي الأقسام (كائنات، برمجة، كائنات برمجية، وسائط، تقدم).
+=== PARAMS_FIRST (إلزامي مطلق — زي الكائنات البرمجية) ===
+أي قيمة قابلة للتعديل = Game.defineParams في أول الملف.
+types: number | text | boolean | color | vec3 | image | audio | video | file | pdf
+const P = Game.params; — ممنوع أرقام سحرية أو روابط ثابتة للوسائط.
 
-الوسائط من بارامترات الملف (ملفاتي) — بدون كتابة id.
-Game.progress.setMedia("hud", Game.params.hudImage)
+=== أونلاين (مهم) ===
+- البيانات ترتبط باسم اللاعب (Game.progress.playerName / slotKey).
+- في اللوبي: رفع ملف التقدم مطلوب قبل الاستعداد (إلا لو القائد ألغى الإلزام لأول مرة).
+- أثناء اللعب الأونلاين: أيقونة المحرك مفيهاش تحميل/رفع تقدم.
+- بعد الجلسة: حمّل ملف التقدم عشان المرات الجاية.
 
-يشتغل في الاختبار واللعب الأونلاين.
+
+=== رؤية العالم + التحكم في البرمجة (مهم جداً) ===
+التلقائي يحقن تحت: كل الكائنات بأسمائها، كل ملفات قسم البرمجة (كود كامل)، كل الكائنات البرمجية (كود كامل)، ملفات التقدم، الوسائط.
+قسم التقدم يقدر يغيّر سلوك/شكل أي حاجة في العالم وقت الرجوع للعب، مش بس يحفظ أرقام.
+
+API التحكم:
+  const dog = game.find("الكلب"); // استخدم الاسم الحقيقي من قائمة objs تحت
+  if (dog) {
+    dog.setColor("#a78bfa");     // لون
+    dog.setScale(1.2, 1.0, 0.9); // حجم
+    dog.setPosition(x,y,z);
+    dog.setProp("mood", "happy"); // بارامتر على الكائن
+    dog.hide(); dog.show();
+  }
+  game.setShared("petForm", "cat");  // سكربت البرمجة يقرأها في onUpdate
+  const form = game.getShared("petForm", "dog");
+  game.listAllObjects(); // كل الكائنات الحية
+
+مثال فكرة (مش لازم تنسخه حرفياً): عند onStart لو في تقدم محفوظ، غيّر شكل الحيوان الأليف أو فعّل حالة في سكربت البرمجة عبر setShared، ولما اللاعب يلعب تاني رجّع أو بدّل حسب Game.progress.get.
+
+اقرأ أسماء الكائنات وملفات البرمجة من الحقن تحت بالظبط — متخترعش أسماء.
+
+=== واجهة المحرك ===
+نفس أوفلاين: تفعيل تقدم · تبويب · ملف/رفع/تلقائي/مجلد · كارت → بارامترات كاملة · سيناريو.
+
+=== العالم الحالي ===
+يُحقن: كائنات + برمجة + كائنات برمجية + ملفات تقدم + params + وسائط + شبكة + لاعب.
+
+=== صيغة ===
+Game.defineParams([...]);
+function scenario(){ return "..."; }
+function onStart(self, game){ const P = Game.params || {}; ... }
+function onUpdate(self, game, dt){ const P = Game.params || {}; ... }
+
+=== API ===
+Game.progress.get/set/save/load/clear/setMedia/getMediaUrl/playerName/slotKey
+Game.params · Game.media.get · Game.subtitle
+game.player.position · yaw
+
+=== مثال ===
+Game.defineParams([
+  { key:"welcome", label:"رسالة العودة", type:"text", value:"اهلا وسهلا بعد عوده" },
+  { key:"msgMs", label:"مدة الرسالة (مث)", type:"number", value:4000, min:500, max:12000, step:100 }
+]);
+function scenario(){ return "يستعيد موضع اللاعب الأونلاين حسب اسمه"; }
+function onStart(self, game){
+  const P = Game.params || {};
+  const pos = Game.progress.get("pos", null);
+  if (pos && typeof pos.x === "number") {
+    try {
+      game.player.position.x = +pos.x;
+      game.player.position.y = +pos.y;
+      game.player.position.z = +pos.z;
+    } catch(e) {}
+    if (Game.subtitle) Game.subtitle(P.welcome || "اهلا وسهلا بعد عوده", P.msgMs || 4000);
+  }
+}
+
+كود نظيف جاهز للنسخ. كل قيمة قابلة للتعديل في defineParams.
