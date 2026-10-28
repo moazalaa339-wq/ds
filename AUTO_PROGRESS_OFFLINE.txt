@@ -1,0 +1,40 @@
+HAWA_AUTO · قسم حفظ التقدم · أوفلاين
+========================================
+هذا ملف سياق التلقائي لقسم «حفظ التقدم».
+التصدير الكامل من زر تلقائي يحقن أيضاً: API المحرك، كل الكائنات، كل ملفات البرمجة،
+كل الكائنات البرمجية، ملفات التقدم، فهرس الوسائط (id/اسم/نوع)، اللاعب، الشبكة، الموبايل.
+
+=== ماذا يكتب ملف التقدم؟ ===
+- كود onStart / onUpdate + بارامترات Game.defineParams
+- قيم نصية في Game.progress (مستوى، عملات، موضع…)
+- مراجع وسائط عبر البارامترات (تُختار من ملفاتي) — بدون كتابة id يدوياً
+
+=== API ===
+Game.progress.get(key, default)
+Game.progress.set(key, value)
+Game.progress.save() / load() / clear()
+Game.progress.setMedia(key, Game.params.hudImage)  // مرجع صغير تلقائي
+Game.progress.getMediaUrl(key)
+Game.params   // بعد الاختيار من ملفاتي
+Game.media.get(ref) / Game.media.ref(v)
+Game.subtitle("نص")
+game.player.position / game.coords / game.player.yaw
+
+=== مثال: آخر مكان ===
+function onStart(self, game) {
+  const pos = Game.progress.get("pos", null);
+  if (pos) {
+    game.player.position.x = pos.x;
+    game.player.position.y = pos.y;
+    game.player.position.z = pos.z;
+    Game.subtitle("اهلا وسهلا بعد عوده");
+  }
+}
+// المحرك يحفظ pos/yaw كل ثانية أثناء اللعب
+
+=== قواعد أوفلاين ===
+لاعب واحد — التخزين المحلي حسب المشروع.
+يشتغل في الاختبار النصفي والكامل.
+
+=== سيناريو ===
+function scenario() { return "شرح عربي لما يفعله الملف"; }

@@ -40,12 +40,13 @@
 <div id="app">
   <header id="bar">
     <a id="bHome" class="home-btn hawa-icon-btn" href="./" title="الرئيسية"><span class="hawa-ico-frame" data-ic="home"></span><i>الرئيسية</i></a>
-    <div class="brand"><span class="logo"><img src="logo.png" alt="Hawa"></span><div><b>Hawa</b> Engine<small>v2.25 · بناء</small></div></div>
+    <div class="brand"><span class="logo"><img src="logo.png" alt="Hawa"></span><div><b>Hawa</b> Engine<small>v2.82 · بناء</small></div></div>
 
     <nav class="tabs" id="secs">
       <button data-sec="objects" class="on"><span data-ic="objects"></span>الكائنات</button>
       <button data-sec="prog"><span data-ic="prog"></span>البرمجة</button>
       <button data-sec="sobj"><span data-ic="sobj"></span>الكائنات البرمجية</button>
+      <button data-sec="progress" id="secProgress" hidden><span data-ic="save"></span>حفظ التقدم</button>
     </nav>
 
     <div class="grow"></div>
@@ -89,6 +90,7 @@
       <button id="bSpawns" title="نقط البداية"><span data-ic="flag"></span><span class="snap-l" id="spawnN">0</span><i class="bcap">نقاط</i></button>
       <button id="bCoordRail" title="الإحداثيات"><span data-ic="grid"></span><i class="bcap">إحداثيات</i></button>
       <button id="bPadRail" type="button" class="pad-rail-btn" title="تفعيل الدراع (كونترولر بلايستيشن)"><span class="pad-ico"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 6h10a4 4 0 0 1 3.9 4.9l-1 4.2A2.5 2.5 0 0 1 17.5 17.5l-1.4-1.6H7.9l-1.4 1.6A2.5 2.5 0 0 1 2.1 15.1l-1-4.2A4 4 0 0 1 7 6z"/><path d="M6.5 9.5v3M5 11h3"/><circle cx="15.5" cy="10" r=".7" fill="currentColor"/><circle cx="17.7" cy="12.2" r=".7" fill="currentColor"/></svg></span><i class="bcap">دراع</i></button>
+      <button id="bProgressRail" type="button" class="progress-rail-btn" title="تفعيل قسم حفظ التقدم" aria-pressed="false"><span data-ic="save"></span><i class="bcap">تقدم</i></button>
       <div class="rail-hist" id="railHist">
         <button id="bUndo" type="button" title="ترجيع" aria-label="ترجيع">↶<i class="bcap">ترجيع</i></button>
         <button id="bRedo" type="button" title="تقديم" aria-label="تقديم">↷<i class="bcap">تقديم</i></button>
@@ -107,6 +109,7 @@
       <button type="button" data-sec="objects" class="on"><span data-ic="objects"></span>الكائنات</button>
       <button type="button" data-sec="prog"><span data-ic="prog"></span>البرمجة</button>
       <button type="button" data-sec="sobj"><span data-ic="sobj"></span>الكائنات البرمجية</button>
+      <button type="button" data-sec="progress" id="mSecProgress" hidden><span data-ic="save"></span>حفظ التقدم</button>
     </div>
 
     <div id="catP">
@@ -141,6 +144,19 @@
       </div>
       <div id="sCrumb" class="mf-crumb sf-crumb"></div>
       <div id="sList"></div>
+    </div>
+
+    <div id="progressP" hidden>
+      <div class="sub"><span>حفظ التقدم</span><span id="prCount" class="mut">0</span></div>
+      <p class="mut small" style="margin:0 0 8px;line-height:1.45">برمجة حفظ/تحميل التقدم. الوسائط من <b>بارامترات الملف</b> (⚙) عبر ملفاتي. أوفلاين = لاعب واحد · أونلاين = حسب اسم اللاعب.</p>
+      <div class="row">
+        <button id="prNew" class="pri">＋ ملف جديد</button>
+        <button id="prUp">⬆ رفع</button>
+        <button id="prAuto" title="تلقائي حفظ التقدم">⬇ تلقائي</button>
+        <button type="button" id="prNewFolder" class="media-btn mf-newdir" title="مجلد جديد">＋ مجلد</button>
+      </div>
+      <div id="prCrumb" class="mf-crumb sf-crumb"></div>
+      <div id="prList"></div>
     </div>
   </aside>
 
@@ -238,6 +254,21 @@
   <div id="pvp"></div>
   <div id="pTop">
     <button id="pExit" class="stop"><span data-ic="stop"></span>خروج للبناء<kbd>P</kbd></button>
+    <div id="pProgressWrap" class="p-progress-wrap" hidden>
+      <button type="button" id="pProgressIcon" class="p-progress-icon" title="قائمة اللعب" aria-label="قائمة اللعب">☰</button>
+      <div id="pProgressMenu" class="p-progress-menu" hidden>
+        <button type="button" id="pProgressBack" class="p-prog-back">↩ رجوع لوضع البناء</button>
+        <button type="button" id="pProgressDl" class="p-prog-dl" hidden>⬇ تحميل حفظ التقدم</button>
+        <button type="button" id="pProgressUp" class="p-prog-up" hidden>⬆ رفع حفظ التقدم</button>
+        <div id="pProgressFileRow" class="p-prog-file" hidden>
+          <span class="p-prog-fname" id="pProgressFileName">—</span>
+          <div class="p-prog-file-acts">
+            <button type="button" id="pProgressReplace" title="استبدال الملف">استبدال</button>
+            <button type="button" id="pProgressClear" class="p-prog-danger" title="حذف والرجوع للصفر">حذف</button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
   <div id="pHud">
     <div class="chip msg" id="pMsg" hidden></div>
@@ -283,6 +314,7 @@
   </div>
 </div>
 <input type="file" id="flProj" accept="*/*" hidden>
+<input type="file" id="flProgress" accept=".json,.hawa-progress,application/json,*/*" hidden>
 
 <!-- واجهة الموبايل -->
 <div id="mBar" hidden>
@@ -290,6 +322,7 @@
     <button type="button" id="mSecObjects" data-m-sec="objects" class="on" aria-label="الكائنات"><span>🧱</span><i>كائنات</i></button>
     <button type="button" id="mSecProg" data-m-sec="prog" aria-label="البرمجة"><span>&lt;/&gt;</span><i>برمجة</i></button>
     <button type="button" id="mSecSobj" data-m-sec="sobj" aria-label="الكائنات البرمجية"><span>⚙</span><i>برمجية</i></button>
+    <button type="button" id="mSecProgress" data-m-sec="progress" hidden aria-label="حفظ التقدم"><span>💾</span><i>تقدم</i></button>
   </div>
   <button type="button" id="mSideBtn" aria-label="المشهد والخصائص"><span>📋</span><i>مشهد</i></button>
   <div class="m-bar-hist" id="mBarHist">
@@ -396,6 +429,14 @@
       </div>
     </div>
   </div>
+
+<!-- عرض سيناريو ملف حفظ التقدم -->
+<div id="prScenario" class="pr-scenario" hidden>
+  <div class="pr-sc-box">
+    <div class="pr-sc-hd"><b id="prScTitle">عرض السيناريو</b><button type="button" id="prScClose">✕</button></div>
+    <pre id="prScBody" class="pr-sc-body"></pre>
+  </div>
+</div>
 
 <div id="padGate" class="pad-gate" hidden>
   <div class="pg-box">

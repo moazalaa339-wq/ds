@@ -725,7 +725,7 @@ function applyFileParamsToObject(o) {
   chg();
 }
 
-const S = {objs:[], scripts:[], sdefs:[], sel:null, groups:[], selSet:[], selGroup:null, gnid:1, padGame:false, mode:'build', tool:'select', gz:'move', item:'cube', section:'objects',
+const S = {objs:[], scripts:[], sdefs:[], progressScripts:[], progressFolders:{}, progressCwd:null, progressEnabled:false, progressRequireUpload:true, progressPid:1, sel:null, groups:[], selSet:[], selGroup:null, gnid:1, padGame:false, mode:'build', tool:'select', gz:'move', item:'cube', section:'objects',
   snap:.5, nid:1, sid:1, did:1, mid:1, dirty:1, needSave:0, err:[], hr:null, fly:false, media:{}, mediaOrder:[], mediaFolders:{}, scriptFolders:{}, sdefFolders:{}, progCwd:null, sobjCwd:null, progEnter:false, sobjEnter:false, progEnterSel:null, sobjEnterSel:null, paramOpen:false,
   allowScriptSpawn:true, // دائماً مسموح — الخيار اتشال من الواجهة
   roomMinEnabled:false,   // تفعيل حد أدنى مخصص
@@ -2208,7 +2208,7 @@ try {
   addEventListener('pointermove', e => {
     _ptrClient = { x: e.clientX, y: e.clientY };
     try {
-      if (S && S.mode === 'build' && (S.tool === 'place' || S.tool === 'respawn' || S.tool === 'online_spawn') && cv) {
+      if (S && (S.mode === 'build' || S.playEdit) && (S.tool === 'place' || S.tool === 'respawn' || S.tool === 'online_spawn') && cv) {
         const r = cv.getBoundingClientRect();
         if (e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) {
           S.hr = ray(e).ray.clone();
@@ -3152,14 +3152,19 @@ function setTool(t) {
   cats(); sList();
 }
 function setSec(s) {
-  S.section = s; $('#catP').hidden = s !== 'objects'; $('#progP').hidden = s !== 'prog'; $('#sobjP').hidden = s !== 'sobj';
+  S.section = s;
+  $('#catP').hidden = s !== 'objects';
+  $('#progP').hidden = s !== 'prog';
+  $('#sobjP').hidden = s !== 'sobj';
+  try { const pp = $('#progressP'); if (pp) pp.hidden = s !== 'progress'; } catch (_) {}
   $$('#secs [data-sec],#mSecs [data-sec]').forEach(b => b.classList.toggle('on', b.dataset.sec === s));
   try {
     document.querySelectorAll('#mBarSecs [data-m-sec]').forEach(b => {
       b.classList.toggle('on', b.getAttribute('data-m-sec') === s);
     });
   } catch (_) {}
-  $('#dockTitle').textContent = {objects: 'الكائنات', prog: 'قسم البرمجة', sobj: 'الكائنات البرمجية'}[s];
+  $('#dockTitle').textContent = {objects: 'الكائنات', prog: 'قسم البرمجة', sobj: 'الكائنات البرمجية', progress: 'حفظ التقدم'}[s] || s;
+  if (s === 'progress') { try { prList(); } catch (_) {} }
 }
 /* ===== أقسام البناء: القائمة أقسام بس، وكل قسم نافذة لوحده ===== */
 function secParts(title) { const i = title.indexOf(' '); return i > 0 ? [title.slice(0, i), title.slice(i + 1)] : ['📦', title]; }
@@ -3357,6 +3362,11 @@ function packGameData(name) {
     mediaFolders: JSON.parse(JSON.stringify(S.mediaFolders || {})),
     scriptFolders: JSON.parse(JSON.stringify(S.scriptFolders || {})),
     sdefFolders: JSON.parse(JSON.stringify(S.sdefFolders || {})),
+    progressEnabled: !!S.progressEnabled,
+    progressRequireUpload: S.progressRequireUpload !== false,
+    progressScripts: JSON.parse(JSON.stringify(S.progressScripts || [])),
+    progressFolders: JSON.parse(JSON.stringify(S.progressFolders || {})),
+    progressPid: S.progressPid || 1,
     mid: S.mid || 1,
     nid: S.nid, sid: S.sid, did: S.did,
     player: (typeof PCFG !== 'undefined') ? JSON.parse(JSON.stringify(PCFG)) : null,
@@ -6196,7 +6206,767 @@ if (_pUp) _pUp.onclick = () => { const fl = $('#fl'); if (fl) { fl.dataset.m = '
   if (eb) eb.onclick = () => codeToggleEnter('script');
   if (ok) ok.onclick = () => codeConfirmEnter('script');
 })();
-const edL = () => (edK === 'sobj' ? S.sdefs : S.scripts);
+
+/* ===================== قسم حفظ التقدم ===================== */
+function syncProgressSectionUI() {
+  const on = !!S.progressEnabled;
+  try {
+    document.body.classList.toggle('progress-on', on);
+    document.documentElement.classList.toggle('progress-on', on);
+  } catch (_) {}
+  for (const id of ['secProgress', 'mSecProgress', 'mSecProgress']) {
+    const el = document.getElementById(id);
+    if (el) el.hidden = !on;
+  }
+  // mBar button
+  const mb = document.getElementById('mSecProgress');
+  if (mb) mb.hidden = !on;
+  const rail = document.getElementById('bProgressRail');
+  if (rail) {
+    rail.classList.toggle('on', on);
+    rail.setAttribute('aria-pressed', on ? 'true' : 'false');
+    try {
+      const cap = rail.querySelector('.bcap');
+      if (cap) cap.textContent = on ? 'تقدم ✔' : 'تقدم';
+    } catch (_) {}
+  }
+  if (!on && S.section === 'progress') {
+    try { setSec('objects'); } catch (_) {}
+  }
+  try { syncPlayProgressMenu(); } catch (_) {}
+}
+
+async function toggleProgressEnabled() {
+  if (S.progressEnabled) {
+    const hasFiles = (S.progressScripts || []).length > 0;
+    if (hasFiles) {
+      const choice = await HawaUI.choose(
+        'إلغاء تفعيل قسم حفظ التقدم؟',
+        [
+          { value: 'off', label: 'إلغاء التفعيل فقط (الملفات تفضل)', cls: 'hd-ok' },
+          { value: 'wipe', label: 'إلغاء التفعيل + حذف الملفات', cls: 'hd-danger' },
+          { value: 'cancel', label: 'إلغاء', cls: 'hd-cancel' }
+        ]
+      );
+      if (!choice || choice === 'cancel') return;
+      S.progressEnabled = false;
+      if (choice === 'wipe') {
+        S.progressScripts = [];
+        S.progressFolders = {};
+        S.progressCwd = null;
+      }
+    } else {
+      if (!await uiConfirm('إلغاء تفعيل قسم حفظ التقدم؟')) return;
+      S.progressEnabled = false;
+    }
+  } else {
+    S.progressEnabled = true;
+    tip('✔ قسم حفظ التقدم مفعّل — يظهر فوق في الأقسام');
+  }
+  syncProgressSectionUI();
+  try { prList(); } catch (_) {}
+  chg();
+}
+
+function prList() {
+  if (!S.progressScripts) S.progressScripts = [];
+  if (!S.progressFolders || typeof S.progressFolders !== 'object') S.progressFolders = {};
+  const el = document.getElementById('prList');
+  const cnt = document.getElementById('prCount');
+  if (cnt) cnt.textContent = (S.progressScripts.filter(s => s.enabled !== false).length) + ' / ' + S.progressScripts.length + ' مفعّل';
+  if (!el) return;
+  const cwd = S.progressCwd || null;
+  const folders = S.progressFolders;
+  try {
+    const crumb = document.getElementById('prCrumb');
+    if (crumb) {
+      const stack = [];
+      let cur = cwd;
+      while (cur) {
+        const f = folders[cur];
+        if (!f) break;
+        stack.unshift({ id: cur, name: f.name || 'مجلد' });
+        cur = f.parent || null;
+      }
+      const parts = ['<button type="button" data-pr-crumb="">الجذر</button>'];
+      for (const s of stack) parts.push('<span>/</span><button type="button" data-pr-crumb="' + esc(s.id) + '">' + esc(s.name) + '</button>');
+      crumb.innerHTML = parts.join(' ');
+      crumb.onclick = e => {
+        const b = e.target.closest('[data-pr-crumb]');
+        if (!b) return;
+        const id = b.getAttribute('data-pr-crumb');
+        S.progressCwd = id || null;
+        prList();
+      };
+    }
+  } catch (_) {}
+  let html = '';
+  if (cwd) {
+    const parent = (folders[cwd] || {}).parent || null;
+    html += `<div class="pcard sf-up" data-pr-up="${esc(parent || '')}">
+      <div class="pc-top"><span class="pc-ico">↩</span></div>
+      <div class="pc-name" style="font-size:11px">رجوع</div>
+      <div class="pc-meta"><em>للمجلد اللي فوق</em></div>
+    </div>`;
+  }
+  for (const [fid, f] of Object.entries(folders)) {
+    if ((f.parent || null) !== cwd) continue;
+    const n = S.progressScripts.filter(s => (s.folder || null) === fid).length;
+    const nm = f.name || 'مجلد';
+    html += `<div class="pcard sf-folder" data-pr-fopen="${esc(fid)}">
+      <div class="pc-top"><span class="pc-ico">📁</span></div>
+      <div class="pc-name" style="${typeof fitNameStyle === 'function' ? fitNameStyle(nm) : ''}" title="${esc(nm)}">${esc(nm)}</div>
+      <div class="pc-meta"><em>${n} ملف</em></div>
+      <div class="pc-btns">
+        <button type="button" data-pr-fren="${esc(fid)}" title="إعادة تسمية">✎</button>
+        <button type="button" data-pr-fdel="${esc(fid)}" class="red" title="حذف">🗑</button>
+      </div>
+    </div>`;
+  }
+  for (const s of S.progressScripts) {
+    if ((s.folder || null) !== cwd) continue;
+    const nm = s.name || ('progress_' + s.id);
+    const on = s.enabled !== false;
+    html += `<div class="pcard ${on ? 'is-on' : 'is-off'}" data-pr-id="${s.id}" title="اضغط لفتح">
+      <div class="pc-top"><span class="dot"></span><span class="pc-ico">💾</span></div>
+      <div class="pc-name" style="${typeof fitNameStyle === 'function' ? fitNameStyle(nm) : ''}" title="${esc(nm)}">${esc(nm)}</div>
+      <div class="pc-meta"><em>${on ? 'مفعّل' : 'متوقف'}</em></div>
+      <div class="pc-btns">
+        <button type="button" data-pr-params="${s.id}" title="بارامترات">⚙</button>
+        <button type="button" data-pr-scen="${s.id}" title="عرض السيناريو">📜</button>
+        <button type="button" data-pr-tog="${s.id}" title="تفعيل/إيقاف">${on ? '⏸' : '▶'}</button>
+        <button type="button" data-pr-del="${s.id}" class="red" title="حذف">🗑</button>
+      </div>
+    </div>`;
+  }
+  if (!html) html = '<p class="mut small" style="grid-column:1/-1">— مفيش ملفات بعد</p>';
+  el.innerHTML = html;
+  el.onclick = async e => {
+    const btn = e.target.closest('button');
+    const card = e.target.closest('[data-pr-id],[data-pr-up],[data-pr-fopen]');
+    if (btn) {
+      if (btn.hasAttribute('data-pr-fren')) {
+        const fid = btn.getAttribute('data-pr-fren');
+        const f = S.progressFolders[fid]; if (!f) return;
+        const nn = prompt('اسم المجلد', f.name || '');
+        if (nn == null) return;
+        f.name = String(nn).trim().slice(0, 60) || f.name;
+        prList(); chg(); return;
+      }
+      if (btn.hasAttribute('data-pr-fdel')) {
+        const fid = btn.getAttribute('data-pr-fdel');
+        if (!await uiConfirm('حذف المجلد وملفاته؟')) return;
+        const kill = new Set([fid]);
+        let grew = true;
+        while (grew) {
+          grew = false;
+          for (const [id, f] of Object.entries(S.progressFolders)) {
+            if (kill.has(f.parent) && !kill.has(id)) { kill.add(id); grew = true; }
+          }
+        }
+        for (const id of kill) delete S.progressFolders[id];
+        S.progressScripts = S.progressScripts.filter(s => !kill.has(s.folder));
+        if (kill.has(S.progressCwd)) S.progressCwd = null;
+        prList(); chg(); return;
+      }
+      if (btn.hasAttribute('data-pr-params')) {
+        openProgressParams(+btn.getAttribute('data-pr-params')); return;
+      }
+      if (btn.hasAttribute('data-pr-scen')) {
+        const s = S.progressScripts.find(x => +x.id === +btn.getAttribute('data-pr-scen'));
+        if (s) showProgressScenario(s);
+        return;
+      }
+      if (btn.hasAttribute('data-pr-tog')) {
+        const id = +btn.getAttribute('data-pr-tog');
+        const s = S.progressScripts.find(x => +x.id === id);
+        if (!s) return;
+        s.enabled = !(s.enabled !== false);
+        tip(s.enabled !== false ? '✔ مفعّل' : '⛔ متوقف');
+        prList(); chg(); return;
+      }
+      if (btn.hasAttribute('data-pr-del')) {
+        const id = +btn.getAttribute('data-pr-del');
+        if (!await uiConfirm('حذف ملف التقدم؟')) return;
+        S.progressScripts = S.progressScripts.filter(x => +x.id !== id);
+        prList(); chg(); return;
+      }
+      return;
+    }
+    if (!card) return;
+    if (card.hasAttribute('data-pr-up')) {
+      const v = card.getAttribute('data-pr-up');
+      S.progressCwd = v || null;
+      prList(); return;
+    }
+    if (card.hasAttribute('data-pr-fopen')) {
+      S.progressCwd = card.getAttribute('data-pr-fopen');
+      prList(); return;
+    }
+    if (card.hasAttribute('data-pr-id')) {
+      openEd(+card.getAttribute('data-pr-id'), 'progress');
+    }
+  };
+}
+
+function openProgressParams(id) {
+  const s = (S.progressScripts || []).find(x => +x.id === +id); if (!s) return;
+  const sch = schemaOf(s.code);
+  if (!s.p) s.p = {};
+  for (const e of sch) if (s.p[e.key] === undefined) s.p[e.key] = e.value;
+  try {
+    const parsed = parseParams(s.code);
+    for (const k of Object.keys(parsed)) if (s.p[k] === undefined) s.p[k] = parsed[k];
+  } catch (_) {}
+  let m = document.getElementById('scrParamModal');
+  if (!m) {
+    m = document.createElement('div'); m.id = 'scrParamModal';
+    m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:200;display:flex;align-items:center;justify-content:center;';
+    m.addEventListener('click', ev => { if (ev.target === m) m.hidden = true; });
+    document.body.appendChild(m);
+  }
+  const holder = { p: s.p };
+  const keys = sch.length ? sch : Object.keys(s.p).map(k => ({ key: k, label: k, value: s.p[k] }));
+  m.innerHTML = `<div style="background:#14161c;color:#eee;border-radius:12px;padding:16px;min-width:300px;max-width:90vw;max-height:80vh;overflow:auto;direction:rtl">`
+    + `<h4 style="margin:0 0 10px">${esc(s.name)} · بارامترات حفظ التقدم</h4>` + RESET_BTN
+    + (keys.length ? keys.map(e => paramRow(holder, e.key, e.label || e.key, e)).join('') : '<p class="mut small">عرّف بارامترات بـ Game.defineParams([{key,label,type,value}]) في أول الملف</p>')
+    + `<div style="display:flex;gap:8px;justify-content:space-between;align-items:center;margin-top:12px;flex-wrap:wrap">`
+    + `<button type="button" class="unit-viewer-btn" data-unit-view title="عارض الوحدة الافتراضية">عارض الوحده الافتراضيه</button>`
+    + `<button data-close>إغلاق</button></div></div>`;
+  m.hidden = false;
+  m.querySelector('[data-close]').onclick = () => { m.hidden = true; };
+  const _rb = m.querySelector('[data-reset-defaults]');
+  if (_rb) _rb.onclick = (ev) => {
+    if (ev) { ev.preventDefault(); ev.stopPropagation(); }
+    doResetParams(holder, s.code, () => {
+      openProgressParams(id);
+      chg();
+    });
+  };
+  m.querySelectorAll('[data-p]').forEach(inp => {
+    const k = inp.dataset.p, e = sch.find(x => x.key === k);
+    const h = () => {
+      const axis = inp.dataset.pAxis != null ? inp.dataset.pAxis : inp.getAttribute('data-p-axis');
+      applyParamValue(holder, k, inp.type === 'checkbox' ? inp.checked : inp.value, e, axis);
+      chg();
+    };
+    inp.addEventListener('input', h); inp.addEventListener('change', h);
+  });
+  m.querySelectorAll('[data-p-from-files]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const key = btn.getAttribute('data-p-from-files');
+      const acc = btn.getAttribute('data-p-accept') || '*/*';
+      const ty = btn.getAttribute('data-p-type') || '';
+      openMyFilesPicker(acc || paramAccept(ty) || '*/*', ref => {
+        if (!ref) return;
+        applyParamValue(holder, key, ref, sch.find(x => x.key === key));
+        openProgressParams(id);
+        chg();
+        tip('✔ تم اختيار: ' + mediaLabel(ref));
+      });
+    });
+  });
+  m.querySelectorAll('[data-p-clr]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const key = btn.getAttribute('data-p-clr') || btn.dataset.pClr;
+      applyParamValue(holder, key, '', null);
+      openProgressParams(id);
+      chg();
+    });
+  });
+}
+
+(function wireProgressUI() {
+  const n = document.getElementById('prNew');
+  if (n) n.onclick = () => {
+    if (!S.progressEnabled) { tip('⚠ فعّل قسم حفظ التقدم من زر «تقدم» جنب الدراع'); return; }
+    const s = {
+      id: (S.progressPid = (S.progressPid || 1) + 1),
+      name: 'progress_' + S.progressPid + '.js',
+      code: 'Game.defineParams([\n  { key: "welcome", label: "رسالة العودة", type: "text", value: "اهلا وسهلا بعد عوده" },\n  { key: "firstHello", label: "رسالة أول مرة", type: "text", value: "مرحباً — بداية جديدة" }\n]);\n\nfunction scenario() {\n  return "يرجع اللاعب لآخر مكان محفوظ ويعرض رسالة ترحيب.";\n}\n\nfunction onStart(self, game) {\n  const P = Game.params || {};\n  const pos = Game.progress.get("pos", null);\n  if (pos && typeof pos.x === "number") {\n    try {\n      if (game.player && game.player.position) {\n        game.player.position.x = +pos.x;\n        game.player.position.y = +pos.y;\n        game.player.position.z = +pos.z;\n      }\n      if (game.player && game.player.velocity && game.player.velocity.set) game.player.velocity.set(0, 0, 0);\n    } catch (e) {}\n    const yaw = Game.progress.get("yaw", null);\n    if (yaw != null && game.player) try { game.player.yaw = +yaw; } catch (e) {}\n    const msg = P.welcome || "اهلا وسهلا بعد عوده";\n    if (Game.subtitle) Game.subtitle(msg, 4500);\n    else if (Game.say) Game.say(msg, 4500);\n  } else {\n    const msg = P.firstHello || "مرحباً — بداية جديدة";\n    if (Game.subtitle) Game.subtitle(msg, 3500);\n    else if (Game.say) Game.say(msg, 3500);\n  }\n}\n',
+      p: {},
+      
+      enabled: true,
+      folder: S.progressCwd || null
+    };
+    S.progressScripts.push(s);
+    prList();
+    openEd(s.id, 'progress');
+    chg();
+  };
+  const up = document.getElementById('prUp');
+  if (up) up.onclick = () => {
+    const fl = document.getElementById('flProgress');
+    if (fl) { fl.dataset.m = 'progress-js'; fl.click(); }
+  };
+  const nf = document.getElementById('prNewFolder');
+  if (nf) nf.onclick = () => {
+    const name = prompt('اسم المجلد', 'مجلد');
+    if (name == null) return;
+    const id = 'prf_' + Date.now().toString(36);
+    S.progressFolders[id] = { name: String(name).trim().slice(0, 60) || 'مجلد', parent: S.progressCwd || null };
+    prList(); chg();
+  };
+  const auto = document.getElementById('prAuto');
+  if (auto) auto.onclick = () => { try { downloadProgressAuto(); } catch (e) { console.warn(e); tip('⚠ فشل التلقائي'); } };
+  const rail = document.getElementById('bProgressRail');
+  if (rail) rail.onclick = () => { toggleProgressEnabled(); };
+  const fl = document.getElementById('flProgress');
+  if (fl && !fl._prBound) {
+    fl._prBound = 1;
+    fl.addEventListener('change', async () => {
+      const f = fl.files && fl.files[0];
+      fl.value = '';
+      if (!f) return;
+      try {
+        const text = await f.text();
+        if (fl.dataset.m === 'progress-js' || /\.js$/i.test(f.name)) {
+          S.progressScripts.push({
+            id: (S.progressPid = (S.progressPid || 1) + 1),
+            name: f.name,
+            code: text,
+            p: {},
+            enabled: true,
+            folder: S.progressCwd || null
+          });
+          prList(); chg(); tip('✔ تم رفع ملف التقدم');
+          return;
+        }
+        // progress save file import
+        try {
+          const data = JSON.parse(text);
+          if (data && (data.kind === 'hawa-progress' || data.progress)) {
+            HawaProgress._fileLoadedThisSession = true;
+            HawaProgress._loadedFileName = f.name || 'progress.json';
+            HawaProgress.importFile(data);
+            try { syncPlayProgressMenu(); } catch (_) {}
+            try {
+              if (S.mode === 'play' && typeof RT !== 'undefined' && RT && RT.p) {
+                const pos = HawaProgress.get('pos', null);
+                if (pos && typeof pos.x === 'number') {
+                  RT.p.x = +pos.x; RT.p.y = +pos.y; RT.p.z = +pos.z;
+                  if (RT.v) RT.v.set(0, 0, 0);
+                }
+                const yaw = HawaProgress.get('yaw', null);
+                if (yaw != null && RT) RT.yaw = +yaw;
+                try { if (typeof say === 'function') say('اهلا وسهلا بعد عوده', 3.5); } catch (_) {}
+                try { Game && Game.subtitle && Game.subtitle('اهلا وسهلا بعد عوده'); } catch (_) {}
+              }
+            } catch (_) {}
+            tip('✔ تم استيراد ملف التقدم');
+            return;
+          }
+        } catch (_) {}
+        tip('⚠ ملف غير معروف');
+      } catch (e) { tip('⚠ ' + (e.message || e)); }
+    });
+  }
+  try { syncProgressSectionUI(); } catch (_) {}
+})();
+
+/** Runtime + تخزين تقدم اللعب */
+const HawaProgress = {
+  _mem: {},
+  _fileLoadedThisSession: false,
+  _loadedFileName: '',
+  autoSave: true,
+  projectId() {
+    try {
+      const n = (S && (S.gameName || S.name)) || '';
+      const key = n || (location.pathname || 'hawa') + '|' + (S.nid || 0);
+      return 'hawa_prog_' + String(key).replace(/[^\w\u0600-\u06ff.-]+/gi, '_').slice(0, 80);
+    } catch (_) { return 'hawa_prog_default'; }
+  },
+  playerName() {
+    try {
+      if (typeof NetMP !== 'undefined' && NetMP && NetMP.on && NetMP.name) return String(NetMP.name);
+    } catch (_) {}
+    try {
+      const meta = JSON.parse(sessionStorage.getItem('hawa_play_meta') || 'null');
+      if (meta && meta.playerName) return String(meta.playerName);
+    } catch (_) {}
+    return 'local';
+  },
+  slotKey() {
+    const online = !!(S && S.playNet === 'online');
+    return this.projectId() + (online ? ('__' + this.playerName()) : '__offline');
+  },
+  load() {
+    try {
+      const raw = localStorage.getItem(this.slotKey());
+      this._mem = raw ? (JSON.parse(raw) || {}) : {};
+    } catch (_) { this._mem = {}; }
+    return this._mem;
+  },
+  save() {
+    try {
+      localStorage.setItem(this.slotKey(), JSON.stringify(this._mem || {}));
+      return true;
+    } catch (e) { console.warn('progress save', e); return false; }
+  },
+  get(k, d) {
+    if (!this._mem || typeof this._mem !== 'object') this.load();
+    return Object.prototype.hasOwnProperty.call(this._mem, k) ? this._mem[k] : d;
+  },
+  set(k, v) {
+    if (!this._mem || typeof this._mem !== 'object') this.load();
+    this._mem[k] = v;
+    if (this.autoSave) this.save();
+    return v;
+  },
+  has(k) {
+    if (!this._mem) this.load();
+    return Object.prototype.hasOwnProperty.call(this._mem, k);
+  },
+  keys() {
+    if (!this._mem) this.load();
+    return Object.keys(this._mem);
+  },
+  clear() {
+    this._mem = {};
+    try { localStorage.removeItem(this.slotKey()); } catch (_) {}
+  },
+  exportFile(name) {
+    return {
+      kind: 'hawa-progress',
+      version: 1,
+      projectId: this.projectId(),
+      playerName: this.playerName(),
+      online: !!(S && S.playNet === 'online'),
+      name: name || ('progress_' + this.playerName()),
+      progress: JSON.parse(JSON.stringify(this._mem || {})),
+      exportedAt: new Date().toISOString()
+    };
+  },
+  importFile(data) {
+    if (!data) return false;
+    const prog = data.progress || data.data || data;
+    if (!prog || typeof prog !== 'object') return false;
+    this._mem = JSON.parse(JSON.stringify(prog));
+    this.save();
+    return true;
+  },
+  downloadCurrent() {
+    try {
+      if (typeof RT !== 'undefined' && RT && RT.p) {
+        this.set('pos', { x: +RT.p.x.toFixed(3), y: +RT.p.y.toFixed(3), z: +RT.p.z.toFixed(3) });
+        if (RT.yaw != null) this.set('yaw', +RT.yaw.toFixed(4));
+        this.set('_savedAt', Date.now());
+        this.save();
+      }
+    } catch (_) {}
+    const name = prompt('اسم ملف التقدم', 'تقدمي_' + this.playerName()) || ('progress_' + Date.now());
+    const file = this.exportFile(name);
+    const blob = new Blob([JSON.stringify(file, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = name.replace(/[^\w\u0600-\u06ff.-]+/g, '_') + '.hawa-progress.json';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    tip('✔ تم تحميل ملف التقدم — احفظه عشان تكمل بعدين');
+  },
+  api() {
+    const self = this;
+    return {
+      get: (k, d) => self.get(k, d),
+      set: (k, v) => self.set(k, v),
+      save: () => self.save(),
+      load: () => self.load(),
+      clear: () => self.clear(),
+      has: (k) => self.has(k),
+      keys: () => self.keys(),
+      playerName: () => self.playerName(),
+      slotKey: () => self.slotKey(),
+      // حفظ مرجع وسيط من بارامتر (من غير ما تكتب id)
+      setMedia: (k, v) => {
+        let ref = v;
+        try {
+          if (typeof RT !== 'undefined' && RT && RT.game && RT.game.media && RT.game.media.ref)
+            ref = RT.game.media.ref(v);
+          else if (typeof v === 'string' && v.startsWith('data:')) ref = '';
+          else if (typeof v === 'string' && !v.startsWith('media:') && S.media && S.media[v]) ref = 'media:' + v;
+        } catch (_) {}
+        return self.set(k, ref || v);
+      },
+      getMediaUrl: (k) => {
+        const ref = self.get(k, '');
+        try {
+          if (typeof RT !== 'undefined' && RT && RT.game && RT.game.media && RT.game.media.get)
+            return RT.game.media.get(ref);
+        } catch (_) {}
+        return null;
+      },
+      get data() { return self._mem; },
+      set data(v) { self._mem = v && typeof v === 'object' ? v : {}; if (self.autoSave) self.save(); },
+      get autoSave() { return self.autoSave; },
+      set autoSave(v) { self.autoSave = !!v; }
+    };
+  }
+};
+
+async function downloadProgressAuto() {
+  try {
+    try { if (typeof MOB !== 'undefined' && MOB.detect) MOB.detect(); } catch (_) {}
+    const prevSec = S.section;
+    S.section = 'progress';
+    const online = S.playNet === 'online';
+    const file = online ? 'AUTO_PROGRESS_ONLINE.txt' : 'AUTO_PROGRESS_OFFLINE.txt';
+    let ctx = '';
+    try { ctx = await loadAutoCtx(file); } catch (_) {}
+    if (!ctx) {
+      try { ctx = await loadAutoCtx(online ? 'AUTO_PROGRESS_OFFLINE.txt' : 'AUTO_PROGRESS_ONLINE.txt'); } catch (_) {}
+    }
+    // نفس شمول تلقائي البرمجة/الكائنات: API + عالم + سكربتات + كائنات برمجية + تقدم + وسائط
+    const { t } = autoText(ctx || '');
+    const mobile = !!(typeof MOB !== 'undefined' && MOB.on) || (typeof isMobileLike === 'function' && isMobileLike());
+    const tag = (mobile ? 'phone' : 'pc') + '-' + (online ? 'online' : 'offline');
+    const outName = file.replace(/\.txt$/i, '') + '-export-' + tag + '.txt';
+    dl(outName, t);
+    tip('✔ تلقائي حفظ التقدم · شامل العالم والمحرك · ' + (online ? 'أونلاين' : 'أوفلاين'));
+    try { S.section = prevSec; } catch (_) {}
+  } catch (e) {
+    console.warn(e);
+    tip('⚠ فشل التلقائي: ' + (e && e.message || e));
+  }
+}
+
+
+function syncPlayProgressMenu() {
+  const wrap = document.getElementById('pProgressWrap');
+  const menu = document.getElementById('pProgressMenu');
+  const dl = document.getElementById('pProgressDl');
+  const up = document.getElementById('pProgressUp');
+  const fileRow = document.getElementById('pProgressFileRow');
+  const fname = document.getElementById('pProgressFileName');
+  if (!wrap) return;
+  // أيقونة القائمة تظهر في الاختبار النصفي والكامل دائماً
+  const inPlay = S.mode === 'play';
+  wrap.hidden = !inPlay;
+  const progOn = !!S.progressEnabled;
+  if (dl) dl.hidden = !progOn;
+  if (up) up.hidden = !progOn;
+  if (fileRow) {
+    const hasFile = !!(progOn && HawaProgress && HawaProgress._fileLoadedThisSession && HawaProgress._loadedFileName);
+    fileRow.hidden = !hasFile;
+    if (fname) fname.textContent = hasFile ? ('الملف المرفوع: ' + HawaProgress._loadedFileName) : '';
+  }
+}
+
+function clearProgressToZero() {
+  try {
+    HawaProgress._mem = {};
+    HawaProgress._fileLoadedThisSession = false;
+    HawaProgress._loadedFileName = '';
+    try { localStorage.removeItem(HawaProgress.slotKey()); } catch (_) {}
+  } catch (_) {}
+  // رجوع لنقطة البداية كأنك داخل جديد
+  try {
+    if (S.mode === 'play' && typeof RT !== 'undefined' && RT) {
+      if (typeof respawnP === 'function') respawnP();
+      else if (RT.rs && RT.rs[0]) {
+        const o = RT.rs[0];
+        RT.p.set(o.pos[0], o.pos[1] + .02, o.pos[2]);
+        if (RT.v) RT.v.set(0, 0, 0);
+      }
+      try { say('تم حذف ملف التقدم — بداية من الصفر', 2800); } catch (_) {}
+    }
+  } catch (_) {}
+  try { syncPlayProgressMenu(); } catch (_) {}
+  tip('✔ تم حذف التقدم والرجوع للصفر');
+}
+
+function bindPlayProgressUI() {
+  const wrap = document.getElementById('pProgressWrap');
+  const icon = document.getElementById('pProgressIcon');
+  const menu = document.getElementById('pProgressMenu');
+  const dl = document.getElementById('pProgressDl');
+  const up = document.getElementById('pProgressUp');
+  const back = document.getElementById('pProgressBack');
+  const rep = document.getElementById('pProgressReplace');
+  const clr = document.getElementById('pProgressClear');
+  if (!wrap || !icon) return;
+  try { syncPlayProgressMenu(); } catch (_) {}
+  if (menu) menu.hidden = true;
+
+  if (!icon._prBound) {
+    icon._prBound = 1;
+    icon.onclick = e => {
+      e.stopPropagation();
+      if (!menu) return;
+      try { syncPlayProgressMenu(); } catch (_) {}
+      menu.hidden = !menu.hidden;
+    };
+    document.addEventListener('pointerdown', e => {
+      if (!menu || menu.hidden) return;
+      if (wrap.contains(e.target)) return;
+      menu.hidden = true;
+    }, true);
+  }
+
+  if (back && !back._prBound) {
+    back._prBound = 1;
+    back.onclick = e => {
+      e.stopPropagation();
+      if (menu) menu.hidden = true;
+      try { playStop(); } catch (err) { tip(err.message || err); }
+    };
+  }
+
+  if (dl && !dl._prBound) {
+    dl._prBound = 1;
+    dl.onclick = e => {
+      e.stopPropagation();
+      if (!S.progressEnabled) return;
+      try {
+        if (typeof RT !== 'undefined' && RT && RT.p) {
+          HawaProgress.set('pos', { x: +RT.p.x.toFixed(3), y: +RT.p.y.toFixed(3), z: +RT.p.z.toFixed(3) });
+          if (RT.yaw != null) HawaProgress.set('yaw', +RT.yaw.toFixed(4));
+          HawaProgress.save();
+        }
+      } catch (_) {}
+      try { HawaProgress.downloadCurrent(); } catch (err) { tip(err.message || err); }
+      if (menu) menu.hidden = true;
+    };
+  }
+
+  const pickProgressFile = () => {
+    const fl = document.getElementById('flProgress');
+    if (!fl) { tip('⚠ منتقي الملفات غير موجود'); return; }
+    fl.dataset.m = 'progress-save';
+    fl.value = '';
+    fl.click();
+  };
+
+  if (up && !up._prBound) {
+    up._prBound = 1;
+    up.onclick = e => {
+      e.stopPropagation();
+      if (!S.progressEnabled) return;
+      pickProgressFile();
+      if (menu) menu.hidden = true;
+    };
+  }
+  if (rep && !rep._prBound) {
+    rep._prBound = 1;
+    rep.onclick = e => {
+      e.stopPropagation();
+      if (!S.progressEnabled) return;
+      pickProgressFile();
+    };
+  }
+  if (clr && !clr._prBound) {
+    clr._prBound = 1;
+    clr.onclick = e => {
+      e.stopPropagation();
+      clearProgressToZero();
+      if (menu) menu.hidden = true;
+    };
+  }
+}
+
+function runProgressScripts(rt) {
+  if (!S.progressEnabled) return;
+  // في البناء/الاختبار: متجيش تقدم قديم من localStorage تلقائي
+  // عشان اللاعب يبدأ من نقطة البداية إلا لما يرفع ملف تقدم
+  // في اللعبة المصدّرة (HAWA_PLAY_ONLY) أو بعد رفع ملف: نحمل التخزين
+  try {
+    const pure = !!window.HAWA_PLAY_ONLY;
+    if (pure || HawaProgress._fileLoadedThisSession) {
+      HawaProgress.load();
+    } else {
+      HawaProgress._mem = {};
+    }
+  } catch (_) { try { HawaProgress._mem = {}; } catch (__) {} }
+  if (!rt || !rt.game) return;
+  // اربط API التقدم + الوسائط على كائن اللعب دائماً
+  try {
+    rt.game.progress = HawaProgress.api();
+    if (typeof rt.game.subtitle !== 'function') {
+      rt.game.subtitle = (t, ms) => { try { say(String(t || ''), ms || 4000); } catch (_) {} };
+    }
+    window.Game = rt.game;
+  } catch (_) {}
+  try {
+    rt.game.media = {
+      // يرجّع data URL للعرض (من media:id أو id خام)
+      get(ref) {
+        if (ref == null || ref === '') return null;
+        let id = String(ref);
+        if (id.startsWith('media:')) id = id.slice(6);
+        // لو اتحوّل مسبقاً لـ data URL
+        if (/^data:/i.test(String(ref))) return String(ref);
+        let m = S.media && (S.media[id] || S.media[ref]);
+        if ((!m || !m.data) && typeof window !== 'undefined') {
+          try {
+            const g = window.HAWA_GAME || window.GAME_DATA || window.__HAWA_GAME__;
+            if (g && g.media) m = g.media[id] || g.media[ref];
+          } catch (_) {}
+        }
+        return m && m.data ? m.data : null;
+      },
+      // يرجّع مرجع ثابت للحفظ في ملف التقدم (media:id) — من غير ما تكتب id بإيدك
+      ref(v) {
+        if (v == null || v === '') return '';
+        const s = String(v);
+        if (s.startsWith('media:')) return s;
+        if (/^data:/i.test(s)) return ''; // data URL مش للحفظ
+        if (S.media && S.media[s]) return 'media:' + s;
+        return s.startsWith('m') ? ('media:' + s) : s;
+      },
+      label(ref) { return (typeof mediaLabel === 'function') ? mediaLabel(ref) : String(ref || ''); }
+    };
+  } catch (_) {}
+
+  for (const s of (S.progressScripts || [])) {
+    if (s.enabled === false) continue;
+    try {
+      const code = String(s.code || '');
+      if (!s.p) s.p = {};
+      // املأ القيم الافتراضية من defineParams
+      try {
+        const sch = schemaOf(code);
+        for (const e of sch) if (s.p[e.key] === undefined) s.p[e.key] = e.value;
+      } catch (_) {}
+      // props للعرض: الوسائط تبقى data URL
+      const props = (typeof resolvedParams === 'function') ? resolvedParams(s.p) : Object.assign({}, s.p);
+      // rawProps للحفظ: تفضل media:id
+      const rawProps = Object.assign({}, s.p);
+      rt.game.params = Object.assign({}, props);
+      // defineParams أثناء التنفيذ = لا يعمل شيء (القيم جاهزة)
+      const prevDef = rt.game.defineParams;
+      rt.game.defineParams = function () { /* no-op at runtime for progress files */ };
+
+      // ملفات التقدم دايماً بنمط الـ hooks (onStart/onUpdate) — مش runScene
+      // عشان defineParams ما يخليهوش "big" ويضيع onStart
+      const wrap = code + `\n;return {onStart:(typeof onStart==="function"?onStart:null),onUpdate:(typeof onUpdate==="function"?onUpdate:null),onTouch:(typeof onTouch==="function"?onTouch:null)};`;
+      const self = { name: s.name, object: null, progress: true, props: props, rawProps: rawProps, id: s.id };
+      let h = null;
+      try {
+        h = new Function('self', 'game', wrap)(self, rt.game);
+      } catch (e) {
+        console.warn('progress compile', s.name, e);
+        try { if (typeof fail === 'function') fail(s.name || 'progress', e); } catch (_) {}
+        continue;
+      }
+      if (h) {
+        h.name = s.name || ('progress_' + s.id);
+        h.self = self;
+        if (!rt.hooks) rt.hooks = [];
+        rt.hooks.push(h);
+        // onStart يتنادى مرة واحدة من playStart مع باقي الـ hooks
+        h._progress = true;
+      }
+      try { rt.game.defineParams = prevDef; } catch (_) {}
+    } catch (e) { console.warn('progress script', e); }
+  }
+}
+
+
+const edL = () => {
+  if (edK === 'sobj') return S.sdefs;
+  if (edK === 'progress') return S.progressScripts || [];
+  return S.scripts;
+};
 function showEd(on) {
   const el = $('#ed');
   if (!el) return;
@@ -6212,7 +6982,7 @@ function showEd(on) {
   }
 }
 function openEd(id, k) {
-  edK = (k === 'sobj') ? 'sobj' : 'script';
+  edK = (k === 'sobj') ? 'sobj' : (k === 'progress' ? 'progress' : 'script');
   const nid = +id;
   const s = edL().find(x => +x.id === nid);
   if (!s) { tip('⚠ الملف غير موجود'); return; }
@@ -6221,7 +6991,7 @@ function openEd(id, k) {
   if (nameEl) nameEl.value = s.name || '';
   if (ta) ta.value = s.code || '';
   try { if (ta) ta.scrollTop = 0; window.__edGutRender && window.__edGutRender(); } catch (_) {}
-  if (kind) kind.textContent = edK === 'sobj' ? 'كائن برمجي' : 'ملف برمجة';
+  if (kind) kind.textContent = edK === 'sobj' ? 'كائن برمجي' : (edK === 'progress' ? 'حفظ التقدم' : 'ملف برمجة');
   showEd(true);
   try { const sm = document.getElementById('edSaveMsg'); if (sm) { sm.className = ''; sm.textContent = ''; } } catch (e) {}
   try { if (ta) ta.focus(); } catch (e) {}
@@ -6311,6 +7081,7 @@ async function saveEd() {
     }
     try { pList(); } catch (e) { console.warn(e); }
     try { sList(); } catch (e) { console.warn(e); }
+    try { if (edK === 'progress') prList(); } catch (e) { console.warn(e); }
     try { inspect(); } catch (e) { console.warn(e); }
     try { chg(); } catch (e) { console.warn(e); }
     try { save(); } catch (e) { console.warn(e); }
@@ -6337,6 +7108,11 @@ async function deleteEd() {
   if (edI == null) return;
   if (!await uiConfirm('حذف الملف؟')) return;
   const id = +edI;
+  if (edK === 'progress') {
+    S.progressScripts = (S.progressScripts || []).filter(x => +x.id !== id);
+    try { prList(); } catch (_) {}
+    closeEd(); chg(); return;
+  }
   if (edK === 'sobj') {
     try { invalidateGhostCache(id); } catch (e) {}
     S.sdefs = S.sdefs.filter(x => +x.id !== id);
@@ -8070,6 +8846,11 @@ function projectPersistFields() {
     roomFillExact: !!S.roomFillExact,
     snap: (S.snap === 0 || S.snap === .25 || S.snap === .5 || S.snap === 1) ? S.snap : .5,
     padGame: !!S.padGame,
+    progressEnabled: !!S.progressEnabled,
+    progressRequireUpload: S.progressRequireUpload !== false,
+    progressScripts: JSON.parse(JSON.stringify(S.progressScripts || [])),
+    progressFolders: JSON.parse(JSON.stringify(S.progressFolders || {})),
+    progressPid: S.progressPid || 1,
     player: (typeof PCFG !== 'undefined') ? JSON.parse(JSON.stringify(PCFG)) : null,
     builderCam: (typeof getBuilderCam === 'function') ? getBuilderCam() : null
   };
@@ -8083,6 +8864,12 @@ function applyProjectPersistFields(d) {
   if (d.roomMinEnabled != null) S.roomMinEnabled = !!d.roomMinEnabled;
   if (d.roomFillExact != null) S.roomFillExact = !!d.roomFillExact;
   if (d.padGame != null) S.padGame = !!d.padGame;
+  if (d.progressEnabled != null) S.progressEnabled = !!d.progressEnabled;
+  if (d.progressRequireUpload != null) S.progressRequireUpload = !!d.progressRequireUpload;
+  if (Array.isArray(d.progressScripts)) S.progressScripts = JSON.parse(JSON.stringify(d.progressScripts));
+  if (d.progressFolders && typeof d.progressFolders === 'object') S.progressFolders = JSON.parse(JSON.stringify(d.progressFolders));
+  if (d.progressPid) S.progressPid = Math.max(S.progressPid || 1, +d.progressPid || 1);
+  try { syncProgressSectionUI(); } catch (_) {}
   let rmp = d.roomMinPlayersSetting != null ? d.roomMinPlayersSetting : d.roomMinPlayers;
   if (rmp != null) S.roomMinPlayers = Math.max(2, Math.floor(+rmp || 2));
   if (d.snap === 0 || d.snap === .25 || d.snap === .5 || d.snap === 1) {
@@ -8237,6 +9024,11 @@ async function wipeProjectTotal() {
   clearAll();
   S.scripts = [];
   S.sdefs = [];
+  S.progressScripts = [];
+  S.progressFolders = {};
+  S.progressCwd = null;
+  S.progressEnabled = false;
+  S.progressPid = 1;
   S.media = {}; S.mediaOrder = [];
   S.mediaFolders = {};
   S.scriptFolders = {};
@@ -8253,7 +9045,8 @@ async function wipeProjectTotal() {
   try { localStorage.removeItem('hawa2-project'); } catch (_) {}
   try { localStorage.removeItem('hawa2-room'); } catch (_) {}
   try { closeParamPanel(); } catch (_) {}
-  hier(); pList(); sList(); inspect();
+  hier(); pList(); sList(); try { prList(); } catch (_) {} inspect();
+  try { syncProgressSectionUI(); } catch (_) {}
   try { demo(); } catch (_) {}
   try { syncPlayNetUI(); } catch (_) {}
   // امسح محتوى المجلد/السيرفر لكن نفس المسار يفضل مربوط
@@ -8799,6 +9592,7 @@ function resolveAutoCtxFile(sec) {
   const section = sec || (S.mode === 'play' ? 'play' : S.section);
   
   if (section === 'objects' || section === 'play') return 'auto_story_level.txt';
+  if (section === 'progress') return (S.playNet === 'online') ? 'AUTO_PROGRESS_ONLINE.txt' : 'AUTO_PROGRESS_OFFLINE.txt';
   if (section !== 'prog' && section !== 'sobj') return '';
 
   try { if (typeof MOB !== 'undefined' && MOB.detect) MOB.detect(); } catch (_) {}
@@ -8908,9 +9702,26 @@ game.key يقرأ الكيبورد الحقيقي. على الموبايل نف�
   t += `objs:\n${S.objs.map(sm).join('\n') || '(empty)'}\n\n`;
   t += `scripts:\n${S.scripts.map(s => `--- ${s.name} enabled=${!!s.enabled}\n${s.code}`).join('\n\n') || '(empty)'}\n\n`;
   t += `sdefs:\n${S.sdefs.map(d => `--- ${d.name} id=${d.id}\n${d.code}`).join('\n\n') || '(empty)'}\n`;
+  // ملفات حفظ التقدم + فهرس الوسائط (id فقط بدون data URL)
+  t += `\nprogressEnabled=${S.progressEnabled ? 1 : 0}\n`;
+  t += `progressScripts:\n${(S.progressScripts || []).map(s => `--- ${s.name} id=${s.id} enabled=${s.enabled !== false}\nparams=${JSON.stringify(s.p || {})}\n${s.code}`).join('\n\n') || '(empty)'}\n`;
+  try {
+    const med = S.media || {};
+    const lines = Object.keys(med).map(id => {
+      const m = med[id] || {};
+      return `id=${id} name=${m.name || ''} kind=${m.kind || mediaKindFrom(m.mime, m.name) || ''} mime=${m.mime || ''}`;
+    });
+    t += `\nmediaCatalog:\n${lines.join('\n') || '(empty)'}\n`;
+  } catch (_) { t += '\nmediaCatalog:\n(empty)\n'; }
   if (sec === 'play' && RT) {
     const p = RT.p || { x: 0, y: 0, z: 0 };
     t += `\nplay score=${RT.score} pos=[${[p.x, p.y, p.z].map(v => (+v).toFixed(2))}] err=${S.err.join(' | ') || 'none'}\n`;
+  }
+  // ملاحظة قسم التقدم
+  if (sec === 'progress') {
+    t += `\n=== PROGRESS_SECTION_FOCUS ===\n`;
+    t += `اكتب ملفات onStart/onUpdate لحفظ التقدم. الوسائط من بارامترات الملف (ملفاتي) بدون كتابة id يدوياً.\n`;
+    t += `Game.progress / Game.params / Game.media.get / Game.media.ref / Game.progress.setMedia\n`;
   }
   return { sec, t: t + coordBlock() };
 }
@@ -11826,6 +12637,7 @@ function bigGame(rt, o, root) {
       el.innerHTML = html == null ? '' : String(html);
       el.style.display = html ? 'block' : 'none';
     },
+    progress: HawaProgress.api(),
     voice: {
       set: o => VoiceChat.set(o),
       get: () => VoiceChat.get(),
@@ -14045,11 +14857,27 @@ async function playStart(opts) {
   try {
     if (typeof MOB !== 'undefined') {
       MOB.detect();
-      // في الاختبار النصفي: أدوات البناء ظاهرة؛ في الكامل: مخفية
+      // في الاختبار النصفي: أدوات البناء ظاهرة زي البناء العادي؛ في الكامل: مخفية
       MOB.syncPads();
-      if (S.playEdit) {
+      if (S.playEdit && MOB.on) {
+        document.body.classList.remove('mob-live');
         const mt = document.getElementById('mTouch');
-        if (mt && MOB.on) mt.hidden = false;
+        if (mt) { mt.hidden = false; mt.removeAttribute('hidden'); mt.style.display = 'block'; mt.style.visibility = 'visible'; mt.style.pointerEvents = 'none'; }
+        const joy = document.getElementById('mJoy');
+        if (joy) { joy.style.display = 'block'; joy.style.visibility = 'visible'; joy.style.pointerEvents = 'auto'; }
+        const act = document.getElementById('mAct');
+        if (act) { act.style.display = 'flex'; act.style.visibility = 'visible'; act.style.pointerEvents = 'none'; }
+        const jb = document.getElementById('mJump'), rb = document.getElementById('mRun');
+        if (jb) { jb.innerHTML = '<b>▲</b><span>طلوع</span>'; jb.setAttribute('aria-label', 'طلوع'); jb.style.pointerEvents = 'auto'; }
+        if (rb) { rb.innerHTML = '<b>▼</b><span>نزول</span>'; rb.setAttribute('aria-label', 'نزول'); rb.style.pointerEvents = 'auto'; }
+        const mb = document.getElementById('mBar');
+        if (mb) { mb.hidden = false; mb.removeAttribute('hidden'); }
+        const bh = document.getElementById('mBuildHint');
+        if (bh) bh.hidden = false;
+        // تأكد إن اللمس على البناء شغال
+        try { MOB.resetBuildTouch(); } catch (_) {}
+        setTimeout(() => { try { MOB.syncPads(); } catch (_) {} }, 80);
+        setTimeout(() => { try { MOB.syncPads(); } catch (_) {} }, 300);
       }
     }
   } catch (_) {}
@@ -14069,6 +14897,8 @@ async function playStart(opts) {
   } catch (_) { S._playBackup = null; }
   sel(null); S.mode = 'play'; syncMarks(); S.err = []; S.fly = false; updModes();
   try { syncTestBtnUI(); } catch (_) {}
+  try { bindPlayProgressUI(); } catch (_) {}
+  try { syncProgressSectionUI(); } catch (_) {}
   const playEl = document.getElementById('play');
   const appEl = document.getElementById('app');
   if (playEl) { playEl.hidden = false; playEl.style.display = ''; }
@@ -14261,7 +15091,7 @@ async function playStart(opts) {
   } catch (e) { console.error(e); }
   const game = {
     THREE: T, scene, camera: cam, renderer: R,
-    get time() { return rt.t; }, get score() { return rt.score; }, addScore: n => rt.score += n, say, respawn: respawnP,
+    get time() { return rt.t; }, get score() { return rt.score; }, addScore: n => rt.score += n, say, subtitle: (t, ms) => { if (t) say(String(t), ms || 4000); else if (RT) RT.msgT = 0; }, respawn: respawnP,
     key: c => keyDown(c),
     setKey(code, down) { setVirtualKey(code, !!down); },
     forcePlayerInput(slot, inp) { applyInputMap(inp); },
@@ -14525,6 +15355,7 @@ return {
   rt.sceneBase = new Set(scene.children);
   
   for (const s of S.scripts) if (s.enabled) { if (isBig(s.code)) runScene(rt, s); else comp(s, {name: 'scene', props: {}}); }
+  try { runProgressScripts(rt); } catch (e) { console.warn(e); }
   
   for (const o of S.objs) {
     if (o.hidden || o.type === 'respawn') continue;
@@ -14537,6 +15368,16 @@ return {
     if (self) for (const id of o.scripts) { const s = S.scripts.find(x => x.id === id); if (s) comp(s, self); }
   }
   for (const h of rt.hooks) if (h.onStart) try { h.onStart(h.self, game); } catch (e) { fail(h.name, e); }
+  // رسالة ترحيب التقدم بعد كل onStart (عشان متتغطاش برسائل الشبكة)
+  try {
+    if (S.progressEnabled && HawaProgress && HawaProgress.get) {
+      const pos = HawaProgress.get('pos', null);
+      if (pos && typeof pos.x === 'number') {
+        const welcome = (game.params && game.params.welcome) || 'اهلا وسهلا بعد عوده';
+        setTimeout(() => { try { say(String(welcome), 4500); } catch (_) {} }, 500);
+      }
+    }
+  } catch (_) {}
   S.dirty = 1;
   } catch (err) {
     // لو فشل الاختبار (سكربت غلط / خطأ شبكة) — ارجع للبناء بدل شاشة سوداء
@@ -14585,6 +15426,14 @@ function playStop() {
   } catch (_) {}
   rt.inst.forEach(i => { scene.remove(i); i.dispose(); }); scene.remove(rt.rig.root);
   RT = null; S.mode = 'build';
+  try {
+    const menu = document.getElementById('pProgressMenu');
+    if (menu) menu.hidden = true;
+    const wrap = document.getElementById('pProgressWrap');
+    if (wrap) wrap.hidden = true;
+  } catch (_) {}
+  try { syncProgressSectionUI(); } catch (_) {}
+  try { syncPlayProgressMenu(); } catch (_) {}
   try { if (S._buildCam) applyBuilderCam(S._buildCam); } catch (_) {}
 
   
@@ -14769,9 +15618,25 @@ function syncTestBtnUI() {
   } catch (_) {}
   try {
     document.body.classList.toggle('in-test', inTest);
-    // شيل شارة «وضع الاختبار» نهائياً (موبايل وكمبيوتر)
-    const badge = document.getElementById('mTestBadge');
-    if (badge) { try { badge.remove(); } catch (_) { badge.hidden = true; } }
+    // شارة واضحة على الموبايل: جوّه الاختبار
+    let badge = document.getElementById('mTestBadge');
+    if (inTest && typeof MOB !== 'undefined' && MOB.on) {
+      if (!badge) {
+        badge = document.createElement('div');
+        badge.id = 'mTestBadge';
+        badge.setAttribute('role', 'status');
+        badge.innerHTML = '<b>■</b><span>وضع الاختبار</span>';
+        document.body.appendChild(badge);
+      }
+      badge.hidden = false;
+      badge.removeAttribute('hidden');
+      badge.classList.toggle('half', !!(S && S.playEdit));
+      const span = badge.querySelector('span');
+      if (span) span.textContent = (S && S.playEdit) ? 'اختبار نصفي · بناء' : 'وضع الاختبار';
+    } else if (badge) {
+      badge.hidden = true;
+      badge.setAttribute('hidden', '');
+    }
   } catch (_) {}
 }
 
@@ -15142,7 +16007,19 @@ function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(.05, (now - last) / 1000); last = now;
   try { if (typeof HawaPad !== 'undefined' && HawaPad.tick) HawaPad.tick(dt); } catch (_) {}
-  if (S.mode === 'play') play(dt);
+  if (S.mode === 'play') {
+    play(dt);
+    try {
+      if (S.progressEnabled && typeof HawaProgress !== 'undefined' && RT && RT.p) {
+        const now = performance.now();
+        if (!HawaProgress._lastPosSave || now - HawaProgress._lastPosSave > 1000) {
+          HawaProgress._lastPosSave = now;
+          HawaProgress.set('pos', { x: +RT.p.x.toFixed(3), y: +RT.p.y.toFixed(3), z: +RT.p.z.toFixed(3) });
+          if (RT.yaw != null) HawaProgress.set('yaw', +RT.yaw.toFixed(4));
+        }
+      }
+    } catch (_) {}
+  }
   // بناء أو اختبار+بناء: أدوات المحرر
   if (S.mode === 'build' || S.playEdit) {
     const isMob = !!(typeof MOB !== 'undefined' && MOB.on);
@@ -16034,12 +16911,18 @@ function boot() {
       S.roomMinEnabled = !!d.roomMinEnabled;
       S.roomFillExact = !!d.roomFillExact;
       S.padGame = !!d.padGame;
+      S.progressEnabled = !!d.progressEnabled;
+      S.progressRequireUpload = d.progressRequireUpload !== false;
+      S.progressScripts = Array.isArray(d.progressScripts) ? JSON.parse(JSON.stringify(d.progressScripts)) : [];
+      S.progressFolders = (d.progressFolders && typeof d.progressFolders === 'object') ? JSON.parse(JSON.stringify(d.progressFolders)) : {};
+      S.progressPid = Math.max(1, +d.progressPid || 1, ...(S.progressScripts.map(x => (+x.id || 0) + 1).concat([1])));
       S.roomMinPlayers = Math.max(2, Math.floor(+(d.roomMinPlayersSetting != null ? d.roomMinPlayersSetting : d.roomMinPlayers) || 2));
       if (d.player && typeof d.player === 'object') {
         window.__HAWA_PLAYER_LOCKED = true;
         for (const k in PCFG) delete PCFG[k];
         Object.assign(PCFG, JSON.parse(JSON.stringify(PLAYER_DEF)), d.player);
       }
+      try { syncProgressSectionUI(); } catch (_) {}
     } catch (e) { console.warn('apply game settings', e); }
     S.scripts = (d.scripts || []).map(s => ({
       id: +s.id, name: s.name, code: s.code,
@@ -16068,7 +16951,7 @@ function boot() {
   }
   if (!S.objs.length && !(d && d.objs && d.objs.length) && !window.HAWA_PLAY_ONLY) demo();
   ensureLive(); refreshLive(); ensureCoordUI();
-  cats(); setTool('select'); setSec('objects'); setGz('move'); hier(); pList(); sList(); inspect(); resize(); camUpdate(); updModes(); updOnRsBtn();
+  cats(); setTool('select'); setSec('objects'); setGz('move'); hier(); pList(); sList(); try { prList(); } catch (_) {} inspect(); resize(); camUpdate(); updModes(); updOnRsBtn(); try { syncProgressSectionUI(); } catch (_) {}
   try { syncPlayNetUI(); } catch (_) {}
   requestAnimationFrame(frame);
   if (window.HAWA_PLAY_ONLY) {
